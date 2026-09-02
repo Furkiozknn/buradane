@@ -1,0 +1,49 @@
+import type { Metadata, Viewport } from "next";
+import { Inter } from "next/font/google";
+
+import "./globals.css";
+
+// Inter carries complete Turkish coverage (ı İ ğ Ğ ş Ş ç Ç ö Ö ü Ü) - a real
+// constraint here, since a font missing dotless ı silently mangles half the
+// place names in the dataset.
+const inter = Inter({
+  variable: "--font-inter",
+  subsets: ["latin", "latin-ext"],
+  display: "swap",
+});
+
+export const metadata: Metadata = {
+  title: "buradane — Yakınımda ne var?",
+  description:
+    "Türkiye'deki kamusal alanları keşfet: tuvalet, park, içme suyu, dinlenme alanı, çocuk parkı, spor alanı, otopark ve daha fazlası. Konumuna en yakın olanı saniyeler içinde bul.",
+  applicationName: "buradane",
+  keywords: ["kamusal alan", "tuvalet bul", "park", "içme suyu", "erişilebilirlik", "İstanbul"],
+};
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#fafaf9" },
+    { media: "(prefers-color-scheme: dark)", color: "#0c0a09" },
+  ],
+  width: "device-width",
+  initialScale: 1,
+  // The map is the app; letting the page zoom breaks the gesture model.
+  maximumScale: 1,
+  viewportFit: "cover",
+};
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="tr">
+      <body className={`${inter.variable} antialiased`}>
+        <a
+          href="#sonuclar"
+          className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-surface focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:shadow-lg"
+        >
+          Sonuç listesine geç
+        </a>
+        {children}
+      </body>
+    </html>
+  );
+}

@@ -6,9 +6,19 @@ __pycache__/
 .venv/
 .env
 
-# Node (frontend, once it exists)
+# Node (frontend)
 node_modules/
 .next/
+# Copied from node_modules by scripts/copy-maplibre-worker.mjs at pre(dev|build)
+frontend/public/maplibre/
+
+# Overpass response cache - a local build artifact, not source. Delete it to
+# force scripts/fetch_demo_data.py to re-pull from the API.
+.overpass-cache/
+
+# Community contributions written by the running demo. The committed dataset
+# is the OSM snapshot; runtime user submissions are local state.
+frontend/data/contributions.json
 
 # OS
 .DS_Store

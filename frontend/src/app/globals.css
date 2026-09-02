@@ -1,0 +1,222 @@
+@import "tailwindcss";
+
+/**
+ * buradane design tokens.
+ *
+ * Palette rationale: this is a civic/public-good product about trust and
+ * access, so the brand hue is a deep teal-green - it reads institutional and
+ * calm without the coldness of corporate blue or the startup-purple that
+ * would undercut "public service". Surfaces are warm stone neutrals rather
+ * than pure grey, so the map (which is itself cool and grey-green) sits on
+ * something that doesn't fight it.
+ *
+ * Everything is a token: no component hardcodes a hex value.
+ */
+
+:root {
+  --brand: #0b6e5f;
+  --brand-hover: #095a4e;
+  --brand-soft: #e6f4f1;
+  --brand-contrast: #ffffff;
+
+  /* The user's own position. Blue is the near-universal "you are here"
+     signal; deliberately NOT the brand color, so a user never confuses
+     themselves with a place. */
+  --location: #2563eb;
+  --location-soft: #dbeafe;
+
+  --bg: #fafaf9;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-sunken: #f5f5f4;
+
+  --text: #1c1917;
+  --text-secondary: #57534e;
+  --text-muted: #a8a29e;
+
+  --border: #e7e5e4;
+  --border-strong: #d6d3d1;
+
+  --success: #15803d;
+  --success-soft: #dcfce7;
+  --warning: #b45309;
+  --warning-soft: #fef3c7;
+  --danger: #b91c1c;
+  --danger-soft: #fee2e2;
+
+  --radius-sm: 8px;
+  --radius: 14px;
+  --radius-lg: 20px;
+  --radius-full: 999px;
+
+  --shadow-sm: 0 1px 2px rgb(28 25 23 / 0.06), 0 1px 3px rgb(28 25 23 / 0.08);
+  --shadow: 0 4px 12px rgb(28 25 23 / 0.08), 0 2px 4px rgb(28 25 23 / 0.04);
+  --shadow-lg: 0 12px 32px rgb(28 25 23 / 0.14), 0 4px 8px rgb(28 25 23 / 0.06);
+
+  --sheet-peek: 168px;
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --brand: #2dd4bf;
+    --brand-hover: #5eead4;
+    --brand-soft: #0f3833;
+    --brand-contrast: #04211d;
+
+    --location: #60a5fa;
+    --location-soft: #1e3a8a;
+
+    --bg: #0c0a09;
+    --surface: #1c1917;
+    --surface-raised: #262322;
+    --surface-sunken: #141211;
+
+    --text: #fafaf9;
+    --text-secondary: #d6d3d1;
+    --text-muted: #78716c;
+
+    --border: #2c2826;
+    --border-strong: #44403c;
+
+    --success: #4ade80;
+    --success-soft: #14311f;
+    --warning: #fbbf24;
+    --warning-soft: #3a2a08;
+    --danger: #f87171;
+    --danger-soft: #3b1414;
+
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+    --shadow: 0 4px 12px rgb(0 0 0 / 0.5);
+    --shadow-lg: 0 12px 32px rgb(0 0 0 / 0.6);
+
+    color-scheme: dark;
+  }
+}
+
+@theme inline {
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-contrast: var(--brand-contrast);
+  --color-location: var(--location);
+  --color-location-soft: var(--location-soft);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-text: var(--text);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --radius-card: var(--radius);
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  /* The map owns the viewport; the page itself must never scroll or the
+     bottom sheet gesture fights the document. */
+  overscroll-behavior: none;
+}
+
+/* Focus visibility is non-negotiable in a product whose whole point is
+   accessibility - never remove it, only style it. */
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Touch targets: 44px is the floor, per WCAG 2.5.5 / platform HIG. */
+button,
+a[role="button"],
+[role="tab"] {
+  touch-action: manipulation;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* --- MapLibre overrides: make the default chrome match the design system - */
+
+.maplibregl-ctrl-attrib {
+  background: color-mix(in srgb, var(--surface) 88%, transparent) !important;
+  color: var(--text-secondary) !important;
+  font-size: 10px !important;
+  border-radius: var(--radius-full) 0 0 0 !important;
+}
+
+.maplibregl-ctrl-attrib a {
+  color: var(--text-secondary) !important;
+}
+
+.maplibregl-canvas:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: -2px;
+}
+
+/* Hide the default popup chrome - place cards are rendered by React, not by
+   MapLibre's popup markup, so the two never disagree about styling. */
+.maplibregl-popup-content {
+  padding: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.maplibregl-popup-tip {
+  display: none !important;
+}
+
+/* Utility: horizontal chip rows that scroll without a visible scrollbar. */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Skeleton shimmer used while results load. */
+@keyframes buradane-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--surface-sunken) 25%,
+    color-mix(in srgb, var(--surface-sunken) 60%, var(--border)) 37%,
+    var(--surface-sunken) 63%
+  );
+  background-size: 200% 100%;
+  animation: buradane-shimmer 1.4s ease-in-out infinite;
+}
