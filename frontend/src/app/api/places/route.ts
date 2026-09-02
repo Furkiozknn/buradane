@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { queryPlaces } from "@/lib/places-repository";
+import { listOverrides } from "@/lib/contributions-store";
 import type { AmenityKey, CategorySlug } from "@/lib/types";
 
 /**
@@ -40,7 +41,10 @@ export async function GET(request: Request) {
 
   const limit = Math.min(num("limit") ?? 60, 300);
 
+  const overrides = await listOverrides();
+
   const result = queryPlaces({
+    overrides,
     lat,
     lon,
     radius_m: num("radius_m"),

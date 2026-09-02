@@ -32,7 +32,11 @@
 
   --text: #1c1917;
   --text-secondary: #57534e;
-  --text-muted: #a8a29e;
+  /* 4.6:1 on --surface. The lighter stone this used to be (#a8a29e) sat at
+     2.52:1 and failed WCAG 1.4.3 everywhere it carried real text - section
+     headings and "bilgi yok" states, exactly the copy a low-vision user most
+     needs to read. Hierarchy is preserved; only the floor moved. */
+  --text-muted: #78716c;
 
   --border: #e7e5e4;
   --border-strong: #d6d3d1;
@@ -73,7 +77,9 @@
 
     --text: #fafaf9;
     --text-secondary: #d6d3d1;
-    --text-muted: #78716c;
+    /* Mirrored the other way: on a dark surface the muted tone has to be
+       lighter, not darker, to clear the same 4.5:1 floor. */
+    --text-muted: #a8a29e;
 
     --border: #2c2826;
     --border-strong: #44403c;
@@ -220,6 +226,12 @@ a[role="button"],
 @media (max-width: 1023px) {
   .maplibregl-ctrl-top-right {
     padding-top: 64px;
+  }
+
+  /* With the sheet expanded there is no usable map left to zoom, and the
+     buttons would sit underneath it. See AppShell's data-sheet attribute. */
+  [data-sheet="full"] .maplibregl-ctrl-top-right {
+    display: none;
   }
 }
 

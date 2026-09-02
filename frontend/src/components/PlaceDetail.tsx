@@ -4,6 +4,8 @@ import { useState } from "react";
 import {
   ArrowLeft,
   BadgeCheck,
+  Bookmark,
+  Check,
   CircleAlert,
   Clock,
   ExternalLink,
@@ -12,6 +14,7 @@ import {
   MapPin,
   Navigation,
   Phone,
+  Share2,
   ShieldCheck,
 } from "lucide-react";
 
@@ -22,8 +25,24 @@ import { directionsUrl, osmUrl } from "@/lib/directions";
 import type { Place } from "@/lib/types";
 import { ReportDialog } from "./ReportDialog";
 
-export function PlaceDetail({ place, onBack }: { place: Place; onBack: () => void }) {
+export function PlaceDetail({
+  place,
+  onBack,
+  onVerified,
+  isFavorite = false,
+  onToggleFavorite,
+}: {
+  place: Place;
+  onBack: () => void;
+  /** Lets the list/map pick up the new freshness immediately instead of
+   * waiting for the next query. */
+  onVerified?: (placeId: string) => void;
+  isFavorite?: boolean;
+  onToggleFavorite?: (placeId: string) => void;
+}) {
   const [reportOpen, setReportOpen] = useState(false);
+  const [verifyState, setVerifyState] = useState<"idle" | "sending" | "done" | "error">("idle");
+  const [shared, setShared] = useState(false);
   const primary = categoryMeta(place.categories[0]);
   const Icon = primary.icon;
   const openState = isOpenNow(place.opening_hours_raw);
@@ -31,6 +50,46 @@ export function PlaceDetail({ place, onBack }: { place: Place; onBack: () => voi
 
   // Split into what we know is true, and what we genuinely don't know. The
   // second list matters: hiding unknowns would let the UI imply "no".
+  /** Native share sheet where it exists (mobile), clipboard fallback
+   * everywhere else. The URL already carries the open place, so the
+   * recipient lands on this exact record. */
+  async function share() {
+    const url = window.location.href;
+    const text = `${place.name} — ${primary.label}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: "buradane", text, url });
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      setShared(true);
+      setTimeout(() => setShared(false), 2000);
+    } catch {
+      // User dismissed the share sheet, or the clipboard is blocked. Neither
+      // is an error worth interrupting them over.
+    }
+  }
+
+  async function confirmStillHere() {
+    setVerifyState("sending");
+    try {
+      const response = await fetch("/api/contributions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: "verify_present",
+          placeId: place.id,
+          placeName: place.name,
+        }),
+      });
+      if (!response.ok) throw new Error("Doğrulama gönderilemedi");
+      setVerifyState("done");
+      onVerified?.(place.id);
+    } catch {
+      setVerifyState("error");
+    }
+  }
+
   const known = AMENITIES.filter((a) => place.amenities[a.key] === true);
   const absent = AMENITIES.filter((a) => place.amenities[a.key] === false);
   const unknown = AMENITIES.filter(
@@ -119,12 +178,73 @@ export function PlaceDetail({ place, onBack }: { place: Place; onBack: () => voi
             </a>
             <button
               type="button"
+              onClick={() => onToggleFavorite?.(place.id)}
+              aria-pressed={isFavorite}
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-border transition-colors hover:bg-surface-sunken"
+              aria-label={isFavorite ? "Kayıtlılardan çıkar" : "Kaydet"}
+              style={{ color: isFavorite ? "var(--brand)" : "var(--text-secondary)" }}
+            >
+              <Bookmark size={18} fill={isFavorite ? "currentColor" : "none"} />
+            </button>
+            <button
+              type="button"
+              onClick={share}
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-border text-text-secondary transition-colors hover:bg-surface-sunken"
+              aria-label="Bu yeri paylaş"
+            >
+              {shared ? <Check size={18} style={{ color: "var(--success)" }} /> : <Share2 size={18} />}
+            </button>
+            <button
+              type="button"
               onClick={() => setReportOpen(true)}
               className="flex h-12 items-center justify-center gap-2 rounded-xl border border-border px-4 text-[14px] font-medium text-text-secondary transition-colors hover:bg-surface-sunken"
             >
               <Flag size={16} />
               Sorun bildir
             </button>
+          </div>
+
+          {/* The freshness loop. Open civic data decays silently; one tap
+              from someone who is physically standing there is the cheapest
+              possible fix, so it gets a first-class slot rather than being
+              buried in a menu. */}
+          <div className="mt-3 rounded-xl border border-border p-3">
+            {verifyState === "done" ? (
+              <p className="flex items-center gap-2 text-[13.5px] font-medium" style={{ color: "var(--success)" }}>
+                <BadgeCheck size={16} />
+                Teşekkürler, kaydettik. Bugün doğrulandı olarak işaretlendi.
+              </p>
+            ) : (
+              <>
+                <p className="text-[13.5px] font-medium text-text">Bu yer hâlâ burada mı?</p>
+                <p className="mt-0.5 text-[12.5px] text-text-secondary">
+                  Şu an oradaysan tek dokunuşla herkes için güncelleyebilirsin.
+                </p>
+                <div className="mt-2.5 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={confirmStillHere}
+                    disabled={verifyState === "sending"}
+                    className="h-10 flex-1 rounded-lg text-[13.5px] font-semibold transition-opacity disabled:opacity-50"
+                    style={{ background: "var(--success-soft)", color: "var(--success)" }}
+                  >
+                    {verifyState === "sending" ? "Gönderiliyor…" : "Evet, burada"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setReportOpen(true)}
+                    className="h-10 flex-1 rounded-lg border border-border text-[13.5px] font-medium text-text-secondary transition-colors hover:bg-surface-sunken"
+                  >
+                    Yok, kapanmış
+                  </button>
+                </div>
+                {verifyState === "error" && (
+                  <p className="mt-2 text-[12.5px]" style={{ color: "var(--danger)" }} role="alert">
+                    Gönderilemedi, tekrar dener misin?
+                  </p>
+                )}
+              </>
+            )}
           </div>
 
           {place.status === "temporarily_closed" && (

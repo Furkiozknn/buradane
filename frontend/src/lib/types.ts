@@ -116,7 +116,16 @@ export interface PlaceQueryResult {
 /** A user-submitted signal. Kept separate from `Place` because these never
  * mutate the public record directly - they queue for moderation, exactly
  * like the backend's PlaceReport / PlaceSuggestion tables. */
-export type ContributionKind = "suggestion" | "report_incorrect" | "report_closed";
+export type ContributionKind =
+  | "suggestion"
+  | "report_incorrect"
+  | "report_closed"
+  /** "Hâlâ burada mı? Evet" - the cheapest, highest-volume signal a civic
+   * dataset can collect, and the one that keeps open data from going stale.
+   * Unlike the report kinds this applies immediately (see
+   * contributions-store), matching the backend, which treats a positive
+   * verification as low-risk and time-decays its weight. */
+  | "verify_present";
 
 export interface Contribution {
   id: string;

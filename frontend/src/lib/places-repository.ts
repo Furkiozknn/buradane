@@ -138,6 +138,41 @@ export function getPlaceById(id: string): Place | undefined {
   return loadDataset().places.find((p) => p.id === id);
 }
 
+/**
+ * Layers a moderation/verification override onto a base place.
+ *
+ * The score is *derived here*, never stored: the override records what
+ * happened (how many people confirmed it, when), and this function applies
+ * the same capped bonus the backend's formula uses. Storing an absolute
+ * score in the override would mean writing a number without knowing the
+ * base - which silently downgraded well-documented places the first time
+ * around.
+ */
+export function applyOverride(base: Place, override: Partial<Place> | undefined): Place {
+  if (!override) return base;
+
+  const merged = { ...base, ...override };
+
+  // `undefined` in the override must not erase a real base value.
+  if (override.reliability_score === undefined) merged.reliability_score = base.reliability_score;
+
+  const verifications = override.verification_count ?? 0;
+  if (verifications > 0) {
+    merged.reliability_score = Math.min(
+      1,
+      Number((base.reliability_score + Math.min(0.15, 0.04 * verifications)).toFixed(3)),
+    );
+  }
+
+  // An unresolved "this is wrong" report is the clearest low-confidence
+  // signal there is, and it outranks the verification bonus.
+  if (override.report_count && override.report_count > 0) {
+    merged.reliability_score = Math.max(0, Number((merged.reliability_score - 0.15).toFixed(3)));
+  }
+
+  return merged;
+}
+
 /** Free text -> structured filters. The architecture the brief asks for:
  * natural-language-ish queries resolve into the same structured filter set
  * the UI chips produce, so a semantic/LLM layer can later replace this
@@ -233,7 +268,16 @@ function normalizeTr(value: string): string {
   return value.replace(/İ/g, "i").replace(/I/g, "ı").toLowerCase().trim();
 }
 
-export function queryPlaces(query: PlaceQuery): PlaceQueryResult {
+export function queryPlaces(
+  query: PlaceQuery & {
+    /** Moderator-approved corrections and community verifications, layered
+     * on read. They live outside the immutable OSM snapshot, and must be
+     * applied BEFORE filtering - otherwise a place an admin marked closed
+     * would still match an "open now" search, and a just-verified place
+     * would keep showing its stale freshness label in the list. */
+    overrides?: Record<string, Partial<Place>>;
+  },
+): PlaceQueryResult {
   const {
     lat,
     lon,
@@ -246,6 +290,7 @@ export function queryPlaces(query: PlaceQuery): PlaceQueryResult {
     q,
     limit = 60,
     offset = 0,
+    overrides,
   } = query;
 
   let parsedFromText = { categories: [] as CategorySlug[], amenities: [] as AmenityKey[], freeOnly: false, leftover: "" };
@@ -299,7 +344,11 @@ export function queryPlaces(query: PlaceQuery): PlaceQueryResult {
 
   function collect(needle: string | null): Place[] {
     const found: Place[] = [];
-    for (const place of loadDataset().places) {
+    const hasOverrides = overrides !== undefined && Object.keys(overrides).length > 0;
+
+    for (const base of loadDataset().places) {
+      const place = hasOverrides ? applyOverride(base, overrides[base.id]) : base;
+
       if (place.status === "pending_review" || place.status === "permanently_closed") continue;
 
       if (box) {

@@ -3,7 +3,12 @@ import { NextResponse } from "next/server";
 import { addContribution, listContributions } from "@/lib/contributions-store";
 import type { ContributionKind } from "@/lib/types";
 
-const VALID_KINDS: ContributionKind[] = ["suggestion", "report_incorrect", "report_closed"];
+const VALID_KINDS: ContributionKind[] = [
+  "suggestion",
+  "report_incorrect",
+  "report_closed",
+  "verify_present",
+];
 
 /** GET /api/contributions - the moderation queue (admin panel reads this). */
 export async function GET() {

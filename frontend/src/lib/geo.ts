@@ -49,3 +49,45 @@ export function formatDistance(meters: number | null | undefined): string {
 export function walkingMinutes(meters: number): number {
   return Math.max(1, Math.round(meters / 75));
 }
+
+/**
+ * Initial bearing from `from` to `to`, in degrees clockwise from north.
+ *
+ * This is the useful half of what a toilet-finder compass gives you: "which
+ * way do I set off". We show it as a small arrow next to the distance rather
+ * than as a full-screen compass - a device compass needs the magnetometer,
+ * is unreliable indoors and uncalibrated, and would make the whole screen
+ * about one place. A north-referenced arrow needs no sensor and works next
+ * to every result at once.
+ */
+export function bearingDegrees(from: LatLon, to: LatLon): number {
+  const phi1 = (from.lat * Math.PI) / 180;
+  const phi2 = (to.lat * Math.PI) / 180;
+  const dLambda = ((to.lon - from.lon) * Math.PI) / 180;
+
+  const y = Math.sin(dLambda) * Math.cos(phi2);
+  const x = Math.cos(phi1) * Math.sin(phi2) - Math.sin(phi1) * Math.cos(phi2) * Math.cos(dLambda);
+
+  return (((Math.atan2(y, x) * 180) / Math.PI) + 360) % 360;
+}
+
+const COMPASS_TR = [
+  "kuzey",
+  "kuzeydoğu",
+  "doğu",
+  "güneydoğu",
+  "güney",
+  "güneybatı",
+  "batı",
+  "kuzeybatı",
+] as const;
+
+/**
+ * Bearing as a Turkish compass word. The arrow is a visual-only channel, so
+ * screen-reader users get the direction in words - a rotated glyph conveys
+ * nothing to them.
+ */
+export function bearingLabel(degrees: number): string {
+  const index = Math.round(degrees / 45) % 8;
+  return COMPASS_TR[index];
+}

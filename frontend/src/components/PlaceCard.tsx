@@ -3,7 +3,8 @@
 import { BadgeCheck, ChevronRight, CircleAlert, Navigation } from "lucide-react";
 
 import { AMENITY_BY_KEY, categoryMeta } from "@/lib/categories";
-import { formatDistance, walkingMinutes } from "@/lib/geo";
+import { bearingDegrees, bearingLabel, formatDistance, walkingMinutes, type LatLon } from "@/lib/geo";
+import { DirectionArrow } from "./DirectionArrow";
 import { isOpenNow } from "@/lib/opening-hours";
 import type { AmenityKey, Place } from "@/lib/types";
 import { directionsUrl } from "@/lib/directions";
@@ -23,11 +24,15 @@ const CARD_AMENITY_ORDER: AmenityKey[] = [
 export function PlaceCard({
   place,
   active,
+  origin,
   onSelect,
   onOpenDetail,
 }: {
   place: Place;
   active?: boolean;
+  /** Where the user is (or the map centre when location is unknown) - the
+   * point the direction arrow points *from*. */
+  origin?: LatLon | null;
   onSelect: (place: Place) => void;
   onOpenDetail: (place: Place) => void;
 }) {
@@ -37,6 +42,10 @@ export function PlaceCard({
   const features = CARD_AMENITY_ORDER.filter((key) => place.amenities[key] === true).slice(0, 3);
   const isClosed = place.status === "temporarily_closed";
   const lowConfidence = place.reliability_score < 0.45;
+  const bearing =
+    origin && place.distance_m != null
+      ? bearingDegrees(origin, { lat: place.lat, lon: place.lon })
+      : null;
 
   return (
     <article
@@ -50,7 +59,11 @@ export function PlaceCard({
         onMouseEnter={() => onSelect(place)}
         className="absolute inset-0 rounded-2xl"
         aria-label={`${primary.label}. ${place.name}. ${
-          place.distance_m != null ? `${formatDistance(place.distance_m)} uzaklıkta.` : ""
+          place.distance_m != null
+            ? `${formatDistance(place.distance_m)} uzaklıkta${
+                bearing != null ? `, ${bearingLabel(bearing)} yönünde` : ""
+              }.`
+            : ""
         } Detayları aç.`}
       />
 
@@ -66,7 +79,8 @@ export function PlaceCard({
         <div className="flex items-start justify-between gap-2">
           <h3 className="truncate text-[15px] font-semibold leading-tight text-text">{place.name}</h3>
           {place.distance_m != null && (
-            <span className="shrink-0 text-[13px] font-semibold tabular-nums text-brand">
+            <span className="flex shrink-0 items-center gap-1 text-[13px] font-semibold tabular-nums text-brand">
+              {bearing != null && <DirectionArrow degrees={bearing} size={12} />}
               {formatDistance(place.distance_m)}
             </span>
           )}

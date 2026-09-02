@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { getPlaceById } from "@/lib/places-repository";
+import { applyOverride, getPlaceById } from "@/lib/places-repository";
 import { getPlaceOverrides } from "@/lib/contributions-store";
 
 /** GET /api/places/:id - mirrors the backend's `GET /places/{place_id}`.
@@ -20,5 +20,7 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
   // and re-importable.
   const overrides = await getPlaceOverrides(decodedId);
 
-  return NextResponse.json({ ...place, ...overrides });
+  // Same merge the list query uses, so a place never reports one score in
+  // the list and a different one on its own page.
+  return NextResponse.json(applyOverride(place, overrides));
 }

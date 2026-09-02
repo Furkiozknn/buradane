@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { LocateFixed, MapPin, Plus, RefreshCw, Search, SlidersHorizontal, X } from "lucide-react";
+import { Bookmark, LocateFixed, MapPin, Plus, RefreshCw, Search, SlidersHorizontal, X } from "lucide-react";
 
 import { CategoryChips, CategoryGrid } from "./CategoryPicker";
 import { PlaceCard, PlaceCardSkeleton } from "./PlaceCard";
@@ -10,6 +10,8 @@ import { PlaceDetail } from "./PlaceDetail";
 import { EMPTY_FILTERS, FilterSheet, activeFilterCount, type FilterState } from "./FilterSheet";
 import { SuggestPlaceDialog } from "./SuggestPlaceDialog";
 import { DESKTOP_QUERY, useMediaQuery } from "@/lib/use-media-query";
+import { buildUrlSearch, type UrlState } from "@/lib/url-state";
+import { useFavorites } from "@/lib/use-favorites";
 import type { CategorySlug, Place, PlaceQueryResult } from "@/lib/types";
 
 // The map is browser-only (WebGL + window). Loading it without SSR is
@@ -34,18 +36,34 @@ type SheetSnap = "peek" | "half" | "full";
 const SNAP_HEIGHT: Record<SheetSnap, string> = {
   peek: "min(190px, 26vh)",
   half: "52vh",
-  full: "92vh",
+  // Anchored to the floating header's height rather than a vh percentage:
+  // at 92vh the expanded sheet stopped ~6px below the filter button, which
+  // both looks cramped and fails the touch-target spacing check. Leaving a
+  // fixed 136px keeps a real gap on every screen size, and keeps a strip of
+  // map visible so the user never loses spatial context.
+  full: "calc(100dvh - 136px)",
 };
 
 export function AppShell({
   datasetMeta,
+  initialState,
 }: {
   datasetMeta: { attribution: string; generatedAt: string; count: number };
+  /** Parsed from the request URL on the server (see app/page.tsx), so the
+   * server and client agree on the first paint - reading `window` here
+   * instead produces a hydration mismatch and a visible state jump. */
+  initialState: UrlState;
 }) {
-  const [category, setCategory] = useState<CategorySlug | null>(null);
-  const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
-  const [query, setQuery] = useState("");
-  const [searchInput, setSearchInput] = useState("");
+  const initial = initialState;
+
+  const [category, setCategory] = useState<CategorySlug | null>(initial?.category ?? null);
+  const [filters, setFilters] = useState<FilterState>(
+    initial
+      ? { amenities: initial.amenities, openNow: initial.openNow, freeOnly: initial.freeOnly }
+      : EMPTY_FILTERS,
+  );
+  const [query, setQuery] = useState(initial?.query ?? "");
+  const [searchInput, setSearchInput] = useState(initial?.query ?? "");
   const [location, setLocation] = useState<LocationState>({ status: "idle" });
   const [result, setResult] = useState<PlaceQueryResult | null>(null);
   const [loading, setLoading] = useState(true);
@@ -54,7 +72,10 @@ export function AppShell({
   const [detailPlace, setDetailPlace] = useState<Place | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [suggestOpen, setSuggestOpen] = useState(false);
-  const [snap, setSnap] = useState<SheetSnap>("peek");
+  // A link that opens a place starts expanded. Letting it settle at "peek"
+  // and then jump to "full" once the fetch resolves is a large, avoidable
+  // layout shift on the exact page people share.
+  const [snap, setSnap] = useState<SheetSnap>(initial?.placeId ? "full" : "peek");
   const [viewport, setViewport] = useState<{
     bbox: [number, number, number, number];
     zoom: number;
@@ -65,6 +86,25 @@ export function AppShell({
   const sheetRef = useRef<HTMLDivElement>(null);
   const requestIdRef = useRef(0);
   const isDesktop = useMediaQuery(DESKTOP_QUERY);
+  const { favoriteIds, toggle: toggleFavorite, isFavorite, count: favoriteCount } = useFavorites();
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+
+  // Keep the address bar in step with what's on screen. replaceState, not
+  // push: panning the map or toggling a filter shouldn't bury the user's
+  // real navigation history under dozens of entries.
+  useEffect(() => {
+    const search = buildUrlSearch({
+      category,
+      amenities: filters.amenities,
+      freeOnly: filters.freeOnly,
+      openNow: filters.openNow,
+      query,
+      placeId: detailPlace?.id ?? null,
+      center: viewport?.center ?? null,
+      zoom: viewport?.zoom ?? null,
+    });
+    window.history.replaceState(null, "", `${window.location.pathname}${search}`);
+  }, [category, filters, query, detailPlace, viewport]);
 
   const center = location.status === "granted" ? { lat: location.lat, lon: location.lon } : ISTANBUL_CENTER;
   // Deliberately excludes "locating": while the request is in flight we have
@@ -140,6 +180,29 @@ export function AppShell({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [category, filters, query, location.status]);
 
+  // A link that names a place opens straight on that place's detail, rather
+  // than dropping the recipient on a map and making them hunt for it.
+  useEffect(() => {
+    if (!initial?.placeId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await fetch(`/api/places/${encodeURIComponent(initial.placeId!)}`);
+        if (!response.ok || cancelled) return;
+        const place = (await response.json()) as Place;
+        setDetailPlace(place);
+        setSelectedId(place.id);
+        setSnap("full");
+      } catch {
+        // A stale or hand-edited link shouldn't break the app - the user
+        // still lands on a working map.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [initial?.placeId]);
+
   const requestLocation = useCallback(() => {
     if (!("geolocation" in navigator)) {
       setLocation({ status: "unavailable" });
@@ -174,7 +237,10 @@ export function AppShell({
     setStaleViewport(true);
   }, []);
 
-  const places = result?.places ?? [];
+  // Favorites filter is applied client-side: the saved list never leaves the
+  // device, so the server has no way to filter by it (and shouldn't).
+  const allPlaces = result?.places ?? [];
+  const places = showFavoritesOnly ? allPlaces.filter((p) => favoriteIds.includes(p.id)) : allPlaces;
   const counts = useMemo(() => {
     const map: Record<string, number> = {};
     for (const place of places) {
@@ -193,6 +259,26 @@ export function AppShell({
     setSelectedId(place.id);
     setSnap("full");
   }, []);
+
+  /** After a verification lands, both views have to agree: the list/map get
+   * re-queried, and the open detail re-reads its own record so the score and
+   * "N kişi doğruladı" the user is looking at aren't a snapshot from before
+   * their own tap. */
+  const handleVerified = useCallback(
+    async (placeId: string) => {
+      void fetchPlaces(viewport ? { bbox: viewport.bbox } : {});
+      try {
+        const response = await fetch(`/api/places/${encodeURIComponent(placeId)}`);
+        if (!response.ok) return;
+        const fresh = (await response.json()) as Place;
+        setDetailPlace((current) => (current?.id === placeId ? { ...current, ...fresh } : current));
+      } catch {
+        // The verification itself already succeeded; failing to refresh the
+        // view is not worth surfacing an error over.
+      }
+    },
+    [fetchPlaces, viewport],
+  );
 
   const sheetHeightPx = useMemo(() => {
     if (typeof window === "undefined") return 190;
@@ -218,12 +304,24 @@ export function AppShell({
   const mapCenter = viewport?.center ?? center;
 
   return (
-    <main className="relative h-[100dvh] w-full overflow-hidden bg-bg">
+    <main
+      className="relative h-[100dvh] w-full overflow-hidden bg-bg"
+      // When the sheet is fully expanded on mobile it covers the map, and
+      // MapLibre's zoom buttons end up underneath it - unreachable, and
+      // flagged as obscured touch targets. Hiding them in that one state is
+      // honest: there is no map to zoom while the panel owns the screen.
+      data-sheet={isDesktop ? "sidebar" : snap}
+    >
       <MapCanvas
         places={places}
         selectedId={selectedId}
         userLocation={location.status === "granted" ? { lat: location.lat, lon: location.lon } : null}
         padding={mapPadding}
+        initialView={
+          initial?.center && initial.zoom !== null
+            ? { center: initial.center, zoom: initial.zoom }
+            : null
+        }
         onSelect={(place) => {
           if (!place) {
             setSelectedId(null);
@@ -291,7 +389,10 @@ export function AppShell({
             app is broken". On desktop this sits in the sidebar column, so
             it doesn't need to compete with the map. */}
         {usingApproximateLocation && (
-          <div className="pointer-events-auto mx-auto mt-2 flex max-w-2xl justify-center">
+          // mt-3, not mt-2: at mt-2 this row clipped the bottom of the 48px
+          // filter button above it, leaving it only ~6px of free space and
+          // failing the touch-target spacing check.
+          <div className="pointer-events-auto mx-auto mt-3 flex max-w-2xl justify-center">
             {/* pointer-events-none: this is a passive label sitting over the
                 map, and without it the strip silently eats drag-to-pan. */}
             <span className="pointer-events-none flex items-center gap-1.5 rounded-full bg-surface/95 px-3 py-1 text-[12px] font-medium text-text-secondary shadow-sm">
@@ -307,7 +408,9 @@ export function AppShell({
       {/* "Search this area" - the map moved, so results may not match what's
           visible. Re-querying automatically would fight the user; offering it
           keeps them in control. */}
-      {staleViewport && !loading && (
+      {/* Not shown when the sheet is fully expanded: there is no visible map
+          left to re-search, and the pill would sit underneath the panel. */}
+      {staleViewport && !loading && (isDesktop || snap !== "full") && (
         <button
           type="button"
           onClick={() => viewport && fetchPlaces({ bbox: viewport.bbox })}
@@ -361,7 +464,7 @@ export function AppShell({
         // approximate-location chip is showing above it.
         style={
           isDesktop
-            ? { top: usingApproximateLocation ? 112 : 76 }
+            ? { top: usingApproximateLocation ? 118 : 76 }
             : { height: SNAP_HEIGHT[snap] }
         }
       >
@@ -377,7 +480,13 @@ export function AppShell({
         )}
 
         {detailPlace ? (
-          <PlaceDetail place={detailPlace} onBack={() => setDetailPlace(null)} />
+          <PlaceDetail
+            place={detailPlace}
+            onBack={() => setDetailPlace(null)}
+            onVerified={handleVerified}
+            isFavorite={isFavorite(detailPlace.id)}
+            onToggleFavorite={toggleFavorite}
+          />
         ) : (
           <>
             <div className="shrink-0">
@@ -388,6 +497,22 @@ export function AppShell({
               )}
 
               <div className="flex items-center justify-between gap-2 px-4 pb-2 pt-2">
+                {favoriteCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowFavoritesOnly((v) => !v)}
+                    aria-pressed={showFavoritesOnly}
+                    className="flex h-7 shrink-0 items-center gap-1 rounded-full border px-2.5 text-[12px] font-medium transition-colors"
+                    style={{
+                      borderColor: showFavoritesOnly ? "var(--brand)" : "var(--border)",
+                      background: showFavoritesOnly ? "var(--brand-soft)" : "transparent",
+                      color: showFavoritesOnly ? "var(--brand)" : "var(--text-secondary)",
+                    }}
+                  >
+                    <Bookmark size={12} fill={showFavoritesOnly ? "currentColor" : "none"} aria-hidden />
+                    Kayıtlı {favoriteCount}
+                  </button>
+                )}
                 <p className="text-[13px] font-medium text-text-secondary" aria-live="polite">
                   {loading
                     ? "Yakındakiler aranıyor…"
@@ -467,6 +592,7 @@ export function AppShell({
                     key={place.id}
                     place={place}
                     active={place.id === selectedId}
+                    origin={center}
                     onSelect={(p) => setSelectedId(p.id)}
                     onOpenDetail={openDetail}
                   />
@@ -503,6 +629,7 @@ export function AppShell({
           <PlaceCard
             place={selectedPlace}
             active
+            origin={center}
             onSelect={() => {}}
             onOpenDetail={openDetail}
           />

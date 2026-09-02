@@ -9,6 +9,9 @@ const KIND_LABEL: Record<Contribution["kind"], string> = {
   suggestion: "Mekan önerisi",
   report_incorrect: "Yanlış bilgi bildirimi",
   report_closed: "Kapalı bildirimi",
+  // Applied immediately rather than queued, so it appears here as history
+  // (already "Onaylandı") rather than as something awaiting a decision.
+  verify_present: "Yerinde doğrulama",
 };
 
 const REASON_LABEL: Record<string, string> = {

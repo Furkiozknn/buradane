@@ -35,6 +35,12 @@ import { CATEGORIES, categoryMeta } from "@/lib/categories";
 import type { Place } from "@/lib/types";
 import { buildPinImage } from "@/lib/pin-image";
 
+/** Map camera moves are animation too - honour the OS setting rather than
+ * only styling transitions in CSS. */
+function prefersReducedMotion(): boolean {
+  return typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
 const SOURCE_ID = "places";
 const CLUSTER_LAYER = "clusters";
 const CLUSTER_COUNT_LAYER = "cluster-count";
@@ -58,6 +64,9 @@ export interface MapCanvasProps {
    * on desktop) so the map centers content in the area that's actually
    * visible rather than behind a panel. */
   padding: { bottom: number; left: number };
+  /** Where to open, when a shared link specifies it. Read once at map
+   * creation - later changes are the user's own panning, not ours. */
+  initialView?: { center: { lat: number; lon: number }; zoom: number } | null;
   onSelect: (place: Place | null) => void;
   /** `center` is the map's own centre, which respects `padding` - the bbox
    * midpoint does NOT (MapLibre computes getBounds() from the raw canvas
@@ -77,6 +86,7 @@ export default function MapCanvas({
   selectedId,
   userLocation,
   padding,
+  initialView,
   onSelect,
   onViewportChange,
   onMapMoved,
@@ -132,8 +142,10 @@ export default function MapCanvas({
     const map = new MapLibreMap({
       container: containerRef.current,
       style: BASEMAP_STYLE,
-      center: [28.9784, 41.0082], // İstanbul, until we know where the user is
-      zoom: 12.5,
+      center: initialView
+        ? [initialView.center.lon, initialView.center.lat]
+        : [28.9784, 41.0082], // İstanbul, until we know where the user is
+      zoom: initialView?.zoom ?? 12.5,
       attributionControl: false,
       // Pitch/rotate add nothing to a "what's near me" product and make the
       // map easy to knock askew with a stray two-finger gesture.
@@ -367,6 +379,40 @@ export default function MapCanvas({
     if (!map.getLayer(SELECTED_LAYER)) return;
     map.setFilter(SELECTED_LAYER, ["==", ["get", "id"], selectedId ?? "__none__"]);
   }, [selectedId, places]);
+
+  // Bring the selected place into view. Without this, picking a result from
+  // the list highlights a pin the user often can't see - the single most
+  // jarring thing a map app can do. `easeTo` (not `flyTo`): a short, direct
+  // move reads as responsive, where flyTo's zoom-out-and-back arc feels
+  // slow when you are just stepping through a list.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !readyRef.current || !selectedId) return;
+
+    const target = placesRef.current.find((p) => p.id === selectedId);
+    if (!target) return;
+
+    // Only move if the place isn't already comfortably in the visible area
+    // (which excludes whatever the sheet/sidebar covers, via padding).
+    const point = map.project([target.lon, target.lat]);
+    const canvas = map.getCanvas();
+    const pad = map.getPadding();
+    const left = pad.left ?? 0;
+    const right = pad.right ?? 0;
+    const top = pad.top ?? 0;
+    const bottom = pad.bottom ?? 0;
+    const visible =
+      point.x > left + 24 &&
+      point.x < canvas.clientWidth - right - 24 &&
+      point.y > top + 24 &&
+      point.y < canvas.clientHeight - bottom - 24;
+    if (visible) return;
+
+    map.easeTo({
+      center: [target.lon, target.lat],
+      duration: prefersReducedMotion() ? 0 : 420,
+    });
+  }, [selectedId]);
 
   // Keep the visible (unobscured) map area centered clear of the panel.
   useEffect(() => {

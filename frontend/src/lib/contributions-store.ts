@@ -69,6 +69,13 @@ export async function addContribution(input: {
 }): Promise<Contribution> {
   const store = await readStore();
 
+  // A positive verification ("yes, it's still here") is the one contribution
+  // that applies immediately rather than queueing. That mirrors the backend:
+  // confirming an existing record is low-risk (it cannot invent or delete
+  // anything), its weight decays with time, and holding it for moderation
+  // would defeat the entire point of a freshness signal.
+  const isVerification = input.kind === "verify_present";
+
   const contribution: Contribution = {
     id: `c_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
     kind: input.kind,
@@ -76,11 +83,33 @@ export async function addContribution(input: {
     placeName: input.placeName ?? null,
     payload: input.payload ?? {},
     note: input.note ?? null,
-    status: "pending", // never auto-published, same rule as the backend
+    status: isVerification ? "approved" : "pending",
     createdAt: new Date().toISOString(),
   };
 
   store.contributions.push(contribution);
+
+  if (isVerification && contribution.placeId) {
+    const existing = store.overrides[contribution.placeId] ?? {};
+    const verificationCount = (existing.verification_count ?? 0) + 1;
+    store.overrides[contribution.placeId] = {
+      ...existing,
+      verification_count: verificationCount,
+      last_verified_at: contribution.createdAt,
+      freshness_label: "Bugün doğrulandı",
+      // A place someone just confirmed is standing is, by definition, not
+      // closed - so an earlier approved "kapalı" report is superseded.
+      status: "active",
+      // Deliberately NOT storing reliability_score here. This store has no
+      // idea what the place's computed score is, so writing an absolute
+      // value would clobber it with a guess - the first version did exactly
+      // that and a verification *lowered* a well-documented place from
+      // 0.713 to 0.54. The read path owns the score and derives the
+      // verification bonus from the count above.
+      reliability_score: undefined,
+    };
+  }
+
   await writeStore(store);
   return contribution;
 }
