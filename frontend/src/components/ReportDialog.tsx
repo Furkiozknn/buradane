@@ -143,7 +143,7 @@ export function ReportDialog({ place, onClose }: { place: Place; onClose: () => 
                 onChange={(event) => setNote(event.target.value)}
                 rows={2}
                 maxLength={500}
-                className="mt-1 w-full resize-none rounded-xl border border-border bg-surface p-3 text-[14px] outline-none focus:border-brand"
+                className="mt-1 w-full resize-none rounded-xl border border-border bg-surface p-3 text-[16px] outline-none focus:border-brand"
                 placeholder="Ne gördüğünü kısaca yazabilirsin"
               />
             </label>

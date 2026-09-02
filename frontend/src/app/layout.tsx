@@ -27,8 +27,11 @@ export const viewport: Viewport = {
   ],
   width: "device-width",
   initialScale: 1,
-  // The map is the app; letting the page zoom breaks the gesture model.
-  maximumScale: 1,
+  // Deliberately NO maximumScale/user-scalable=no. Blocking page zoom is a
+  // WCAG 1.4.4 failure, and in an app whose whole point is helping people
+  // find accessible facilities, disabling zoom to protect a gesture would be
+  // the wrong trade. Map gestures are handled by MapLibre and `touch-action`
+  // instead.
   viewportFit: "cover",
 };
 

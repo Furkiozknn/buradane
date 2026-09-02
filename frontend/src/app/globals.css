@@ -53,8 +53,6 @@
   --shadow: 0 4px 12px rgb(28 25 23 / 0.08), 0 2px 4px rgb(28 25 23 / 0.04);
   --shadow-lg: 0 12px 32px rgb(28 25 23 / 0.14), 0 4px 8px rgb(28 25 23 / 0.06);
 
-  --sheet-peek: 168px;
-
   color-scheme: light;
 }
 
@@ -177,6 +175,60 @@ a[role="button"],
 .maplibregl-canvas:focus-visible {
   outline: 2px solid var(--brand);
   outline-offset: -2px;
+}
+
+/* MapLibre ships 29px control buttons stacked flush against each other:
+   under the 44px touch-target floor (WCAG 2.5.5 / platform HIG), and with no
+   spacing between neighbours. In a product about accessible places, shipping
+   controls people can't reliably hit would be the wrong look.
+
+   They are enlarged and separated rather than hidden on touch: zoom-OUT has
+   no one-finger alternative (double-tap only zooms in), so removing these
+   buttons on mobile would strand anyone who can't perform a two-finger
+   pinch - the exact users this app exists for. */
+.maplibregl-ctrl-group {
+  background: var(--surface) !important;
+  display: flex !important;
+  flex-direction: column;
+  gap: 10px;
+  border-radius: 0 !important;
+  /* The group is now just a spacer; each button carries its own surface. */
+  box-shadow: none !important;
+}
+
+.maplibregl-ctrl-group button {
+  width: 44px !important;
+  height: 44px !important;
+  background: var(--surface) !important;
+  border-radius: var(--radius) !important;
+  /* Keeps MapLibre's hairline ring (which draws the control's edge against a
+     near-white basemap) AND adds the design system's drop shadow. */
+  box-shadow:
+    0 0 0 1px var(--border),
+    var(--shadow) !important;
+}
+
+.maplibregl-ctrl-group button + button {
+  border-top: none !important;
+}
+
+/* On narrow screens the app's own floating header (search + filter button)
+   occupies the top-right corner, and MapLibre's controls default to the same
+   spot - the filter button physically covers the zoom-in button, making it
+   unreachable. Push the map controls below the header instead of hiding
+   them: zoom-out has no one-finger alternative. */
+@media (max-width: 1023px) {
+  .maplibregl-ctrl-top-right {
+    padding-top: 64px;
+  }
+}
+
+/* MapLibre's control glyphs are baked-in dark SVGs; invert them in dark mode
+   so they don't vanish against the dark surface. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .maplibregl-ctrl-group button .maplibregl-ctrl-icon {
+    filter: invert(1);
+  }
 }
 
 /* Hide the default popup chrome - place cards are rendered by React, not by

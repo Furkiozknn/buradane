@@ -135,7 +135,7 @@ export function SuggestPlaceDialog({
                 onChange={(event) => setName(event.target.value)}
                 maxLength={120}
                 placeholder="Örn. Sahil Parkı Çeşmesi"
-                className="mt-1 h-12 w-full rounded-xl border border-border bg-surface px-3 text-[15px] outline-none focus:border-brand"
+                className="mt-1 h-12 w-full rounded-xl border border-border bg-surface px-3 text-[16px] outline-none focus:border-brand"
               />
             </label>
 
@@ -187,7 +187,7 @@ export function SuggestPlaceDialog({
                 rows={2}
                 maxLength={500}
                 placeholder="Ücretsiz mi, erişilebilir mi, saatleri var mı?"
-                className="mt-1 w-full resize-none rounded-xl border border-border bg-surface p-3 text-[14px] outline-none focus:border-brand"
+                className="mt-1 w-full resize-none rounded-xl border border-border bg-surface p-3 text-[16px] outline-none focus:border-brand"
               />
             </label>
 

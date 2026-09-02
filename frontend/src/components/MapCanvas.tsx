@@ -59,7 +59,15 @@ export interface MapCanvasProps {
    * visible rather than behind a panel. */
   padding: { bottom: number; left: number };
   onSelect: (place: Place | null) => void;
-  onViewportChange: (bbox: [number, number, number, number], zoom: number) => void;
+  /** `center` is the map's own centre, which respects `padding` - the bbox
+   * midpoint does NOT (MapLibre computes getBounds() from the raw canvas
+   * corners), and using it puts a suggested place hundreds of metres to
+   * kilometres from where the user was actually looking. */
+  onViewportChange: (
+    bbox: [number, number, number, number],
+    zoom: number,
+    center: { lat: number; lon: number },
+  ) => void;
   onMapMoved: () => void;
   onReady?: () => void;
 }
@@ -282,9 +290,11 @@ export default function MapCanvas({
 
     const emitViewport = (instance: MapLibreMap) => {
       const bounds = instance.getBounds();
+      const center = instance.getCenter();
       handlersRef.current.onViewportChange(
         [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()],
         instance.getZoom(),
+        { lat: center.lat, lon: center.lng },
       );
     };
 

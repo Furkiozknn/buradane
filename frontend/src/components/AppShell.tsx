@@ -55,7 +55,11 @@ export function AppShell({
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [suggestOpen, setSuggestOpen] = useState(false);
   const [snap, setSnap] = useState<SheetSnap>("peek");
-  const [viewport, setViewport] = useState<{ bbox: [number, number, number, number]; zoom: number } | null>(null);
+  const [viewport, setViewport] = useState<{
+    bbox: [number, number, number, number];
+    zoom: number;
+    center: { lat: number; lon: number };
+  } | null>(null);
   const [staleViewport, setStaleViewport] = useState(false);
 
   const sheetRef = useRef<HTMLDivElement>(null);
@@ -63,7 +67,12 @@ export function AppShell({
   const isDesktop = useMediaQuery(DESKTOP_QUERY);
 
   const center = location.status === "granted" ? { lat: location.lat, lon: location.lon } : ISTANBUL_CENTER;
-  const usingApproximateLocation = location.status !== "granted";
+  // Deliberately excludes "locating": while the request is in flight we have
+  // not fallen back to anything yet, and claiming we did would be both wrong
+  // and (on desktop, where this drives the sidebar offset) a layout jump the
+  // moment the real fix arrives.
+  const usingApproximateLocation =
+    location.status === "denied" || location.status === "unavailable" || location.status === "idle";
 
   /** Debounced free-text search: typing shouldn't fire a request per keystroke. */
   useEffect(() => {
@@ -154,9 +163,12 @@ export function AppShell({
     );
   }, []);
 
-  const handleViewportChange = useCallback((bbox: [number, number, number, number], zoom: number) => {
-    setViewport({ bbox, zoom });
-  }, []);
+  const handleViewportChange = useCallback(
+    (bbox: [number, number, number, number], zoom: number, mapCenter: { lat: number; lon: number }) => {
+      setViewport({ bbox, zoom, center: mapCenter });
+    },
+    [],
+  );
 
   const handleMapMoved = useCallback(() => {
     setStaleViewport(true);
@@ -199,13 +211,11 @@ export function AppShell({
   const filterCount = activeFilterCount(filters);
   const hasAnyFilter = filterCount > 0 || category !== null || query.trim().length > 0;
 
-  // Where a suggested place would land: the middle of what the user is
-  // currently looking at, which is the spot they panned to.
-  const mapCenter = useMemo(() => {
-    if (!viewport) return center;
-    const [minLon, minLat, maxLon, maxLat] = viewport.bbox;
-    return { lat: (minLat + maxLat) / 2, lon: (minLon + maxLon) / 2 };
-  }, [viewport, center]);
+  // Where a suggested place would land: the map's own centre, which accounts
+  // for the sheet/sidebar padding. The bbox midpoint would be the centre of
+  // the whole canvas including the part hidden behind the panel - off by
+  // hundreds of metres to kilometres depending on zoom.
+  const mapCenter = viewport?.center ?? center;
 
   return (
     <main className="relative h-[100dvh] w-full overflow-hidden bg-bg">
@@ -245,7 +255,10 @@ export function AppShell({
               onChange={(event) => setSearchInput(event.target.value)}
               placeholder="Ne arıyorsun? Örn. ücretsiz tuvalet"
               aria-label="Mekan ara"
-              className="h-full w-full min-w-0 bg-transparent text-[14.5px] outline-none placeholder:text-text-muted"
+              // 16px is a hard floor for form controls: iOS Safari auto-zooms
+              // the whole layout when a focused input is smaller, and it does
+              // not zoom back out on blur.
+              className="h-full w-full min-w-0 bg-transparent text-[16px] outline-none placeholder:text-text-muted"
             />
             {searchInput && (
               <button
@@ -279,7 +292,9 @@ export function AppShell({
             it doesn't need to compete with the map. */}
         {usingApproximateLocation && (
           <div className="pointer-events-auto mx-auto mt-2 flex max-w-2xl justify-center">
-            <span className="flex items-center gap-1.5 rounded-full bg-surface/95 px-3 py-1 text-[12px] font-medium text-text-secondary shadow-sm">
+            {/* pointer-events-none: this is a passive label sitting over the
+                map, and without it the strip silently eats drag-to-pan. */}
+            <span className="pointer-events-none flex items-center gap-1.5 rounded-full bg-surface/95 px-3 py-1 text-[12px] font-medium text-text-secondary shadow-sm">
               <MapPin size={12} aria-hidden />
               {location.status === "denied"
                 ? "Konum kapalı — İstanbul merkez gösteriliyor"
@@ -318,7 +333,11 @@ export function AppShell({
         type="button"
         onClick={requestLocation}
         className="absolute right-3 z-20 flex h-12 w-12 items-center justify-center rounded-full border border-border bg-surface shadow transition-transform"
-        style={{ bottom: isDesktop ? "1.5rem" : `calc(${SNAP_HEIGHT[snap]} + 12px)` }}
+        style={{
+          bottom: isDesktop
+            ? "calc(1.5rem + env(safe-area-inset-bottom))"
+            : `calc(${SNAP_HEIGHT[snap]} + 12px)`,
+        }}
         aria-label="Konumumu göster"
       >
         <LocateFixed
@@ -399,7 +418,13 @@ export function AppShell({
               </div>
             </div>
 
-            <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain px-4 pb-6">
+            {/* The bottom padding clears the iPhone home indicator: the
+                layout declares viewport-fit=cover, which makes honouring the
+                inset this app's responsibility. */}
+            <div
+              className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain px-4"
+              style={{ paddingBottom: "calc(1.5rem + env(safe-area-inset-bottom))" }}
+            >
               {loading && places.length === 0 ? (
                 Array.from({ length: 4 }).map((_, index) => <PlaceCardSkeleton key={index} />)
               ) : error ? (

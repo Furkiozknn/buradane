@@ -48,8 +48,11 @@ export function CategoryGrid({ selected, onSelect, counts }: Props) {
               >
                 {category.shortLabel}
               </span>
-              {count !== undefined && (
-                <span className="text-[10px] tabular-nums text-text-muted">{count}</span>
+              {/* `count > 0` matches CategoryChips: a bare "0" under every
+                  category the current viewport happens not to contain is
+                  noise, not information. */}
+              {count !== undefined && count > 0 && (
+                <span className="text-[11px] tabular-nums text-text-secondary">{count}</span>
               )}
             </button>
           );
@@ -106,7 +109,14 @@ export function CategoryChips({ selected, onSelect, counts }: Props) {
             <Icon size={15} color={isSelected ? category.onTint : category.pin} aria-hidden />
             {category.shortLabel}
             {count !== undefined && count > 0 && (
-              <span className="tabular-nums text-[11px] opacity-70">{count}</span>
+              // Follows the chip's own foreground rather than a fixed token:
+              // an unselected chip is on --surface (where --text-secondary
+              // clears 4.5:1), but a selected chip is on the category's light
+              // `tint`, which has no dark variant - pinning the count to
+              // --text-secondary there drops it to ~1.2:1 in dark mode.
+              <span className="tabular-nums text-[11px]" style={{ color: isSelected ? category.onTint : "var(--text-secondary)" }}>
+                {count}
+              </span>
             )}
           </button>
         );
