@@ -61,6 +61,21 @@ CATEGORIES: dict[str, dict] = {
     "otopark": {"selectors": ['["amenity"="parking"]["access"!="private"]'], "cap": 700},
     "dus": {"selectors": ['["amenity"="shower"]'], "cap": 200},
     "wifi": {"selectors": ['["internet_access"="wlan"]'], "cap": 300},
+    # --- Türkiye-specific additions ---------------------------------------
+    # These are where a general "toilet finder" stops and a Turkish civic
+    # tool starts. A mosque is the most widely available public facility in
+    # Turkey (and the most reliable place to find a toilet and running water
+    # in a neighbourhood you don't know); assembly points are the country's
+    # standing earthquake-preparedness infrastructure and are exactly what
+    # nobody can find when it matters.
+    "cami": {
+        "selectors": ['["amenity"="place_of_worship"]["religion"="muslim"]'],
+        "cap": 700,
+    },
+    "eczane": {"selectors": ['["amenity"="pharmacy"]'], "cap": 700},
+    "toplanma-alani": {"selectors": ['["emergency"="assembly_point"]'], "cap": 500},
+    "kutuphane": {"selectors": ['["amenity"="library"]'], "cap": 300},
+    "sarj": {"selectors": ['["amenity"="charging_station"]'], "cap": 300},
 }
 
 # Fallback display names for unnamed OSM features - a huge share of toilets,
@@ -77,6 +92,11 @@ UNNAMED_LABEL = {
     "otopark": "Otopark",
     "dus": "Duş",
     "wifi": "Ücretsiz Wi-Fi Noktası",
+    "cami": "Cami",
+    "eczane": "Eczane",
+    "toplanma-alani": "Acil Toplanma Alanı",
+    "kutuphane": "Kütüphane",
+    "sarj": "Elektrikli Araç Şarj Noktası",
 }
 
 
@@ -153,7 +173,20 @@ def normalize(element: dict, category: str) -> dict | None:
     # A public park/bench/drinking fountain with no fee tag is free in
     # practice - assuming "unknown" there would make the "Ücretsiz" filter
     # useless for exactly the categories users care most about.
-    if fee is None and category in {"park", "dinlenme", "su", "cocuk-alani", "wifi"}:
+    if fee is None and category in {
+        "park",
+        "dinlenme",
+        "su",
+        "cocuk-alani",
+        "wifi",
+        # Public by definition in Turkey - a mosque, an assembly point or a
+        # municipal library never charges entry, and leaving these "unknown"
+        # would make the "Ücretsiz" filter useless for exactly the places
+        # people fall back on.
+        "cami",
+        "toplanma-alani",
+        "kutuphane",
+    }:
         price_type = "free"
 
     opening_hours = tags.get("opening_hours")

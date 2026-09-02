@@ -291,6 +291,7 @@ export function queryPlaces(
     limit = 60,
     offset = 0,
     overrides,
+    sort = "distance",
   } = query;
 
   let parsedFromText = { categories: [] as CategorySlug[], amenities: [] as AmenityKey[], freeOnly: false, leftover: "" };
@@ -320,6 +321,13 @@ export function queryPlaces(
   }
 
   results.sort((a, b) => {
+    if (sort === "reliability") {
+      const byScore = b.reliability_score - a.reliability_score;
+      // Distance still breaks ties: among equally trustworthy records, the
+      // closer one is always the better answer.
+      if (Math.abs(byScore) > 0.001) return byScore;
+      return (a.distance_m ?? Infinity) - (b.distance_m ?? Infinity);
+    }
     if (a.distance_m != null && b.distance_m != null) return a.distance_m - b.distance_m;
     return b.reliability_score - a.reliability_score;
   });

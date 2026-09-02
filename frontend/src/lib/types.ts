@@ -21,7 +21,14 @@ export type CategorySlug =
   | "spor"
   | "otopark"
   | "dus"
-  | "wifi";
+  | "wifi"
+  // Türkiye-specific. See scripts/fetch_demo_data.py for why these earn a
+  // place a general-purpose "find a toilet" app wouldn't have.
+  | "cami"
+  | "eczane"
+  | "toplanma-alani"
+  | "kutuphane"
+  | "sarj";
 
 export type PlaceStatus = "active" | "temporarily_closed" | "permanently_closed" | "pending_review";
 
@@ -81,7 +88,14 @@ export interface Place {
   raw_tags?: Record<string, string>;
 }
 
+/** "Yakın" is the default because it answers the product's actual question.
+ * "Güvenilir" exists because open data quality is uneven - sometimes the
+ * nearest record is a decade-old unverified node and the one 200m further is
+ * the one that will actually be there. */
+export type SortKey = "distance" | "reliability";
+
 export interface PlaceQuery {
+  sort?: SortKey;
   lat?: number;
   lon?: number;
   radius_m?: number;

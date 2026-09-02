@@ -49,6 +49,9 @@ export function PlaceCard({
 
   return (
     <article
+      // Addressable so keyboard navigation can scroll the highlighted row
+      // into view without keeping a ref per card.
+      data-place-id={place.id}
       className="group relative flex gap-3 rounded-2xl border bg-surface p-3 transition-colors"
       style={{ borderColor: active ? primary.pin : "var(--border)" }}
     >

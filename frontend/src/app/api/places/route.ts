@@ -43,8 +43,11 @@ export async function GET(request: Request) {
 
   const overrides = await listOverrides();
 
+  const sortParam = params.get("sort");
+
   const result = queryPlaces({
     overrides,
+    sort: sortParam === "reliability" ? "reliability" : "distance",
     lat,
     lon,
     radius_m: num("radius_m"),

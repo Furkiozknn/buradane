@@ -2,7 +2,17 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Bookmark, LocateFixed, MapPin, Plus, RefreshCw, Search, SlidersHorizontal, X } from "lucide-react";
+import {
+  ArrowUpDown,
+  Bookmark,
+  LocateFixed,
+  MapPin,
+  Plus,
+  RefreshCw,
+  Search,
+  SlidersHorizontal,
+  X,
+} from "lucide-react";
 
 import { CategoryChips, CategoryGrid } from "./CategoryPicker";
 import { PlaceCard, PlaceCardSkeleton } from "./PlaceCard";
@@ -12,7 +22,7 @@ import { SuggestPlaceDialog } from "./SuggestPlaceDialog";
 import { DESKTOP_QUERY, useMediaQuery } from "@/lib/use-media-query";
 import { buildUrlSearch, type UrlState } from "@/lib/url-state";
 import { useFavorites } from "@/lib/use-favorites";
-import type { CategorySlug, Place, PlaceQueryResult } from "@/lib/types";
+import type { CategorySlug, Place, PlaceQueryResult, SortKey } from "@/lib/types";
 
 // The map is browser-only (WebGL + window). Loading it without SSR is
 // required, not a preference - and it keeps maplibre out of the server bundle.
@@ -88,6 +98,7 @@ export function AppShell({
   const isDesktop = useMediaQuery(DESKTOP_QUERY);
   const { favoriteIds, toggle: toggleFavorite, isFavorite, count: favoriteCount } = useFavorites();
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
+  const [sort, setSort] = useState<SortKey>("distance");
 
   // Keep the address bar in step with what's on screen. replaceState, not
   // push: panning the map or toggling a filter shouldn't bury the user's
@@ -141,6 +152,7 @@ export function AppShell({
       if (filters.freeOnly) params.set("free_only", "true");
       if (filters.openNow) params.set("open_now", "true");
       if (query.trim()) params.set("q", query.trim());
+      if (sort !== "distance") params.set("sort", sort);
       params.set("limit", "200");
 
       try {
@@ -158,7 +170,7 @@ export function AppShell({
         if (requestId === requestIdRef.current) setLoading(false);
       }
     },
-    [category, filters, query, center.lat, center.lon],
+    [category, filters, query, sort, center.lat, center.lon],
   );
 
   // Filter/category/search changes re-query immediately against the current
@@ -178,7 +190,7 @@ export function AppShell({
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void fetchPlaces(bbox ? { bbox } : {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [category, filters, query, location.status]);
+  }, [category, filters, query, sort, location.status]);
 
   // A link that names a place opens straight on that place's detail, rather
   // than dropping the recipient on a map and making them hunt for it.
@@ -293,6 +305,42 @@ export function AppShell({
   const mapPadding = isDesktop
     ? { bottom: 24, left: 416 }
     : { bottom: Math.min(sheetHeightPx, 360), left: 24 };
+
+  const handleListKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (places.length === 0) return;
+      const index = places.findIndex((p) => p.id === selectedId);
+
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        const next =
+          event.key === "ArrowDown"
+            ? Math.min(places.length - 1, index + 1)
+            : Math.max(0, index <= 0 ? 0 : index - 1);
+        const target = places[next];
+        if (!target) return;
+        setSelectedId(target.id);
+        // Keep the highlighted row on screen - moving a selection the user
+        // can't see is worse than not moving it.
+        document
+          .querySelector(`[data-place-id="${CSS.escape(target.id)}"]`)
+          ?.scrollIntoView({ block: "nearest" });
+        return;
+      }
+
+      if (event.key === "Enter" && index >= 0) {
+        event.preventDefault();
+        openDetail(places[index]);
+        return;
+      }
+
+      if (event.key === "Escape" && selectedId) {
+        event.preventDefault();
+        setSelectedId(null);
+      }
+    },
+    [places, selectedId, openDetail],
+  );
 
   const filterCount = activeFilterCount(filters);
   const hasAnyFilter = filterCount > 0 || category !== null || query.trim().length > 0;
@@ -527,6 +575,19 @@ export function AppShell({
                 {result?.applied.relaxed && !loading && (
                   <span className="shrink-0 text-[11.5px] text-text-muted">arama genişletildi</span>
                 )}
+                {/* Sorting matters here in a way it wouldn't in a normal
+                    directory: open civic data is uneven, so the nearest
+                    record is sometimes an unverified decade-old node while
+                    the one 200m further is the one that's actually there. */}
+                <button
+                  type="button"
+                  onClick={() => setSort((s) => (s === "distance" ? "reliability" : "distance"))}
+                  className="flex shrink-0 items-center gap-1 text-[12.5px] font-medium text-text-secondary"
+                  aria-label={`Sıralama: ${sort === "distance" ? "en yakın" : "en güvenilir"}. Değiştir.`}
+                >
+                  <ArrowUpDown size={12} aria-hidden />
+                  {sort === "distance" ? "En yakın" : "En güvenilir"}
+                </button>
                 {hasAnyFilter && !loading && (
                   <button
                     type="button"
@@ -546,9 +607,15 @@ export function AppShell({
             {/* The bottom padding clears the iPhone home indicator: the
                 layout declares viewport-fit=cover, which makes honouring the
                 inset this app's responsibility. */}
+            {/* The list is the map's accessible equivalent, so it has to be
+                navigable without a pointer: ↑/↓ step through results (and
+                highlight the matching pin), Enter opens, Escape clears the
+                selection. Tabbing through 200 cards to reach the fifth one
+                is not navigation. */}
             <div
               className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain px-4"
               style={{ paddingBottom: "calc(1.5rem + env(safe-area-inset-bottom))" }}
+              onKeyDown={handleListKeyDown}
             >
               {loading && places.length === 0 ? (
                 Array.from({ length: 4 }).map((_, index) => <PlaceCardSkeleton key={index} />)
