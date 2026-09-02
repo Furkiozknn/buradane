@@ -273,7 +273,11 @@ export function AppShell({
           </button>
         </div>
 
-        {usingApproximateLocation && !isDesktop && (
+        {/* Shown on desktop too: silently falling back to the city centre
+            with no explanation is exactly the state users misread as "the
+            app is broken". On desktop this sits in the sidebar column, so
+            it doesn't need to compete with the map. */}
+        {usingApproximateLocation && (
           <div className="pointer-events-auto mx-auto mt-2 flex max-w-2xl justify-center">
             <span className="flex items-center gap-1.5 rounded-full bg-surface/95 px-3 py-1 text-[12px] font-medium text-text-secondary shadow-sm">
               <MapPin size={12} aria-hidden />
@@ -299,7 +303,7 @@ export function AppShell({
           style={{
             background: "var(--text)",
             color: "var(--bg)",
-            top: isDesktop ? "1.25rem" : usingApproximateLocation ? "7.5rem" : "5rem",
+            top: isDesktop ? "1.25rem" : usingApproximateLocation ? "8rem" : "5rem",
             left: isDesktop ? "calc(416px + (100% - 416px) / 2)" : "50%",
           }}
         >
@@ -331,10 +335,16 @@ export function AppShell({
         aria-label="Sonuçlar"
         className={
           isDesktop
-            ? "absolute bottom-3 left-3 top-[76px] z-30 flex w-[400px] flex-col overflow-hidden rounded-3xl border border-border bg-surface shadow-lg"
+            ? "absolute bottom-3 left-3 z-30 flex w-[400px] flex-col overflow-hidden rounded-3xl border border-border bg-surface shadow-lg"
             : "absolute inset-x-0 bottom-0 z-30 flex flex-col rounded-t-3xl border-t border-border bg-surface shadow-lg transition-[height] duration-300 ease-out"
         }
-        style={isDesktop ? undefined : { height: SNAP_HEIGHT[snap] }}
+        // Desktop: starts below the search row, and lower still when the
+        // approximate-location chip is showing above it.
+        style={
+          isDesktop
+            ? { top: usingApproximateLocation ? 112 : 76 }
+            : { height: SNAP_HEIGHT[snap] }
+        }
       >
         {!isDesktop && (
           <button
@@ -410,6 +420,11 @@ export function AppShell({
                       setFilters(EMPTY_FILTERS);
                       setSearchInput("");
                     }}
+                    // A dead end is the worst possible outcome here: if we
+                    // genuinely have nothing, the useful move is letting the
+                    // user add what they know is there.
+                    secondaryLabel="Yer öner"
+                    onSecondary={() => setSuggestOpen(true)}
                   />
                 ) : (
                   <EmptyState
