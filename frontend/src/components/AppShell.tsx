@@ -134,6 +134,18 @@ export function AppShell({
     return [...cities].sort((a, b) => b.count - a.count)[0]?.slug ?? "istanbul";
   });
   const [cityPickerOpen, setCityPickerOpen] = useState(false);
+  /**
+   * Whether the map follows the device or a chosen city.
+   *
+   * Before this existed, granting location permission removed the city
+   * switcher entirely - the chip that opens it only appeared when we had
+   * *failed* to locate someone. So the moment the app worked as intended,
+   * looking at another city became impossible short of panning there, which
+   * across nine cities is not a real option. Planning a trip is an ordinary
+   * reason to open a civic map.
+   */
+  const [followUser, setFollowUser] = useState(true);
+
   // An explicit "take me here". The nonce is what makes re-picking the city
   // you already have selected work after you have panned away from it.
   const [mapFocus, setMapFocus] = useState<{
@@ -168,14 +180,8 @@ export function AppShell({
 
   const cityCenter =
     datasetMeta.cities.find((c) => c.slug === activeCity)?.center ?? FALLBACK_CENTER;
-  const center = location.status === "granted" ? { lat: location.lat, lon: location.lon } : cityCenter;
-  // Deliberately excludes "locating": while the request is in flight we have
-  // not fallen back to anything yet, and claiming we did would be both wrong
-  // and (on desktop, where this drives the sidebar offset) a layout jump the
-  // moment the real fix arrives.
-  const usingApproximateLocation =
-    location.status === "denied" || location.status === "unavailable" || location.status === "idle";
-
+  const followingUser = followUser && location.status === "granted";
+  const center = followingUser ? { lat: location.lat, lon: location.lon } : cityCenter;
   /** Debounced free-text search: typing shouldn't fire a request per keystroke. */
   useEffect(() => {
     const timer = setTimeout(() => setQuery(searchInput), 320);
@@ -274,7 +280,6 @@ export function AppShell({
     if (!deviceOnline) return;
     if (!wasDegradedRef.current) return;
     const bbox = viewport?.bbox;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     void fetchPlaces(bbox ? { bbox } : {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deviceOnline]);
@@ -537,27 +542,46 @@ export function AppShell({
             with no explanation is exactly the state users misread as "the
             app is broken". On desktop this sits in the sidebar column, so
             it doesn't need to compete with the map. */}
-        {usingApproximateLocation && (
-          // mt-3, not mt-2: at mt-2 this row clipped the bottom of the 48px
-          // filter button above it, leaving it only ~6px of free space and
-          // failing the touch-target spacing check.
-          <div className="pointer-events-auto mx-auto mt-3 flex max-w-2xl justify-center">
-            {/* pointer-events-none: this is a passive label sitting over the
-                map, and without it the strip silently eats drag-to-pan. */}
-            {/* Tappable: when we can't locate someone, "pick your city" is a
-                far better recovery than a blank map or a re-prompt the
-                browser will silently swallow. */}
-            <button
-              type="button"
-              onClick={() => setCityPickerOpen(true)}
-              className="flex min-h-11 items-center gap-1.5 rounded-full bg-surface/95 px-3 py-1 text-[12px] font-medium text-text-secondary shadow-sm transition-colors hover:bg-surface"
-            >
-              <MapPin size={12} aria-hidden />
-              {location.status === "denied" ? "Konum kapalı" : "Yaklaşık konum"} — {activeCityLabel}
-              <span className="text-brand">&middot; değiştir</span>
-            </button>
-          </div>
-        )}
+        {/* Always present, in every location state.
+            It used to appear only when locating had FAILED, which meant the
+            city switcher vanished the moment the app worked as intended -
+            and a control that comes and goes with permission state also
+            shifted everything below it. Its label states which of the two
+            things the map is actually centred on, since "near me" and
+            "showing Ankara" produce very different result lists. */}
+        {/* mt-3, not mt-2: at mt-2 this row clipped the bottom of the 48px
+            filter button above it, leaving it only ~6px of free space and
+            failing the touch-target spacing check. */}
+        <div className="pointer-events-auto mx-auto mt-3 flex max-w-2xl justify-center">
+          {/* Tappable: when we can't locate someone, "pick your city" is a
+              far better recovery than a blank map or a re-prompt the browser
+              will silently swallow - and when we can, it is how you go look
+              somewhere else. */}
+          <button
+            type="button"
+            onClick={() => setCityPickerOpen(true)}
+            className="flex min-h-11 items-center gap-1.5 rounded-full bg-surface/95 px-3 py-1 text-[12px] font-medium text-text-secondary shadow-sm transition-colors hover:bg-surface"
+          >
+            <MapPin size={12} aria-hidden />
+            {/* Three genuinely different situations, said differently.
+                "Yaklaşık konum" is a confession that we could not locate the
+                user, so it must not appear when we know exactly where they
+                are and they simply chose to look at another city. That case
+                gets the bare city name - the pin icon already says what it
+                means, and naming it any harder would drag in Turkish case
+                suffixes that differ per city (Ankara'ya, İzmir'e, Bursa'ya). */}
+            {followingUser ? (
+              <>Konumundasın</>
+            ) : location.status === "granted" ? (
+              <>{activeCityLabel}</>
+            ) : (
+              <>
+                {location.status === "denied" ? "Konum kapalı" : "Yaklaşık konum"} — {activeCityLabel}
+              </>
+            )}
+            <span className="text-brand">&middot; {followingUser ? "şehir seç" : "değiştir"}</span>
+          </button>
+        </div>
       </div>
 
       {/* "Search this area" - the map moved, so results may not match what's
@@ -576,7 +600,9 @@ export function AppShell({
           style={{
             background: "var(--text)",
             color: "var(--bg)",
-            top: isDesktop ? "1.25rem" : usingApproximateLocation ? "8rem" : "5rem",
+            // The location chip is always present now, so this no longer
+            // has to branch on whether it is showing.
+            top: isDesktop ? "1.25rem" : "8rem",
             left: isDesktop ? "calc(416px + (100% - 416px) / 2)" : "50%",
           }}
         >
@@ -589,19 +615,31 @@ export function AppShell({
 
       <button
         type="button"
-        onClick={requestLocation}
+        onClick={() => {
+          // Doubles as "back to me" once the user has gone off to browse
+          // another city, which is why it re-centres even when we already
+          // have a fix.
+          setFollowUser(true);
+          if (location.status === "granted") {
+            setViewport(null);
+            setStaleViewport(false);
+            setMapFocus({ center: { lat: location.lat, lon: location.lon }, zoom: 15, nonce: Date.now() });
+          } else {
+            requestLocation();
+          }
+        }}
         className="absolute right-3 z-20 flex h-12 w-12 items-center justify-center rounded-full border border-border bg-surface shadow transition-transform"
         style={{
           bottom: isDesktop
             ? "calc(1.5rem + env(safe-area-inset-bottom))"
             : `calc(${SNAP_HEIGHT[snap]} + 12px)`,
         }}
-        aria-label="Konumumu göster"
+        aria-label={followingUser ? "Konumumu yeniden ortala" : "Konumuma dön"}
       >
         <LocateFixed
           size={20}
           className={location.status === "locating" ? "animate-spin" : ""}
-          style={{ color: location.status === "granted" ? "var(--location)" : "var(--text-secondary)" }}
+          style={{ color: followingUser ? "var(--location)" : "var(--text-secondary)" }}
         />
       </button>
 
@@ -619,7 +657,7 @@ export function AppShell({
         // approximate-location chip is showing above it.
         style={
           isDesktop
-            ? { top: usingApproximateLocation ? 118 : 76 }
+            ? { top: 118 }
             : { height: SNAP_HEIGHT[snap] }
         }
       >
@@ -883,6 +921,9 @@ export function AppShell({
           onSelect={(city) => {
             setActiveCity(city.slug);
             setCityPickerOpen(false);
+            // Choosing a city means "show me there", which outranks a device
+            // fix until the user taps the locate button again.
+            setFollowUser(false);
             // Selecting a city is an explicit "take me here", so the map
             // jumps rather than waiting for the next viewport query. This
             // used to only clear the app's viewport state, which moved the
