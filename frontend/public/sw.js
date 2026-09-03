@@ -85,7 +85,7 @@ async function trim(cacheName, limit) {
   await Promise.all(keys.slice(0, keys.length - limit).map((key) => cache.delete(key)));
 }
 
-async function cacheFirst(request, cacheName, limit) {
+async function cacheFirst(event, request, cacheName, limit) {
   const cache = await caches.open(cacheName);
   const hit = await cache.match(request);
   if (hit) return hit;
@@ -95,7 +95,11 @@ async function cacheFirst(request, cacheName, limit) {
   // are still worth storing - we just cannot inspect them.
   if (response && (response.ok || response.type === "opaque")) {
     await cache.put(request, response.clone());
-    if (limit) trim(cacheName, limit);
+    // waitUntil, not fire-and-forget: a service worker is terminated as soon
+    // as it looks idle, and an un-awaited trim is exactly the kind of tail
+    // work that gets killed. Dropped often enough, the tile cache stops
+    // being bounded at all.
+    if (limit) event.waitUntil(trim(cacheName, limit));
   }
   return response;
 }
@@ -144,7 +148,7 @@ async function networkFirst(event, request, cacheName, limit, timeoutMs = 2500) 
     .then(async (response) => {
       if (response && response.ok) {
         await cache.put(request, response.clone());
-        if (limit) trim(cacheName, limit);
+        if (limit) event.waitUntil(trim(cacheName, limit));
       }
       return response;
     })
@@ -187,14 +191,14 @@ self.addEventListener("fetch", (event) => {
   if (url.searchParams.has("_rsc")) return;
 
   if (TILE_HOSTS.has(url.hostname)) {
-    event.respondWith(cacheFirst(request, TILE_CACHE, TILE_LIMIT).catch(() => Response.error()));
+    event.respondWith(cacheFirst(event, request, TILE_CACHE, TILE_LIMIT).catch(() => Response.error()));
     return;
   }
 
   if (url.origin !== self.location.origin) return;
 
   if (url.pathname.startsWith("/_next/static/") || url.pathname.startsWith("/maplibre/")) {
-    event.respondWith(cacheFirst(request, ASSET_CACHE).catch(() => Response.error()));
+    event.respondWith(cacheFirst(event, request, ASSET_CACHE).catch(() => Response.error()));
     return;
   }
 
