@@ -21,9 +21,10 @@ süresi) ve **"bu bilgi hâlâ doğru mu?"** (tek dokunuşla "Evet, burada"
 doğrulaması, tazelik etiketi, kaynak ve güvenilirlik skoru).
 
 > **Demo ekran görüntüsü:** Henüz eklenmedi. Aşağıdaki "Hızlı Başlangıç →
-> Frontend" adımlarıyla demoyu yerelde çalıştırıp **11.406 gerçek
-> OpenStreetMap mekanı** (İstanbul 6.481, Ankara 2.654, İzmir 2.271)
-> üzerinde harita ve liste arayüzünü görebilirsiniz.
+> Frontend" adımlarıyla demoyu yerelde çalıştırıp **18.974 gerçek
+> OpenStreetMap mekanı** (İstanbul 6.481, Ankara 2.654, İzmir 2.271,
+> Antalya 1.668, Bursa 1.416, Adana 1.310, Konya 1.293, Gaziantep 983,
+> Trabzon 898) üzerinde harita ve liste arayüzünü görebilirsiniz.
 
 ## v1 Kapsamı
 
@@ -98,7 +99,7 @@ npm run dev
 ```
 
 `http://localhost:3000` adresinde açılır. Demo verisi
-(`frontend/data/places.*.json`, üç şehir / 11.406 gerçek OSM mekanı, ~9 MB)
+(`frontend/data/places.*.json`, dokuz il / 18.974 gerçek OSM mekanı, ~15 MB)
 repoyla birlikte gelir - sadece demoyu denemek için "Veri Pipeline"
 adımlarını tekrar koşmanız gerekmez, onlar yalnızca anlık görüntüyü
 yenilemek ya da yeni bir şehir eklemek istediğinizde gerekli.
@@ -274,9 +275,9 @@ gerekmez.
    Bu yüzden konteyner kategoriler (`park`, `spor`) 120 metre yarıçapındaki
    tesislerden amenity bayrağı devralır - **kategoriler asla
    birleştirilmez** (çeşme parka dönüşmez) ve OSM'in açıkça belirttiği bir
-   değer asla üzerine yazılmaz. Gerçek çalıştırmada üç şehirde toplam 815
-   konteyner mekan zenginleştirildi, 871 amenity bayrağı eklendi (her şehir
-   dosyasının kendi `enrichment` alanına bakın).
+   değer asla üzerine yazılmaz. İlk üç şehirlik anlık görüntüde 815
+   konteyner mekan zenginleştirildi, 871 amenity bayrağı eklendi; güncel
+   sayılar için her şehir dosyasının kendi `enrichment` alanına bakın.
 3. **`repair_demo_data.py`** - Overpass'a tekrar gitmeden, zaten çekilmiş
    anlık görüntüdeki veri kusurlarını onarır: erken bir sürümün eksik ev
    numarasını koşulsuz araya sıkıştırmasından kalma "Yerebatan Caddesi
@@ -524,7 +525,7 @@ düzelttiğimiz üç nokta:
 |---|---|---|
 | `access=private/no` | 146 mekan (17'si tuvalet) | Sonuçlara **hiç girmez**. Özel mülk içindeki bir tuvaleti umumi diye göstermek, acelesi olan birini açılmayacak bir kapıya göndermektir. |
 | `access=customers` / `permit` | 9 tuvalet + diğerleri | **Kalır ama etiketlenir.** "Bir çay al, tuvaleti kullan" İstanbul'da gerçekten işleyen bir çözüm; gizlemek gerçek bir cevabı çöpe atmak olurdu. |
-| `opening_hours` | 11.406 mekanın %5,5'inde var (514 açık, 17 kapalı, 10.875 bilinmiyor) | Filtre yalnızca **kapalı olduğu bilinenleri** eler; çipin adı da bu ("Kapalıları gizle"). |
+| `opening_hours` | 18.974 mekanın **%4,1**'inde var. Üç şehirlik anlık görüntüde ölçülen dağılım: 514 açık, **17 kapalı**, 10.875 bilinmiyor | Filtre yalnızca **kapalı olduğu bilinenleri** eler; çipin adı da bu ("Kapalıları gizle"). 17 kapalıyı ayıklamak için 10.875 kaydı gizlemek, filtreyi işe yaramaz değil zararlı yapardı. |
 | `wheelchair=designated` | 3 mekan | Artık `true`. OSM'nin en güçlü erişilebilirlik iddiasıydı ve "bilinmiyor" sayılıyordu. |
 | `wheelchair=limited` | 70 mekan | Boolean'a **düşürülmüyor** (ne evet ne hayır), detay sayfasında olduğu gibi yazılıyor. |
 
@@ -584,7 +585,8 @@ dev sunucusunun önünde HMR'ı keser. Test etmek için: `npm run build && npm r
 
 ## Yol Haritası
 
-**v1 (şu an, çalışıyor)**: Üç şehirde (İstanbul/Ankara/İzmir) 11.406 gerçek
+**v1 (şu an, çalışıyor)**: Dokuz ilde (İstanbul, Ankara, İzmir, Antalya,
+Bursa, Adana, Konya, Gaziantep, Trabzon) 18.974 gerçek
 OSM mekanı üzerinde harita, konum, yakındakiler, 14 kategori, yer detayı,
 Türkçe doğal-dil araması, dinamik filtreler, sıralama (en yakın / en
 güvenilir), yön göstergesi, yol tarifi, tek dokunuşla yerinde doğrulama,
@@ -604,7 +606,24 @@ offline bölge indirme (service worker), erişilebilirlik/ihtiyaç profiline
 göre kişiselleştirme, gerçek bir semantik/AI destekli arama katmanı
 (demo'daki lookup-tablosu tabanlı ayrıştırmanın ötesinde), gelişmiş
 öneriler, oyunlaştırma (katkı puanı/rozet), belediye açık verisi
-(İBB/ULAŞAV) entegrasyonu, kalan 78 il.
+(İBB/ULAŞAV) entegrasyonu, kalan 72 il.
+
+## Katkı
+
+Katkılara açığız. Nereden başlayacağını bilmiyorsan `good first issue`
+etiketli issue'lara bak; kendi ilinin verisini eklemek de en kolay ve en
+görünür katkılardan biri.
+
+| Belge | Ne için |
+|---|---|
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Ortam kurulumu, dal/commit kuralları, PR süreci, risk seviyeleri, sık karşılaşılan tuzaklar |
+| [ROADMAP.md](ROADMAP.md) | Ne tamamlandı, ne planlandı, hangi konular hâlâ tartışmaya açık |
+| [CLAUDE.md](CLAUDE.md) | Proje kuralları — Claude Code ve diğer AI kodlama araçları için, ama insan katkıcı için de okunur bir mimari özeti |
+| [docs/GITHUB_SETUP.md](docs/GITHUB_SETUP.md) | Maintainer'a: branch protection, label'lar, Actions izinleri |
+| [docs/backend-ortam-degiskenleri.md](docs/backend-ortam-degiskenleri.md) | Backend ortam değişkenleri |
+
+Akış: **issue → dal → PR → otomatik kontroller → review → merge**.
+`main` dalına doğrudan push kapalıdır.
 
 ## Lisans
 

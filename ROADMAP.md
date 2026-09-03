@@ -1,0 +1,198 @@
+# Yol Haritası
+
+Bu belge katkıcıların **projenin nerede olduğunu ve nereye gittiğini**
+görmesi için var.
+
+Kural: buradaki her "tamamlandı" maddesi depoda çalışan koda dayanır.
+Doğrulanmamış hiçbir şey tamamlanmış gibi yazılmamıştır. Bir madde
+belirsizse, belirsiz olduğu açıkça yazılıdır.
+
+**Son güncelleme:** 2026-09-03
+
+---
+
+## Durum göstergeleri
+
+| İşaret | Anlamı |
+|---|---|
+| ✅ | Tamamlandı ve çalışıyor |
+| 🚧 | Kısmen var, tamamlanmadı |
+| 📋 | Planlandı, başlanmadı |
+| ❓ | Karar verilmedi — tartışmaya açık |
+
+---
+
+## ✅ Tamamlanan — v1 demo
+
+### Harita ve keşif
+- ✅ Harita birincil çalışma yüzeyi (MapLibre GL JS + OpenFreeMap positron)
+- ✅ Kümeleme (cluster) ve tekil işaretçiler
+- ✅ Cihaz konumu, "yakınımdakiler", mesafe + yürüme süresi + yön göstergesi
+- ✅ "Bu alanda ara" — harita hareketinde otomatik sorgu yok
+- ✅ Kategori çipleri ve ızgarası, sonuç sayaçlarıyla
+- ✅ Mobil bottom sheet (snap noktalı) + masaüstü sidebar düzeni
+- ✅ Paylaşılabilir derin bağlantılar (URL durumu sunucuda ayrıştırılıyor)
+- ✅ Kayıtlı yerler (cihazda kalır, sunucuya gitmez)
+
+### Veri modeli
+- ✅ Çok kategorili mekan (bir park aynı anda park + çocuk alanı + su olabilir)
+- ✅ 14 kategori; 5'i Türkiye'ye özgü (cami, eczane, acil toplanma alanı,
+  kütüphane, elektrikli şarj)
+- ✅ Özellikler `boolean | null` — `null` "bilinmiyor", "yok" değil
+- ✅ Erişim kısıtı modeli (`public` / `customers` / `permit` / `private`)
+- ✅ Güvenilirlik skoru, tazelik etiketi, kaynak atfı
+
+### Arama
+- ✅ Türkçe doğal dil araması (yapılandırılmış filtrelere çözümleme)
+- ✅ Sondan eklemeli dil desteği (son ek kalıplarıyla, kelime listesiyle değil)
+- ✅ Ünsüz yumuşaması (çocuk → çocuğ-, köpek → köpeğ-)
+- ✅ Zayıf/güçlü kural önceliği ("elektrikli araç şarj" otopark getirmiyor)
+- ✅ Kademeli genişletme — sonuçsuz kalmak yerine en kısıtlayıcı filtreyi
+  bırakıp bunu söylüyor
+- ✅ Diakritiğe duyarsız arama ("kadikoy" = "Kadıköy")
+- ✅ İlçe/il farkındalıklı arama, kanonik yazım çözümlemesiyle
+- ✅ Cevaplanamayan sorularda dürüstlük ("nöbetçi eczane" → resmî kaynağa
+  yönlendirme)
+
+### Filtreler
+- ✅ Özellik filtreleri (`null` asla eşleşmez)
+- ✅ "Kapalıları gizle" — yalnızca kapalı olduğu bilinenleri eler
+- ✅ "Ücretsiz"
+- ✅ Facet sayaçları — her filtrenin kaç sonuç bırakacağı çipte yazıyor
+- ✅ Sıralama: en yakın / en güvenilir
+
+### Katkı ve moderasyon
+- ✅ Mekan öner
+- ✅ Yanlış bilgi bildir / kapanmış bildir
+- ✅ Tek dokunuşla yerinde doğrulama ("Evet, burada")
+- ✅ Yönetim paneli: mekan arama, düzenleme, durum değiştirme, kaynağa geri alma
+- ✅ Moderasyon kuyruğu: onayla / reddet
+- ✅ **Uçtan uca döngü**: öneri → onay → haritada görünür
+- ✅ Kalıcı silme yok — `permanently_closed` durumu
+
+### İdari yapı
+- ✅ 81 il referans tablosu (plaka kodu + büyükşehir işareti)
+- ✅ İlçe adı çözümleyici (Türkçe katlama, yeniden adlandırmalar, ilçe sanılan
+  mahalleler)
+- ✅ Birleşik "İlçe/İl" etiketlerinin ayrıştırılması
+- ✅ Kapsam göstergesi ("81 ilin 9 tanesi")
+
+### Veri
+- ✅ 9 il / **18.974** gerçek OpenStreetMap mekanı
+  (İstanbul, Ankara, İzmir, Antalya, Bursa, Adana, Konya, Gaziantep, Trabzon)
+- ✅ Overpass veri boru hattı: il+kategori bazında checkpoint, üstel geri
+  çekilme, çok aynalı
+- ✅ İl başına ayrı anlık görüntü dosyası — il eklemek bir config satırı
+- ✅ Harita merkezleri verinin kendisinden türetiliyor (elle tablo yok)
+
+### Çevrimdışı ve performans
+- ✅ Service worker: uygulama kabuğu, harita karoları ve son sonuçlar
+  çevrimdışı çalışıyor
+- ✅ Çevrimdışı yanıtlar **etiketleniyor** — kullanıcı verinin eski
+  olabileceğini görüyor
+- ✅ PWA manifest (ana ekrana eklenebilir)
+- ✅ Ölçülen: LCP 168 ms · CLS 0,00 · API 15–36 ms
+
+### Kalite
+- ✅ Lighthouse: erişilebilirlik 100, best practices 100, SEO 100
+- ✅ 111 frontend testi (Vitest)
+- ✅ 0 TypeScript hatası, 0 ESLint hatası
+
+---
+
+## 🚧 Kısmen tamamlanan
+
+### Backend (FastAPI + PostgreSQL/PostGIS)
+- ✅ Modeller, Pydantic şemaları, API route'ları, servisler (dedup,
+  moderation, reliability, search), veri alım modülleri **yazıldı**
+- ✅ `docker-compose.yml` ile PostGIS servisi tanımlı
+- ✅ pytest test dosyaları mevcut; CI'da gerçek PostGIS servisiyle koşuyor
+- 🚧 **Backend hiç canlı veritabanına karşı çalıştırılmadı.** Geliştirme
+  ortamında Docker/Postgres yoktu. Kod doğru API'lere karşı yazıldı ama
+  yerelde koşturulmadı.
+- 🚧 **Gerçek Alembic migration'ı yok** — şema `create_all` ile kuruluyor
+- 🚧 Frontend'in son eklediği alanların (`access`, `district`, `province`,
+  `facets`, `applied.notices`) backend şemasındaki karşılığı **doğrulanmadı**
+
+### Demo ↔ backend geçişi
+- ✅ Demo API route'ları backend'le aynı sorgu sözleşmesini uyguluyor
+- 🚧 "Taban-URL değişikliğiyle geçiş" tasarımı **test edilmedi**
+
+### Türkiye kapsamı
+- ✅ 9 il
+- 📋 Kalan 72 il — boru hattı hazır, yalnızca çekim süresi gerekiyor
+
+---
+
+## 📋 Planlanan — öncelik sırasıyla
+
+### Yüksek öncelik: güvenlik
+
+- 📋 **`/api/admin/*` route'larına kimlik doğrulama.** Şu an kimlik
+  doğrulama **yok**; kodda demo sınırlaması olarak belgelenmiş durumda.
+  Herkese açık dağıtımdan önce **zorunlu**.
+- 📋 **Katkı gönderiminde hız sınırı.** Şu an `/api/contributions` POST'una
+  sınırsız istek atılabilir.
+- 📋 **Backend'de varsayılan JWT sırrının kaldırılması.**
+  `backend/app/core/config.py` içinde çalışan bir varsayılan var
+  (`dev-secret-change-in-production`).
+
+### Yüksek öncelik: dayanıklılık
+
+- 📋 **React error boundary'leri** (`app/error.tsx`, `global-error.tsx`,
+  `not-found.tsx`). Şu an bir bileşen patlarsa kullanıcı boş sayfa görüyor.
+- 📋 **`contributions.json` yazımında eşzamanlılık güvenliği.** Oku-değiştir-yaz
+  döngüsü yarış koşuluna açık; eşzamanlı iki katkı birbirini sessizce ezebilir.
+
+### Yüksek öncelik: erişilebilirlik
+
+- 📋 **Haritada klavye ve ekran okuyucu erişimi.** Sonuç listesi klavyeyle
+  geziliyor ama haritadaki işaretçilere yalnızca fare/dokunmayla ulaşılabiliyor.
+
+### Orta öncelik
+
+- 📋 **Sunucuda render edilen mekan sayfaları** (`/yer/[id]`) + Open Graph
+  metadata. Şu an paylaşılan her bağlantı aynı jenerik başlığı gösteriyor.
+- 📋 **Frontend CI** — lint, tip kontrolü, test ve build'in PR'da otomatik
+  koşması *(bu yol haritası yazılırken eklendi, bkz. `.github/workflows/`)*
+- 📋 **Mükerrer öneri tespiti** — kullanıcı OSM'de zaten var olan bir mekanı
+  önerebiliyor
+- 📋 **Kalan 72 il** için veri çekimi
+- 📋 **Gerçek ilk Alembic migration'ı**
+
+### Düşük öncelik / ileride
+
+- 📋 Topluluk fotoğraf yüklemesi *(OSM'de fotoğraf kapsamı ölçüldü: %2,3 —
+  bu yüzden OSM fotoğrafları yerine topluluk yüklemesi düşünülüyor)*
+- 📋 Telemetri / analitik — şu an ne arandığı bilinmiyor
+- 📋 Production dağıtımı (hosting kararı verilmedi)
+
+---
+
+## ❓ Karar verilmemiş — tartışmaya açık
+
+Bunlar **plan değil, açık sorulardır.** Fikrin varsa issue aç.
+
+- ❓ **Çok dillilik.** v1 kapsamı Türkiye ve Türkçe. Turist kullanımı gerçek
+  bir ihtiyaç ama kapsam kararı verilmedi.
+- ❓ **Uygulama içi rota çizimi.** Şu an harici yol tarifi bağlantısı
+  kullanılıyor. Gerçek rota motoru büyük bir bağımlılık getirir.
+- ❓ **`has_ramp` ve `is_quiet` alanlarının geleceği.** Modelde varlar ama
+  OSM'de veri kaynağı yok (`ramp` etiketi mevcut anlık görüntüde hiç geçmiyor).
+  Topluluk katkısıyla dolar mı, kaldırılmalı mı?
+- ❓ **`frontend/data/*.json` dosyalarının depoda tutulması.** ~15 MB ve 81
+  ile büyüyecek. Depoda tutmak katkıcı için kolaylık, klon boyutu için yük.
+- ❓ **Mobil uygulama.** PWA yeterli mi, native gerekir mi?
+
+---
+
+## Katkı yapmak istiyorum, nereden başlayayım?
+
+- `good first issue` etiketli issue'lara bak
+- Yukarıdaki 📋 maddelerinden biri ilgini çekiyorsa issue aç ve söyle
+- Kendi ilinin verisini eklemek en kolay ve en görünür katkıdır
+  ([CONTRIBUTING.md](CONTRIBUTING.md#️-veri-ve-openstreetmap))
+- Bir hata bulduysan, düzeltmesen bile bildirmen değerlidir
+
+Süreç: [CONTRIBUTING.md](CONTRIBUTING.md) ·
+Proje kuralları: [CLAUDE.md](CLAUDE.md)

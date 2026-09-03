@@ -1,0 +1,100 @@
+name: ✨ Özellik önerisi
+description: Yeni bir özellik veya iyileştirme öner
+title: "[Özellik]: "
+labels: ["feature"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Öneri için teşekkürler.
+
+        Projenin yönünü [ROADMAP.md](../blob/main/ROADMAP.md)'de görebilirsin —
+        önerin oradaki 📋 veya ❓ maddelerinden biriyle ilgiliyse belirtmen
+        tartışmayı hızlandırır.
+
+        **Kodunu yazmayı planlıyorsan** bunu aşağıda işaretle. Büyük
+        değişikliklerde önce burada mutabakat sağlamak, iki günlük emeğin boşa
+        gitmesini önler.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Hangi problemi çözüyor?
+      description: |
+        Çözümü değil, problemi anlat. "Şunu yapamıyorum çünkü…" biçiminde
+        yazmak en iyisi.
+      placeholder: |
+        Bir yeri arkadaşıma WhatsApp'tan yolladığımda bağlantı sadece "buradane"
+        yazıyor. Karşı taraf hangi tuvaleti yolladığımı görmüyor, bağlantıya
+        tıklayana kadar hiçbir fikri olmuyor.
+    validations:
+      required: true
+
+  - type: textarea
+    id: cozum
+    attributes:
+      label: Önerdiğin çözüm
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatifler
+    attributes:
+      label: Düşündüğün alternatifler
+      description: Başka yollar denedin veya düşündüysen neden onları seçmediğini yaz.
+
+  - type: dropdown
+    id: alan
+    attributes:
+      label: Hangi alanı ilgilendiriyor?
+      multiple: true
+      options:
+        - Frontend / arayüz
+        - Harita
+        - Arama ve filtreler
+        - Veri modeli
+        - Katkı ve moderasyon
+        - Backend / API
+        - Veritabanı
+        - Veri / OpenStreetMap
+        - Erişilebilirlik
+        - Performans
+        - Dokümantasyon
+        - Emin değilim
+    validations:
+      required: true
+
+  - type: dropdown
+    id: risk
+    attributes:
+      label: Tahmini risk seviyesi
+      description: |
+        CONTRIBUTING.md'deki risk seviyelerine göre. Emin değilsen
+        "Bilmiyorum" seç — birlikte belirleriz.
+      options:
+        - 🟢 Low — mevcut yapıyı değiştirmiyor
+        - 🟡 Medium — mevcut bileşen/mantık değişiyor
+        - 🔴 High — kimlik doğrulama, şema, API sözleşmesi, yeni bağımlılık
+        - Bilmiyorum
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: katki
+    attributes:
+      label: Katkı
+      options:
+        - label: Bu özelliği kendim geliştirmek istiyorum
+          required: false
+        - label: Yardım alırsam geliştirebilirim
+          required: false
+
+  - type: checkboxes
+    id: kontroller
+    attributes:
+      label: Kontroller
+      options:
+        - label: ROADMAP.md'ye baktım, bu madde orada zaten yok (ya da varsa belirttim)
+          required: true
+        - label: Benzer bir öneri için açık issue olup olmadığına baktım
+          required: true

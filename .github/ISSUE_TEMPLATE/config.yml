@@ -1,0 +1,23 @@
+# Boş issue açmayı kapatmıyoruz: şablona sığmayan meşru durumlar var
+# (soru sormak, bir kararı tartışmak, rehberin anlaşılmayan bir yerini
+# bildirmek). Şablonlar yardımcı olsun diye var, engel olsun diye değil.
+blank_issues_enabled: true
+
+contact_links:
+  - name: 🗺️ Mekan bilgisi yanlış veya eksik
+    url: https://www.openstreetmap.org
+    about: >-
+      Mekan verisi OpenStreetMap'ten gelir. Yanlış konum, kapanmış işletme veya
+      eksik bilgiyi OSM'de düzeltmek en kalıcı çözümdür - düzeltmen bir sonraki
+      çekimde buraya gelir ve OSM'i kullanan herkese yarar. Emin değilsen yine
+      de issue aç.
+
+  - name: 💬 Soru sormak veya bir kararı tartışmak
+    url: https://github.com/Furkiozknn/buradane/discussions
+    about: >-
+      Hata veya özellik değil de bir soru ya da fikirse Discussions daha uygun.
+      (Discussions kapalıysa boş issue açabilirsin.)
+
+  - name: 📖 Katkı rehberi
+    url: https://github.com/Furkiozknn/buradane/blob/main/CONTRIBUTING.md
+    about: Nasıl katkı yapılır, ortam nasıl kurulur, hangi kontroller çalıştırılır.

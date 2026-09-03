@@ -20,19 +20,39 @@ from __future__ import annotations
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import text
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.db import Base, SessionLocal, engine, get_db
 
 
 def _database_reachable() -> bool:
+    """Probe with an explicit timeout, on a throwaway engine.
+
+    The shared `engine` has no `connect_timeout`, and libpq will not give up
+    on its own within any useful period: measured here on Windows with
+    nothing listening on 5432, the connect had still not returned after 150
+    seconds. Because this probe runs at module import, `pytest` hung during
+    collection rather than skipping - the exact opposite of what the module
+    docstring above promises, and a wall a contributor without Docker hits
+    before running a single test.
+
+    A separate engine is used so the production one in app/core/db.py keeps
+    its own connection settings; this timeout is a test-harness concern, not
+    an application one. Two seconds is libpq's effective minimum and is far
+    more than a local or CI database - which CI health-checks before the job
+    starts - needs to answer.
+    """
+    probe = create_engine(settings.database_url, connect_args={"connect_timeout": 2})
     try:
-        with engine.connect() as conn:
+        with probe.connect() as conn:
             conn.execute(text("SELECT 1"))
         return True
     except Exception:
         return False
+    finally:
+        probe.dispose()
 
 
 DB_AVAILABLE = _database_reachable()

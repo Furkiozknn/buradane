@@ -1,0 +1,77 @@
+# Frontend kontrolleri.
+#
+# Neden ayrı bir workflow: mevcut `ci.yml` yalnızca backend'i (pytest +
+# PostGIS servis konteyneri) çalıştırıyor. Frontend'de 111 test, tip kontrolü
+# ve lint var ve bunların hiçbiri PR'da koşmuyordu - üstelik geliştirmenin
+# büyük kısmı frontend'de. `ci.yml`'ı değiştirmek yerine ayrı tutuldu:
+# ikisinin çalışma dizini, dili ve servis ihtiyacı farklı, ve backend
+# konteyner beklerken frontend'in beklemesi için sebep yok.
+#
+# Yol filtresi (`paths:`) bilinçli olarak KULLANILMADI. Branch protection bu
+# kontrolleri zorunlu tuttuğunda, yalnızca dokümantasyon değiştiren bir PR'da
+# workflow hiç tetiklenmez ve "beklenen kontrol hiç gelmedi" diye kalıcı
+# olarak bloke olur. Kontroller birkaç dakika sürüyor; her PR'da koşmaları
+# bu tuzağa düşmekten ucuz.
+
+name: Frontend
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Aynı dal için yeni push geldiğinde eskisini iptal et - katkıcı arka arkaya
+# commit attığında sıranın tıkanmasını önler.
+concurrency:
+  group: frontend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      # Bir sürümdeki hata diğerinin sonucunu gizlemesin.
+      fail-fast: false
+      matrix:
+        # 20: Next.js 16'nın beyan ettiği alt sınır (engines: >=20.9.0).
+        # 22: mevcut LTS. Katkıcıların çoğu bu ikisinden birindedir; ikisini
+        # de koşmak "bende çalışıyordu" durumlarını PR'da yakalar.
+        node: ["20", "22"]
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Node.js kurulumu
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # `npm ci` (install değil): lock dosyasına birebir uyar ve lock ile
+      # package.json tutarsızsa hata verir. CI'ın yerelden sapmasını önler.
+      - name: Bağımlılıklar
+        run: npm ci
+
+      - name: Tip kontrolü
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Testler
+        run: npm test
+
+      # `prebuild` script'i MapLibre worker dosyalarını public/maplibre/
+      # altına kopyalar ve npm tarafından otomatik çalışır. Bu adım atlanırsa
+      # harita çalışma zamanında sessizce boş açılır - build'in burada koşması
+      # kopyalama script'inin bozulmadığını da doğrular.
+      - name: Build
+        run: npm run build
