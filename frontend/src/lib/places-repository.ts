@@ -463,6 +463,32 @@ export function queryPlaces(
     return b.reliability_score - a.reliability_score;
   });
 
+  // Facets over the whole match set, before pagination. One pass; at the
+  // measured 7-30ms per query this is not the expensive part, and counting
+  // after `slice` is how the category chips came to under-report every
+  // number by whatever the page cap cut off.
+  const facets: PlaceQueryResult["facets"] = {
+    categories: {},
+    amenities: {},
+    freeOnly: 0,
+    notClosed: 0,
+  };
+  for (const place of results) {
+    for (const slug of place.categories) {
+      facets.categories[slug] = (facets.categories[slug] ?? 0) + 1;
+    }
+    for (const [key, value] of Object.entries(place.amenities)) {
+      // Only `true` counts. `null` means unknown, and counting it here would
+      // promise exactly the facilities the filter refuses to claim.
+      if (value === true) {
+        const amenityKey = key as AmenityKey;
+        facets.amenities[amenityKey] = (facets.amenities[amenityKey] ?? 0) + 1;
+      }
+    }
+    if (place.price_type === "free") facets.freeOnly += 1;
+    if (isOpenNow(place.opening_hours_raw) !== "closed") facets.notClosed += 1;
+  }
+
   // `raw_tags` is the full OSM tag bag - useful on a detail page, pure weight
   // in a 200-result list response (it roughly doubles the payload).
   const page = results.slice(offset, offset + limit).map(({ raw_tags: _omit, ...place }) => place as Place);
@@ -470,6 +496,7 @@ export function queryPlaces(
   return {
     places: page,
     total: results.length,
+    facets,
     applied: {
       categories: effectiveCategories,
       amenities: effectiveAmenities,

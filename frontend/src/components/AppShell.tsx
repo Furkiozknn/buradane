@@ -336,13 +336,22 @@ export function AppShell({
   // device, so the server has no way to filter by it (and shouldn't).
   const allPlaces = result?.places ?? [];
   const places = showFavoritesOnly ? allPlaces.filter((p) => favoriteIds.includes(p.id)) : allPlaces;
+  // Counts come from the server's facets, which are computed over the whole
+  // match set. Counting the loaded page here under-reported every category
+  // by whatever the 200-item cap cut off - on a 480-result query that was
+  // more than half the map.
+  //
+  // The exception is the favourites view, which is a client-side filter over
+  // a list the server never sees (the saved ids never leave the device), so
+  // there its counts have to be derived here.
   const counts = useMemo(() => {
+    if (!showFavoritesOnly) return (result?.facets.categories ?? {}) as Record<string, number>;
     const map: Record<string, number> = {};
     for (const place of places) {
       for (const slug of place.categories) map[slug] = (map[slug] ?? 0) + 1;
     }
     return map;
-  }, [places]);
+  }, [result, places, showFavoritesOnly]);
 
   const selectedPlace = useMemo(
     () => places.find((p) => p.id === selectedId) ?? null,
@@ -831,6 +840,7 @@ export function AppShell({
         <FilterSheet
           filters={filters}
           resultCount={result?.total ?? 0}
+          facets={result?.facets ?? null}
           onChange={setFilters}
           onClose={() => setFiltersOpen(false)}
         />

@@ -305,6 +305,51 @@ describe("status visibility", () => {
   });
 });
 
+describe("facets", () => {
+  it("counts the whole match set, not the returned page", () => {
+    // Counting client-side from the page silently under-reported every
+    // category by whatever the limit cut off.
+    const result = queryPlaces({ ...ISTANBUL, radius_m: 20_000, limit: 10 });
+    expect(result.places.length).toBe(10);
+    expect(result.total).toBeGreaterThan(10);
+    const summed = Object.values(result.facets.categories).reduce((a, b) => a + (b ?? 0), 0);
+    // A place can hold several categories, so the sum is >= total, never below.
+    expect(summed).toBeGreaterThanOrEqual(result.total);
+  });
+
+  it("counts only confirmed amenities - never `null`", () => {
+    const result = queryPlaces({ ...ISTANBUL, radius_m: 20_000, limit: 50 });
+    const shade = result.facets.amenities.has_shade ?? 0;
+    const actual = queryPlaces({
+      ...ISTANBUL,
+      radius_m: 20_000,
+      amenities: ["has_shade"],
+      limit: 5000,
+    });
+    // The chip's number has to be the number the filter actually returns, or
+    // it is worse than showing nothing.
+    expect(shade).toBe(actual.total);
+  });
+
+  it("counts notClosed with the same rule the filter uses", () => {
+    const result = queryPlaces({ ...ISTANBUL, radius_m: 20_000, limit: 5 });
+    const filtered = queryPlaces({ ...ISTANBUL, radius_m: 20_000, openNow: true, limit: 5 });
+    expect(result.facets.notClosed).toBe(filtered.total);
+  });
+
+  it("counts freeOnly with the same rule the filter uses", () => {
+    const result = queryPlaces({ ...ISTANBUL, radius_m: 20_000, categories: ["tuvalet"], limit: 5 });
+    const filtered = queryPlaces({
+      ...ISTANBUL,
+      radius_m: 20_000,
+      categories: ["tuvalet"],
+      freeOnly: true,
+      limit: 5,
+    });
+    expect(result.facets.freeOnly).toBe(filtered.total);
+  });
+});
+
 describe("payload shape", () => {
   it("strips raw_tags from list results", () => {
     const { places } = queryPlaces({ ...ISTANBUL, radius_m: 2000, limit: 20 });

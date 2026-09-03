@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { X } from "lucide-react";
 
 import { EXTRA_FILTERS, FILTERABLE_AMENITIES } from "@/lib/categories";
-import type { AmenityKey } from "@/lib/types";
+import type { AmenityKey, PlaceQueryResult } from "@/lib/types";
 
 export interface FilterState {
   amenities: AmenityKey[];
@@ -18,14 +18,43 @@ export function activeFilterCount(filters: FilterState): number {
   return filters.amenities.length + (filters.openNow ? 1 : 0) + (filters.freeOnly ? 1 : 0);
 }
 
+/**
+ * How many results a filter would leave, shown on the chip itself.
+ *
+ * The point is to answer "is this worth tapping?" before the tap. Amenity
+ * coverage in open civic data is thin and wildly uneven - across the whole
+ * snapshot `has_shade` is recorded for 29 places and `baby_changing` for 57 -
+ * so without this the sparse filters read as broken rather than as honest
+ * about what nobody has mapped yet.
+ *
+ * `aria-hidden`: the number is already in the button's aria-label as a full
+ * sentence, and a bare "29" announced after the label is noise.
+ */
+function FilterCount({ value, active }: { value: number | null; active: boolean }) {
+  if (value === null) return null;
+  return (
+    <span
+      aria-hidden
+      className="text-[12px] tabular-nums"
+      style={{ color: active ? "var(--brand)" : "var(--text-muted)" }}
+    >
+      {value}
+    </span>
+  );
+}
+
 export function FilterSheet({
   filters,
   resultCount,
+  facets,
   onChange,
   onClose,
 }: {
   filters: FilterState;
   resultCount: number;
+  /** How many of the current results each filter would keep. Null while the
+   * first query is still in flight. */
+  facets: PlaceQueryResult["facets"] | null;
   onChange: (next: FilterState) => void;
   onClose: () => void;
 }) {
@@ -86,12 +115,22 @@ export function FilterSheet({
             {EXTRA_FILTERS.map((filter) => {
               const Icon = filter.icon;
               const isActive = filters[filter.key];
+              const remaining = facets
+                ? filter.key === "freeOnly"
+                  ? facets.freeOnly
+                  : facets.notClosed
+                : null;
               return (
                 <button
                   key={filter.key}
                   type="button"
                   onClick={() => onChange({ ...filters, [filter.key]: !isActive })}
                   aria-pressed={isActive}
+                  aria-label={
+                    remaining === null
+                      ? filter.label
+                      : `${filter.label} — mevcut sonuçlardan ${remaining} tanesi kalır`
+                  }
                   className="flex h-10 items-center gap-2 rounded-full border px-3.5 text-[13.5px] font-medium transition-colors"
                   style={{
                     borderColor: isActive ? "var(--brand)" : "var(--border)",
@@ -101,6 +140,7 @@ export function FilterSheet({
                 >
                   <Icon size={15} aria-hidden />
                   {filter.label}
+                  <FilterCount value={remaining} active={isActive} />
                 </button>
               );
             })}
@@ -123,21 +163,39 @@ export function FilterSheet({
             {FILTERABLE_AMENITIES.map((amenity) => {
               const Icon = amenity.icon;
               const isActive = filters.amenities.includes(amenity.key);
+              const remaining = facets?.amenities[amenity.key] ?? (facets ? 0 : null);
+              // A zero here means "nobody has recorded this yet", which is
+              // exactly the gap the app asks people to fill - so the chip
+              // stays tappable rather than becoming a dead control.
+              //
+              // The de-emphasis lives on the border, NOT on opacity: fading
+              // the whole chip took its label from 5.9:1 down to ~2.5:1 and
+              // failed WCAG AA. Which is the same lesson as the last two
+              // accessibility regressions here - dimming a control to say
+              // "less important" quietly makes it unreadable for the people
+              // most likely to need it.
+              const empty = remaining === 0 && !isActive;
               return (
                 <button
                   key={amenity.key}
                   type="button"
                   onClick={() => toggleAmenity(amenity.key)}
                   aria-pressed={isActive}
+                  aria-label={
+                    remaining === null
+                      ? amenity.filterLabel
+                      : `${amenity.filterLabel} — mevcut sonuçlardan ${remaining} tanesinde var`
+                  }
                   className="flex h-10 items-center gap-2 rounded-full border px-3.5 text-[13.5px] font-medium transition-colors"
                   style={{
-                    borderColor: isActive ? "var(--brand)" : "var(--border)",
-                    background: isActive ? "var(--brand-soft)" : "transparent",
+                    borderColor: isActive ? "var(--brand)" : empty ? "transparent" : "var(--border)",
+                    background: isActive ? "var(--brand-soft)" : empty ? "var(--surface-sunken)" : "transparent",
                     color: isActive ? "var(--brand)" : "var(--text-secondary)",
                   }}
                 >
                   <Icon size={15} aria-hidden />
                   {amenity.filterLabel}
+                  <FilterCount value={remaining} active={isActive} />
                 </button>
               );
             })}

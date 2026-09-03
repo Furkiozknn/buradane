@@ -134,6 +134,23 @@ export interface PlaceQueryResult {
       amenities?: AmenityKey[];
     };
   };
+  /**
+   * How many of the *full* result set each further filter would keep.
+   *
+   * Computed over every match, not the returned page - the page is capped at
+   * 200 while a query routinely matches several hundred, so counting
+   * client-side quietly under-reported every category. And it is what makes
+   * a sparse filter honest: `baby_changing` is recorded for 57 places in the
+   * whole country-scale snapshot, and a chip that says so before it is
+   * tapped is a useful fact rather than a dead end discovered afterwards.
+   */
+  facets: {
+    categories: Partial<Record<CategorySlug, number>>;
+    amenities: Partial<Record<AmenityKey, number>>;
+    freeOnly: number;
+    /** Places NOT known to be closed - matches the filter's own semantics. */
+    notClosed: number;
+  };
 }
 
 /** A user-submitted signal. Kept separate from `Place` because these never
