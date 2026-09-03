@@ -27,7 +27,13 @@
  * filed when it was not would be worse than telling them to try again.
  */
 
-const VERSION = "v1";
+// Bumped whenever a cached entry could have been written under rules that
+// no longer hold. `activate` deletes every cache not carrying the current
+// version, which is the only way an already-poisoned entry goes away: v1
+// stored every navigation under "/", so a browser that visited /admin before
+// that fix is still holding the moderation panel behind the homepage, and
+// correcting the write path does nothing for a copy already on disk.
+const VERSION = "v2";
 const SHELL_CACHE = `buradane-shell-${VERSION}`;
 const ASSET_CACHE = `buradane-assets-${VERSION}`;
 const DATA_CACHE = `buradane-data-${VERSION}`;
