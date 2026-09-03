@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 
 import "./globals.css";
+import { ServiceWorkerRegistrar } from "@/components/ServiceWorkerRegistrar";
 
 // Inter carries complete Turkish coverage (ı İ ğ Ğ ş Ş ç Ç ö Ö ü Ü) - a real
 // constraint here, since a font missing dotless ı silently mangles half the
@@ -46,6 +47,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           Sonuç listesine geç
         </a>
         {children}
+        <ServiceWorkerRegistrar />
       </body>
     </html>
   );

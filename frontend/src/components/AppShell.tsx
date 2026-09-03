@@ -11,6 +11,7 @@ import {
   RefreshCw,
   Search,
   SlidersHorizontal,
+  WifiOff,
   X,
 } from "lucide-react";
 
@@ -24,6 +25,7 @@ import { CityPicker } from "./CityPicker";
 import { DESKTOP_QUERY, useMediaQuery } from "@/lib/use-media-query";
 import { buildUrlSearch, type UrlState } from "@/lib/url-state";
 import { useFavorites } from "@/lib/use-favorites";
+import { useOnlineStatus } from "@/lib/use-online-status";
 import type { CategorySlug, Place, PlaceQueryResult, SortKey } from "@/lib/types";
 
 // The map is browser-only (WebGL + window). Loading it without SSR is
@@ -136,6 +138,13 @@ export function AppShell({
     return [...cities].sort((a, b) => b.count - a.count)[0]?.slug ?? "istanbul";
   });
   const [cityPickerOpen, setCityPickerOpen] = useState(false);
+  const deviceOnline = useOnlineStatus();
+  // Set from the response itself: the service worker labels an answer it had
+  // to serve from cache because the network was gone. That is the only
+  // trustworthy offline signal - `navigator.onLine` stays true on a captive
+  // portal, and cleared as soon as a request gets through again.
+  const [servedFromCache, setServedFromCache] = useState(false);
+  const online = deviceOnline && !servedFromCache;
 
   // Keep the address bar in step with what's on screen. replaceState, not
   // push: panning the map or toggling a filter shouldn't bury the user's
@@ -195,14 +204,28 @@ export function AppShell({
 
       try {
         const response = await fetch(`/api/places?${params.toString()}`);
+        // The service worker answers with 503 + this header when it has
+        // neither a cached copy nor a network. Treating it as a normal
+        // server error would tell the user something is broken, when what
+        // actually happened is that they walked out of coverage.
+        const wasOffline = response.headers.get("x-buradane-offline") !== null;
+        if (response.status === 503 && wasOffline) {
+          if (requestId !== requestIdRef.current) return;
+          setServedFromCache(true);
+          setError("Çevrimdışısınız ve bu arama daha önce yüklenmemiş");
+          return;
+        }
         if (!response.ok) throw new Error(`Sunucu ${response.status} döndü`);
         const data = (await response.json()) as PlaceQueryResult;
         // A slower earlier request must never overwrite a newer result.
         if (requestId !== requestIdRef.current) return;
+        setServedFromCache(wasOffline);
         setResult(data);
         setStaleViewport(false);
       } catch (err) {
         if (requestId !== requestIdRef.current) return;
+        // A hard failure means nothing answered at all - not even the cache.
+        setServedFromCache(true);
         setError(err instanceof Error ? err.message : "Sonuçlar getirilemedi");
       } finally {
         if (requestId === requestIdRef.current) setLoading(false);
@@ -229,6 +252,28 @@ export function AppShell({
     void fetchPlaces(bbox ? { bbox } : {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [category, filters, query, sort, location.status]);
+
+  // Coming back into coverage refreshes on its own. Making someone who just
+  // walked out of a metro station notice a stale list and hunt for a refresh
+  // button is the kind of small friction that decides whether a tool gets
+  // used twice. Only fires on the offline -> online edge, and only when the
+  // last attempt actually failed, so a normal session never re-queries here.
+  // Keyed to the device flag, not to `online`: `online` only turns true once
+  // a request has succeeded, so waiting on it would mean waiting for the
+  // refresh this effect is supposed to trigger.
+  const wasDegradedRef = useRef(false);
+  useEffect(() => {
+    wasDegradedRef.current = error !== null || servedFromCache;
+  }, [error, servedFromCache]);
+
+  useEffect(() => {
+    if (!deviceOnline) return;
+    if (!wasDegradedRef.current) return;
+    const bbox = viewport?.bbox;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchPlaces(bbox ? { bbox } : {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deviceOnline]);
 
   // A link that names a place opens straight on that place's detail, rather
   // than dropping the recipient on a map and making them hunt for it.
@@ -593,6 +638,23 @@ export function AppShell({
         ) : (
           <>
             <div className="shrink-0">
+              {/* Placed inside the sheet rather than floating over the map:
+                  the map itself keeps working offline from cached tiles, so
+                  a full-width alarm across it would overstate the problem.
+                  What is actually at stake is whether the *list* is current,
+                  and this sits directly above the list. */}
+              {!online && (
+                <div
+                  role="status"
+                  className="mx-4 mb-1 mt-2 flex items-center gap-2 rounded-lg bg-surface-sunken px-3 py-2 text-[12.5px] text-text-secondary"
+                >
+                  <WifiOff size={14} className="shrink-0" aria-hidden />
+                  <span>
+                    Çevrimdışısınız
+                    {result ? " — daha önce yüklenen sonuçlar gösteriliyor." : " — bağlantı gelince yenilenecek."}
+                  </span>
+                </div>
+              )}
               {category === null && (isDesktop || snap !== "peek") ? (
                 <CategoryGrid selected={category} onSelect={setCategory} counts={counts} />
               ) : (

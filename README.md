@@ -490,6 +490,45 @@ sorgunun anlamını sessizce değiştirmek yerine.
   `backend/docs/DATA_SOURCES.md`'de not düşüldü, lisans doğrulaması
   entegrasyon öncesi tek tek yapılmalı.
 
+### Çevrimdışı çalışma
+
+Bu uygulama tam olarak ağın en kötü olduğu koşullarda kullanılıyor: dışarıda,
+yürürken, acelesi olan biri tarafından, bazen yabancı bir SIM ile. Sinyal
+kesilince bembeyaz olan bir uygulama, tam da önemli olduğu anda işe yaramaz
+hale gelir. `frontend/public/sw.js` bunu çözüyor:
+
+| İstek türü | Strateji | Neden |
+|---|---|---|
+| `/_next/static/*`, `/maplibre/*` | cache-first, süresiz | İçerik-hash'li dosya adları; bayat isabet yapısal olarak imkânsız |
+| Harita karoları (OpenFreeMap) | cache-first + LRU (1200 kayıt) | Bir aylık Kadıköy karosu hâlâ doğru bir Kadıköy haritası; kötü bağlantıda en pahalı iş bu |
+| `/api/places`, `/api/places/*` | network-first (2.5 sn zaman aşımı) + cache fallback | Bağlantı varken tazelik kazanır; yokken önbellekten servis edilir **ve etiketlenir** |
+| Sayfa gezinmesi | network-first + kabuk fallback | Çevrimdışı soğuk açılışta bile uygulama açılır |
+| POST/PATCH/DELETE, `/api/admin/*` | hiç önbelleklenmez | Bayat bir moderasyon kuyruğu üzerinden işlem yapmak kaydı bozar; bildirimin gönderildiğini yanlış söylemek sessiz kalmaktan kötüdür |
+
+**Neden stale-while-revalidate değil?** SWR önbellek kopyasını verip arkada
+sessizce tamir eder; sayfa canlı yanıtı bir haftalık yanıttan ayırt edemez.
+Bir tuvalet haritasında bu, "tadilat nedeniyle kapalı" bilgisinin haber olması
+ile hiç görünmemesi arasındaki fark demek. Artık her yanıt nereden geldiğini
+`x-buradane-offline` başlığıyla söylüyor; çevrimdışı uyarısı bir tahmin değil,
+bir olgu bildirimi.
+
+**İki tuzak** (ikisi de ölçülerek bulundu, ikisi de sessizdi):
+
+1. `navigator.onLine` güvenilmez — captive portal'da veya upstream'i olmayan
+   bir router arkasında "online" der, devtools ağ emülasyonunda hiç değişmez.
+   Gerçek sinyal, isteğin başına ne geldiği. (İlk çözüm service worker'ın
+   postMessage ile durum yayınlamasıydı; terk edildi — worker boşta kalınca
+   sonlandırılıyor, durum değişkeni tam da lazım olduğu anda kaybolmuş
+   oluyordu.)
+2. `/api/places` `Cache-Control: public, max-age=60` gönderiyor. Worker'ın
+   `fetch`'i tarayıcının HTTP önbelleğinden yanıt alıp **başarılı** sayıyordu —
+   sunucu erişilemezken bile. Dahası zamana bağlıydı: kayıt bir dakikayı
+   geçene kadar çalışıyordu, ki bu tamamen bozuk olmaktan kötü. Çözüm:
+   `fetch(request, { cache: "no-store" })` — tek önbellek katmanı var, o da bu.
+
+Service worker yalnızca production'da kayıt olur (`ServiceWorkerRegistrar`);
+dev sunucusunun önünde HMR'ı keser. Test etmek için: `npm run build && npm run start`.
+
 ## Yol Haritası
 
 **v1 (şu an, çalışıyor)**: Üç şehirde (İstanbul/Ankara/İzmir) 11.406 gerçek
@@ -497,8 +536,9 @@ OSM mekanı üzerinde harita, konum, yakındakiler, 14 kategori, yer detayı,
 Türkçe doğal-dil araması, dinamik filtreler, sıralama (en yakın / en
 güvenilir), yön göstergesi, yol tarifi, tek dokunuşla yerinde doğrulama,
 kullanıcı önerisi ve sorun bildirimi, moderasyon + mekan düzenleme paneli,
-şehir seçici, paylaşılabilir derin bağlantılar, kayıtlı yerler, PWA,
-mobil sheet + masaüstü sidebar düzeni. Erişilebilirlik: Lighthouse 100.
+şehir seçici, paylaşılabilir derin bağlantılar, kayıtlı yerler, **çevrimdışı
+çalışma** (PWA + service worker), mobil sheet + masaüstü sidebar düzeni.
+Erişilebilirlik: Lighthouse 100.
 
 **Sıradaki adım (demo → prod)**: Demo'nun kendi Next.js API route'larını,
 statik JSON anlık görüntüsü yerine gerçek FastAPI+PostGIS backend'ine
