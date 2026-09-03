@@ -52,7 +52,22 @@ export interface DatasetMeta {
   license: string;
   attribution: string;
   count: number;
-  cities: { slug: string; label: string; count: number }[];
+  cities: {
+    slug: string;
+    label: string;
+    count: number;
+    /**
+     * Where the map should open for this city, derived from the city's own
+     * places rather than a hand-maintained table.
+     *
+     * The table version meant "adding a city is a config row plus a fetch
+     * run" was not quite true: a city whose centre nobody remembered to add
+     * silently opened on İstanbul. Median rather than mean, because one
+     * mis-tagged node hundreds of km outside the metro core would drag an
+     * average off the city entirely.
+     */
+    center: { lat: number; lon: number };
+  }[];
 }
 
 let cache: { places: Place[]; meta: DatasetMeta } | null = null;
@@ -184,7 +199,12 @@ function loadDataset() {
       });
     }
 
-    cities.push({ slug, label: raw.city_label ?? slug, count: raw.places.length });
+    cities.push({
+      slug,
+      label: raw.city_label ?? slug,
+      count: raw.places.length,
+      center: medianCenter(raw.places),
+    });
     if (raw.generated_at > newest) newest = raw.generated_at;
     attribution = raw.attribution ?? attribution;
     license = raw.license ?? license;
@@ -196,6 +216,16 @@ function loadDataset() {
     meta: { generated_at: newest, source, license, attribution, count: places.length, cities },
   };
   return cache;
+}
+
+/** Median coordinate of a city's places - resistant to a single node
+ * mis-tagged on the other side of the country, which a mean is not. */
+function medianCenter(places: { lat: number; lon: number }[]): { lat: number; lon: number } {
+  if (places.length === 0) return { lat: 41.0082, lon: 28.9784 };
+  const lats = places.map((p) => p.lat).sort((a, b) => a - b);
+  const lons = places.map((p) => p.lon).sort((a, b) => a - b);
+  const mid = Math.floor(places.length / 2);
+  return { lat: lats[mid], lon: lons[mid] };
 }
 
 export function datasetMeta() {

@@ -67,6 +67,18 @@ export interface MapCanvasProps {
   /** Where to open, when a shared link specifies it. Read once at map
    * creation - later changes are the user's own panning, not ours. */
   initialView?: { center: { lat: number; lon: number }; zoom: number } | null;
+
+  /**
+   * An explicit "take me here", e.g. picking a different city.
+   *
+   * Distinct from `initialView`, which MapLibre reads exactly once when the
+   * map is constructed - so before this existed, switching city updated the
+   * list and the label while the map sat on the previous city. `nonce`
+   * rather than value equality: choosing the same city twice is a real
+   * request to go back to it after panning away, and comparing coordinates
+   * would swallow the second one.
+   */
+  flyTo?: { center: { lat: number; lon: number }; zoom: number; nonce: number } | null;
   onSelect: (place: Place | null) => void;
   /** `center` is the map's own centre, which respects `padding` - the bbox
    * midpoint does NOT (MapLibre computes getBounds() from the raw canvas
@@ -87,6 +99,7 @@ export default function MapCanvas({
   userLocation,
   padding,
   initialView,
+  flyTo,
   onSelect,
   onViewportChange,
   onMapMoved,
@@ -413,6 +426,24 @@ export default function MapCanvas({
       duration: prefersReducedMotion() ? 0 : 420,
     });
   }, [selectedId]);
+
+  // An explicit jump (city switch). Runs on the nonce so a repeat selection
+  // still moves the camera back.
+  const flyNonceRef = useRef<number | null>(null);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !flyTo) return;
+    if (flyNonceRef.current === flyTo.nonce) return;
+    flyNonceRef.current = flyTo.nonce;
+    map.easeTo({
+      center: [flyTo.center.lon, flyTo.center.lat],
+      zoom: flyTo.zoom,
+      // A cross-country jump animated over a second is motion sickness, not
+      // delight - and honouring the OS setting is the same rule the
+      // selection pan follows.
+      duration: prefersReducedMotion() ? 0 : 600,
+    });
+  }, [flyTo]);
 
   // Keep the visible (unobscured) map area centered clear of the panel.
   useEffect(() => {

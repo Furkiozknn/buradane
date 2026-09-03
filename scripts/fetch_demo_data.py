@@ -60,6 +60,41 @@ CITIES: dict[str, dict] = {
         "bbox": (38.32, 26.98, 38.53, 27.25),
         "cap_scale": 0.45,
     },
+    # Beyond the three pilot cities the caps drop again: the goal is that a
+    # user in Bursa or Gaziantep opens the app and finds their own street,
+    # not that the committed snapshot grows another 30 MB. Each of these is
+    # the metropolitan core, not the whole province - a province bbox would
+    # pull in hundreds of km of farmland for a handful of nodes.
+    "bursa": {
+        "label": "Bursa",
+        "bbox": (40.15, 28.85, 40.28, 29.20),
+        "cap_scale": 0.3,
+    },
+    "antalya": {
+        "label": "Antalya",
+        "bbox": (36.82, 30.60, 36.95, 30.83),
+        "cap_scale": 0.3,
+    },
+    "adana": {
+        "label": "Adana",
+        "bbox": (36.94, 35.20, 37.07, 35.42),
+        "cap_scale": 0.3,
+    },
+    "konya": {
+        "label": "Konya",
+        "bbox": (37.82, 32.40, 37.95, 32.60),
+        "cap_scale": 0.3,
+    },
+    "gaziantep": {
+        "label": "Gaziantep",
+        "bbox": (36.98, 37.28, 37.13, 37.45),
+        "cap_scale": 0.3,
+    },
+    "trabzon": {
+        "label": "Trabzon",
+        "bbox": (40.96, 39.63, 41.03, 39.83),
+        "cap_scale": 0.3,
+    },
 }
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "frontend" / "data"

@@ -37,16 +37,12 @@ const MapCanvas = dynamic(() => import("./MapCanvas"), {
 
 const DEFAULT_RADIUS_M = 2000;
 
-/** Where each pilot city's map opens when we can't use the device location.
- * Keyed by the slug the data pipeline writes, so a new city file shows up in
- * the picker as soon as its centre is listed here. */
-const CITY_CENTERS: Record<string, { lat: number; lon: number }> = {
-  istanbul: { lat: 41.0082, lon: 28.9784 },
-  ankara: { lat: 39.9208, lon: 32.8541 },
-  izmir: { lat: 38.4237, lon: 27.1428 },
-};
-
-const FALLBACK_CENTER = CITY_CENTERS.istanbul;
+/** Only used before any city data has loaded. Every real city's centre is
+ * derived from that city's own places (see `medianCenter` in
+ * places-repository) - a hand-maintained table meant a city whose centre
+ * nobody remembered to add silently opened on İstanbul, which made "adding a
+ * city is a config row plus a fetch run" not quite true. */
+const FALLBACK_CENTER = { lat: 41.0082, lon: 28.9784 };
 
 type LocationState =
   | { status: "idle" }
@@ -87,7 +83,7 @@ export function AppShell({
     attribution: string;
     generatedAt: string;
     count: number;
-    cities: { slug: string; label: string; count: number }[];
+    cities: { slug: string; label: string; count: number; center: { lat: number; lon: number } }[];
   };
   /** Parsed from the request URL on the server (see app/page.tsx), so the
    * server and client agree on the first paint - reading `window` here
@@ -138,6 +134,13 @@ export function AppShell({
     return [...cities].sort((a, b) => b.count - a.count)[0]?.slug ?? "istanbul";
   });
   const [cityPickerOpen, setCityPickerOpen] = useState(false);
+  // An explicit "take me here". The nonce is what makes re-picking the city
+  // you already have selected work after you have panned away from it.
+  const [mapFocus, setMapFocus] = useState<{
+    center: { lat: number; lon: number };
+    zoom: number;
+    nonce: number;
+  } | null>(null);
   const deviceOnline = useOnlineStatus();
   // Set from the response itself: the service worker labels an answer it had
   // to serve from cache because the network was gone. That is the only
@@ -163,7 +166,8 @@ export function AppShell({
     window.history.replaceState(null, "", `${window.location.pathname}${search}`);
   }, [category, filters, query, detailPlace, viewport]);
 
-  const cityCenter = CITY_CENTERS[activeCity] ?? FALLBACK_CENTER;
+  const cityCenter =
+    datasetMeta.cities.find((c) => c.slug === activeCity)?.center ?? FALLBACK_CENTER;
   const center = location.status === "granted" ? { lat: location.lat, lon: location.lon } : cityCenter;
   // Deliberately excludes "locating": while the request is in flight we have
   // not fallen back to anything yet, and claiming we did would be both wrong
@@ -434,14 +438,7 @@ export function AppShell({
     [places, selectedId, openDetail],
   );
 
-  const cityOptions = useMemo(
-    () =>
-      datasetMeta.cities.map((city) => ({
-        ...city,
-        center: CITY_CENTERS[city.slug] ?? FALLBACK_CENTER,
-      })),
-    [datasetMeta.cities],
-  );
+  const cityOptions = datasetMeta.cities;
   const activeCityLabel =
     datasetMeta.cities.find((c) => c.slug === activeCity)?.label ?? "İstanbul";
 
@@ -473,6 +470,7 @@ export function AppShell({
             ? { center: initial.center, zoom: initial.zoom }
             : null
         }
+        flyTo={mapFocus}
         onSelect={(place) => {
           if (!place) {
             setSelectedId(null);
@@ -886,9 +884,13 @@ export function AppShell({
             setActiveCity(city.slug);
             setCityPickerOpen(false);
             // Selecting a city is an explicit "take me here", so the map
-            // jumps rather than waiting for the next viewport query.
+            // jumps rather than waiting for the next viewport query. This
+            // used to only clear the app's viewport state, which moved the
+            // list and the label while the map itself stayed on the old
+            // city - MapLibre reads `initialView` exactly once.
             setViewport(null);
             setStaleViewport(false);
+            setMapFocus({ center: city.center, zoom: 12.5, nonce: Date.now() });
           }}
           onClose={() => setCityPickerOpen(false)}
         />

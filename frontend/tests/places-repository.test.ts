@@ -22,6 +22,31 @@ describe("dataset", () => {
     expect(meta.count).toBe(allPlaces().length);
   });
 
+  it("derives a usable centre for every city, with no hand-maintained table", () => {
+    // A hardcoded centre table meant a city whose centre nobody remembered
+    // to add silently opened the map on İstanbul, which quietly broke the
+    // claim that adding a city is a config row plus a fetch run.
+    for (const city of datasetMeta().cities) {
+      expect(Number.isFinite(city.center.lat)).toBe(true);
+      expect(Number.isFinite(city.center.lon)).toBe(true);
+      // Türkiye's mainland bounding box - a centre outside it means the
+      // median was dragged off by bad data.
+      expect(city.center.lat).toBeGreaterThan(35.5);
+      expect(city.center.lat).toBeLessThan(42.5);
+      expect(city.center.lon).toBeGreaterThan(25.5);
+      expect(city.center.lon).toBeLessThan(45);
+    }
+  });
+
+  it("places each city centre inside that city's own places", () => {
+    // The centre has to actually land among the city's data, or the map
+    // opens somewhere with nothing on it.
+    for (const city of datasetMeta().cities) {
+      const near = queryPlaces({ ...city.center, radius_m: 5000, limit: 1 });
+      expect(near.total).toBeGreaterThan(0);
+    }
+  });
+
   it("gives every place a category, coordinates and a source", () => {
     for (const place of allPlaces().slice(0, 500)) {
       expect(place.categories.length).toBeGreaterThan(0);
