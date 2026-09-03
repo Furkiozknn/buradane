@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { listContributions, listOverrides } from "@/lib/contributions-store";
 import { allPlaces, categoryCounts, datasetMeta } from "@/lib/places-repository";
 import { AdminQueue } from "@/components/AdminQueue";
+import { AdminPlaceEditor } from "@/components/AdminPlaceEditor";
 import { CATEGORIES } from "@/lib/categories";
 
 export const dynamic = "force-dynamic";
@@ -31,6 +32,14 @@ export default async function AdminPage() {
           <p className="mt-1 text-[13.5px] text-text-secondary">
             Veri kaynağı: {meta.source} · {meta.count.toLocaleString("tr-TR")} kayıt · anlık görüntü{" "}
             {new Date(meta.generated_at).toLocaleDateString("tr-TR")}
+          </p>
+          <p className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[12.5px] text-text-muted">
+            {meta.cities.map((city) => (
+              <span key={city.slug}>
+                {city.label}:{" "}
+                <span className="tabular-nums">{city.count.toLocaleString("tr-TR")}</span>
+              </span>
+            ))}
           </p>
         </div>
       </header>
@@ -69,6 +78,11 @@ export default async function AdminPage() {
             );
           })}
         </div>
+      </section>
+
+      <section className="mb-8">
+        <h2 className="mb-3 text-[15px] font-semibold text-text">Mekan düzenle</h2>
+        <AdminPlaceEditor />
       </section>
 
       <section>

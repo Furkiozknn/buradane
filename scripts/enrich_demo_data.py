@@ -31,7 +31,14 @@ from pathlib import Path
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-DATA_PATH = Path(__file__).resolve().parent.parent / "frontend" / "data" / "places.istanbul.json"
+DATA_DIR = Path(__file__).resolve().parent.parent / "frontend" / "data"
+
+
+def dataset_files() -> list[Path]:
+    """Every city snapshot. Enrichment is per-city by construction - a park
+    in İzmir can only contain facilities in İzmir - so each file is processed
+    independently and adding a city needs no change here."""
+    return sorted(DATA_DIR.glob("places.*.json"))
 
 # Categories that act as "containers" - large areas a user visits, which can
 # reasonably own facilities located inside them.
@@ -72,8 +79,8 @@ def grid_key(lat: float, lon: float) -> tuple[int, int]:
     return (int(lat / 0.0015), int(lon / 0.0015))
 
 
-def main() -> None:
-    dataset = json.loads(DATA_PATH.read_text(encoding="utf-8"))
+def enrich_file(data_path: Path) -> tuple[int, int, int]:
+    dataset = json.loads(data_path.read_text(encoding="utf-8"))
     places = dataset["places"]
 
     buckets: dict[tuple[int, int], list[dict]] = defaultdict(list)
@@ -81,7 +88,6 @@ def main() -> None:
         buckets[grid_key(place["lat"], place["lon"])].append(place)
 
     containers = [p for p in places if any(c in CONTAINER_CATEGORIES for c in p["categories"])]
-    print(f"{len(containers)} konteyner mekan (park/spor) zenginleştiriliyor...")
 
     enriched_count = 0
     flags_added = 0
@@ -143,10 +149,24 @@ def main() -> None:
         ),
     }
 
-    DATA_PATH.write_text(json.dumps(dataset, ensure_ascii=False), encoding="utf-8")
+    data_path.write_text(json.dumps(dataset, ensure_ascii=False), encoding="utf-8")
+    return enriched_count, flags_added, len(multi_feature)
 
-    print(f"✓ {enriched_count} mekan zenginleştirildi, {flags_added} amenity bayrağı eklendi")
-    print(f"  {len(multi_feature)} mekan artık 3+ özelliğe sahip (çoklu-özellik modeli görünür)")
+
+def main() -> None:
+    files = dataset_files()
+    if not files:
+        print("frontend/data/ içinde places.*.json yok - önce fetch_demo_data.py çalıştırın.")
+        return
+
+    totals = [0, 0, 0]
+    for data_path in files:
+        enriched, flags, multi = enrich_file(data_path)
+        totals = [totals[0] + enriched, totals[1] + flags, totals[2] + multi]
+        print(f"  {data_path.name}: {enriched} mekan zenginleştirildi, {flags} bayrak eklendi")
+
+    print(f"\n✓ Toplam {totals[0]} mekan zenginleştirildi, {totals[1]} amenity bayrağı eklendi")
+    print(f"  {totals[2]} mekan 3+ özelliğe sahip (çoklu-özellik modeli görünür)")
 
 
 if __name__ == "__main__":

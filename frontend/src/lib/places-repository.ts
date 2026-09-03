@@ -32,6 +32,8 @@ import { isOpenNow } from "./opening-hours";
 import { SEARCH_SYNONYMS } from "./categories";
 
 interface RawDataset {
+  city?: string;
+  city_label?: string;
   generated_at: string;
   source: string;
   license: string;
@@ -40,7 +42,16 @@ interface RawDataset {
   places: Omit<Place, "reliability_score" | "freshness_label" | "last_verified_at" | "verification_count" | "report_count">[];
 }
 
-let cache: { places: Place[]; meta: Omit<RawDataset, "places"> } | null = null;
+export interface DatasetMeta {
+  generated_at: string;
+  source: string;
+  license: string;
+  attribution: string;
+  count: number;
+  cities: { slug: string; label: string; count: number }[];
+}
+
+let cache: { places: Place[]; meta: DatasetMeta } | null = null;
 
 /** Deterministic 0..1 hash of a string - same input always yields the same
  * value, so the demo doesn't shuffle its own numbers on every request. */
@@ -110,19 +121,55 @@ function freshnessLabel(ageDays: number): string {
   return `${Math.floor(ageDays / 365)} yıl önce doğrulandı`;
 }
 
+/**
+ * Loads every city snapshot in data/, not one hardcoded file.
+ *
+ * Each city is its own `places.<city>.json` so a city can be re-pulled,
+ * added or dropped without touching the others - which is the whole point of
+ * a pilot that is supposed to grow to 81 provinces. Adding Ankara meant
+ * dropping a file in; no code here changed.
+ */
 function loadDataset() {
   if (cache) return cache;
 
-  const filePath = path.join(process.cwd(), "data", "places.istanbul.json");
-  const raw = JSON.parse(fs.readFileSync(filePath, "utf-8")) as RawDataset;
+  const dataDir = path.join(process.cwd(), "data");
+  const files = fs
+    .readdirSync(dataDir)
+    .filter((name) => name.startsWith("places.") && name.endsWith(".json"))
+    .sort();
 
-  const places: Place[] = raw.places.map((place) => ({
-    ...place,
-    ...deriveCommunitySignals(place),
-  }));
+  if (files.length === 0) {
+    throw new Error(
+      `data/ içinde places.*.json bulunamadı. Önce scripts/fetch_demo_data.py çalıştırın.`,
+    );
+  }
 
-  const { places: _ignored, ...meta } = raw;
-  cache = { places, meta };
+  const places: Place[] = [];
+  const cities: DatasetMeta["cities"] = [];
+  let newest = "";
+  let attribution = "© OpenStreetMap katkıda bulunanları";
+  let license = "ODbL 1.0";
+  let source = "OpenStreetMap via Overpass API";
+
+  for (const file of files) {
+    const raw = JSON.parse(fs.readFileSync(path.join(dataDir, file), "utf-8")) as RawDataset;
+    const slug = raw.city ?? file.replace(/^places\./, "").replace(/\.json$/, "");
+
+    for (const place of raw.places) {
+      places.push({ ...place, ...deriveCommunitySignals(place) });
+    }
+
+    cities.push({ slug, label: raw.city_label ?? slug, count: raw.places.length });
+    if (raw.generated_at > newest) newest = raw.generated_at;
+    attribution = raw.attribution ?? attribution;
+    license = raw.license ?? license;
+    source = raw.source ?? source;
+  }
+
+  cache = {
+    places,
+    meta: { generated_at: newest, source, license, attribution, count: places.length, cities },
+  };
   return cache;
 }
 

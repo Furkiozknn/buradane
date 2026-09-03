@@ -23,7 +23,7 @@ from pathlib import Path
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-DATA_PATH = Path(__file__).resolve().parent.parent / "frontend" / "data" / "places.istanbul.json"
+DATA_DIR = Path(__file__).resolve().parent.parent / "frontend" / "data"
 
 
 def rebuild_address(tags: dict) -> str | None:
@@ -36,8 +36,8 @@ def rebuild_address(tags: dict) -> str | None:
     return ", ".join(parts) if parts else None
 
 
-def main() -> None:
-    dataset = json.loads(DATA_PATH.read_text(encoding="utf-8"))
+def repair_file(data_path: Path) -> tuple[int, int]:
+    dataset = json.loads(data_path.read_text(encoding="utf-8"))
     places = dataset["places"]
 
     fixed_addresses = 0
@@ -54,8 +54,25 @@ def main() -> None:
             place["is_24h"] = None
             cleared_hours += 1
 
-    DATA_PATH.write_text(json.dumps(dataset, ensure_ascii=False), encoding="utf-8")
-    print(f"✓ {fixed_addresses} adres düzeltildi, {cleared_hours} hatalı 'closed' saat bilgisi temizlendi")
+    data_path.write_text(json.dumps(dataset, ensure_ascii=False), encoding="utf-8")
+    return fixed_addresses, cleared_hours
+
+
+def main() -> None:
+    files = sorted(DATA_DIR.glob("places.*.json"))
+    if not files:
+        print("frontend/data/ içinde places.*.json yok - önce fetch_demo_data.py çalıştırın.")
+        return
+
+    total_addresses = 0
+    total_hours = 0
+    for data_path in files:
+        addresses, hours = repair_file(data_path)
+        total_addresses += addresses
+        total_hours += hours
+        print(f"  {data_path.name}: {addresses} adres, {hours} saat bilgisi düzeltildi")
+
+    print(f"\n✓ Toplam {total_addresses} adres düzeltildi, {total_hours} hatalı 'closed' temizlendi")
 
 
 if __name__ == "__main__":

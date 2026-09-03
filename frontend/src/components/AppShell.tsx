@@ -19,6 +19,7 @@ import { PlaceCard, PlaceCardSkeleton } from "./PlaceCard";
 import { PlaceDetail } from "./PlaceDetail";
 import { EMPTY_FILTERS, FilterSheet, activeFilterCount, type FilterState } from "./FilterSheet";
 import { SuggestPlaceDialog } from "./SuggestPlaceDialog";
+import { CityPicker } from "./CityPicker";
 import { DESKTOP_QUERY, useMediaQuery } from "@/lib/use-media-query";
 import { buildUrlSearch, type UrlState } from "@/lib/url-state";
 import { useFavorites } from "@/lib/use-favorites";
@@ -31,8 +32,18 @@ const MapCanvas = dynamic(() => import("./MapCanvas"), {
   loading: () => <div className="absolute inset-0 bg-surface-sunken" aria-hidden />,
 });
 
-const ISTANBUL_CENTER = { lat: 41.0082, lon: 28.9784 };
 const DEFAULT_RADIUS_M = 2000;
+
+/** Where each pilot city's map opens when we can't use the device location.
+ * Keyed by the slug the data pipeline writes, so a new city file shows up in
+ * the picker as soon as its centre is listed here. */
+const CITY_CENTERS: Record<string, { lat: number; lon: number }> = {
+  istanbul: { lat: 41.0082, lon: 28.9784 },
+  ankara: { lat: 39.9208, lon: 32.8541 },
+  izmir: { lat: 38.4237, lon: 27.1428 },
+};
+
+const FALLBACK_CENTER = CITY_CENTERS.istanbul;
 
 type LocationState =
   | { status: "idle" }
@@ -58,7 +69,12 @@ export function AppShell({
   datasetMeta,
   initialState,
 }: {
-  datasetMeta: { attribution: string; generatedAt: string; count: number };
+  datasetMeta: {
+    attribution: string;
+    generatedAt: string;
+    count: number;
+    cities: { slug: string; label: string; count: number }[];
+  };
   /** Parsed from the request URL on the server (see app/page.tsx), so the
    * server and client agree on the first paint - reading `window` here
    * instead produces a hydration mismatch and a visible state jump. */
@@ -99,6 +115,15 @@ export function AppShell({
   const { favoriteIds, toggle: toggleFavorite, isFavorite, count: favoriteCount } = useFavorites();
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [sort, setSort] = useState<SortKey>("distance");
+  // Defaults to the pilot city, not whichever file sorts first alphabetically
+  // (which quietly made Ankara the default the moment it was added). Falls
+  // back to the largest dataset if İstanbul is ever dropped.
+  const [activeCity, setActiveCity] = useState<string>(() => {
+    const cities = datasetMeta.cities;
+    if (cities.some((c) => c.slug === "istanbul")) return "istanbul";
+    return [...cities].sort((a, b) => b.count - a.count)[0]?.slug ?? "istanbul";
+  });
+  const [cityPickerOpen, setCityPickerOpen] = useState(false);
 
   // Keep the address bar in step with what's on screen. replaceState, not
   // push: panning the map or toggling a filter shouldn't bury the user's
@@ -117,7 +142,8 @@ export function AppShell({
     window.history.replaceState(null, "", `${window.location.pathname}${search}`);
   }, [category, filters, query, detailPlace, viewport]);
 
-  const center = location.status === "granted" ? { lat: location.lat, lon: location.lon } : ISTANBUL_CENTER;
+  const cityCenter = CITY_CENTERS[activeCity] ?? FALLBACK_CENTER;
+  const center = location.status === "granted" ? { lat: location.lat, lon: location.lon } : cityCenter;
   // Deliberately excludes "locating": while the request is in flight we have
   // not fallen back to anything yet, and claiming we did would be both wrong
   // and (on desktop, where this drives the sidebar offset) a layout jump the
@@ -342,6 +368,17 @@ export function AppShell({
     [places, selectedId, openDetail],
   );
 
+  const cityOptions = useMemo(
+    () =>
+      datasetMeta.cities.map((city) => ({
+        ...city,
+        center: CITY_CENTERS[city.slug] ?? FALLBACK_CENTER,
+      })),
+    [datasetMeta.cities],
+  );
+  const activeCityLabel =
+    datasetMeta.cities.find((c) => c.slug === activeCity)?.label ?? "İstanbul";
+
   const filterCount = activeFilterCount(filters);
   const hasAnyFilter = filterCount > 0 || category !== null || query.trim().length > 0;
 
@@ -443,12 +480,18 @@ export function AppShell({
           <div className="pointer-events-auto mx-auto mt-3 flex max-w-2xl justify-center">
             {/* pointer-events-none: this is a passive label sitting over the
                 map, and without it the strip silently eats drag-to-pan. */}
-            <span className="pointer-events-none flex items-center gap-1.5 rounded-full bg-surface/95 px-3 py-1 text-[12px] font-medium text-text-secondary shadow-sm">
+            {/* Tappable: when we can't locate someone, "pick your city" is a
+                far better recovery than a blank map or a re-prompt the
+                browser will silently swallow. */}
+            <button
+              type="button"
+              onClick={() => setCityPickerOpen(true)}
+              className="flex min-h-11 items-center gap-1.5 rounded-full bg-surface/95 px-3 py-1 text-[12px] font-medium text-text-secondary shadow-sm transition-colors hover:bg-surface"
+            >
               <MapPin size={12} aria-hidden />
-              {location.status === "denied"
-                ? "Konum kapalı — İstanbul merkez gösteriliyor"
-                : "Yaklaşık konum — İstanbul merkez"}
-            </span>
+              {location.status === "denied" ? "Konum kapalı" : "Yaklaşık konum"} — {activeCityLabel}
+              <span className="text-brand">&middot; değiştir</span>
+            </button>
           </div>
         )}
       </div>
@@ -714,6 +757,22 @@ export function AppShell({
 
       {suggestOpen && (
         <SuggestPlaceDialog center={mapCenter} onClose={() => setSuggestOpen(false)} />
+      )}
+
+      {cityPickerOpen && (
+        <CityPicker
+          cities={cityOptions}
+          activeCity={activeCity}
+          onSelect={(city) => {
+            setActiveCity(city.slug);
+            setCityPickerOpen(false);
+            // Selecting a city is an explicit "take me here", so the map
+            // jumps rather than waiting for the next viewport query.
+            setViewport(null);
+            setStaleViewport(false);
+          }}
+          onClose={() => setCityPickerOpen(false)}
+        />
       )}
     </main>
   );

@@ -17,6 +17,7 @@ Run:  uv run --no-project python scripts/fetch_demo_data.py
 
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 import time
@@ -37,12 +38,31 @@ OVERPASS_ENDPOINTS = [
     "https://overpass.kumi.systems/api/interpreter",  # mirror, used if the primary is busy
 ]
 
-# İstanbul core (European + Asian urban area). Deliberately not the whole
-# province - the demo wants density, not 5000 parking lots in Silivri. The
-# data model itself is not bounded to this box; see README.
-BBOX = (40.85, 28.55, 41.25, 29.45)  # south, west, north, east
+# Pilot cities, in rollout order. Each is the dense urban core rather than
+# the whole province - the demo wants the area people actually walk around
+# in, not 5000 parking lots in the outer districts. Nothing in the data
+# model is bounded to these boxes; adding a city is a row here plus a run.
+CITIES: dict[str, dict] = {
+    "istanbul": {
+        "label": "İstanbul",
+        "bbox": (40.85, 28.55, 41.25, 29.45),  # south, west, north, east
+        "cap_scale": 1.0,
+    },
+    "ankara": {
+        "label": "Ankara",
+        "bbox": (39.78, 32.62, 40.03, 33.00),
+        # Smaller cores need smaller caps; the point is coverage, not volume,
+        # and the committed dataset shouldn't balloon for it.
+        "cap_scale": 0.45,
+    },
+    "izmir": {
+        "label": "İzmir",
+        "bbox": (38.32, 26.98, 38.53, 27.25),
+        "cap_scale": 0.45,
+    },
+}
 
-OUT_PATH = Path(__file__).resolve().parent.parent / "frontend" / "data" / "places.istanbul.json"
+DATA_DIR = Path(__file__).resolve().parent.parent / "frontend" / "data"
 
 # category slug -> (OSM selectors, per-category cap)
 # The cap exists because some categories (parking, benches) would otherwise
@@ -100,8 +120,8 @@ UNNAMED_LABEL = {
 }
 
 
-def overpass_query(selectors: list[str]) -> str:
-    south, west, north, east = BBOX
+def overpass_query(selectors: list[str], bbox: tuple[float, float, float, float]) -> str:
+    south, west, north, east = bbox
     parts = []
     for selector in selectors:
         parts.append(f"  node{selector}({south},{west},{north},{east});")
@@ -271,47 +291,60 @@ def merge_multi_category(places: list[dict]) -> list[dict]:
 CACHE_DIR = Path(__file__).resolve().parent.parent / ".overpass-cache"
 
 
-def fetch_category(category: str, config: dict) -> list[dict]:
-    """Per-category checkpoint on disk. Overpass will rate-limit partway
-    through a 9-category run sooner or later; without this, every failure
-    threw away every category already fetched (which is exactly what
+def fetch_category(city: str, category: str, config: dict, bbox, cap: int) -> list[dict]:
+    """Per-city, per-category checkpoint on disk. Overpass will rate-limit
+    partway through a multi-category run sooner or later; without this, every
+    failure threw away every category already fetched (which is exactly what
     happened on the first run). Re-running now resumes instead of restarting.
     Delete .overpass-cache/ to force a genuinely fresh pull."""
-    CACHE_DIR.mkdir(exist_ok=True)
-    cache_file = CACHE_DIR / f"{category}.json"
+    cache_dir = CACHE_DIR / city
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    cache_file = cache_dir / f"{category}.json"
 
     if cache_file.exists():
         cached = json.loads(cache_file.read_text(encoding="utf-8"))
-        print(f"→ {category}: önbellekten {len(cached)} mekan (yeniden çekilmedi)")
+        print(f"  → {category}: önbellekten {len(cached)} mekan")
         return cached
 
-    print(f"→ {category} çekiliyor...")
-    elements = run_query(overpass_query(config["selectors"]))
+    print(f"  → {category} çekiliyor...")
+    elements = run_query(overpass_query(config["selectors"], bbox))
     normalized = [p for p in (normalize(e, category) for e in elements) if p is not None]
-    capped = normalized[: config["cap"]]
-    print(f"  {len(elements)} OSM elemanı → {len(normalized)} geçerli → {len(capped)} alındı (cap {config['cap']})")
+    capped = normalized[:cap]
+    print(f"    {len(elements)} OSM elemanı → {len(normalized)} geçerli → {len(capped)} alındı (cap {cap})")
     cache_file.write_text(json.dumps(capped, ensure_ascii=False), encoding="utf-8")
     return capped
 
 
-def main() -> None:
-    all_places: list[dict] = []
+def fetch_city(city: str, city_config: dict) -> int:
+    """Each city gets its own file rather than one merged blob: a city can be
+    re-pulled, added or dropped without touching the others, and the read
+    side just globs the directory."""
+    bbox = city_config["bbox"]
+    scale = city_config.get("cap_scale", 1.0)
+
+    print(f"\n=== {city_config['label']} ===")
+    places: list[dict] = []
     for category, config in CATEGORIES.items():
-        all_places.extend(fetch_category(category, config))
-        time.sleep(8)  # be polite to a free public API - 2s was too aggressive and got us 429'd
+        cap = max(50, int(config["cap"] * scale))
+        places.extend(fetch_category(city, category, config, bbox, cap))
+        time.sleep(8)  # be polite to a free public API - 2s got us 429'd
 
-    merged = merge_multi_category(all_places)
-    multi = [p for p in merged if len(p["categories"]) > 1]
+    merged = merge_multi_category(places)
+    for place in merged:
+        place["city"] = city
 
-    OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    OUT_PATH.write_text(
+    out_path = DATA_DIR / f"places.{city}.json"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(
         json.dumps(
             {
+                "city": city,
+                "city_label": city_config["label"],
                 "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                 "source": "OpenStreetMap via Overpass API",
                 "license": "ODbL 1.0",
                 "attribution": "© OpenStreetMap katkıda bulunanları",
-                "bbox": {"south": BBOX[0], "west": BBOX[1], "north": BBOX[2], "east": BBOX[3]},
+                "bbox": {"south": bbox[0], "west": bbox[1], "north": bbox[2], "east": bbox[3]},
                 "count": len(merged),
                 "places": merged,
             },
@@ -319,9 +352,27 @@ def main() -> None:
         ),
         encoding="utf-8",
     )
-    size_mb = OUT_PATH.stat().st_size / 1024 / 1024
-    print(f"\n✓ {len(merged)} mekan yazıldı → {OUT_PATH} ({size_mb:.1f} MB)")
-    print(f"  {len(multi)} mekan birden fazla kategoriye ait (çoklu-kategori modeli çalışıyor)")
+    size_mb = out_path.stat().st_size / 1024 / 1024
+    print(f"  ✓ {len(merged)} mekan → {out_path.name} ({size_mb:.1f} MB)")
+    return len(merged)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--city",
+        choices=sorted(CITIES),
+        action="append",
+        help="Sadece bu şehri çek (birden fazla kez verilebilir). Varsayılan: hepsi.",
+    )
+    args = parser.parse_args()
+
+    selected = args.city or list(CITIES)
+    total = 0
+    for city in selected:
+        total += fetch_city(city, CITIES[city])
+
+    print(f"\n✓ Toplam {total} mekan, {len(selected)} şehir: {', '.join(selected)}")
 
 
 if __name__ == "__main__":

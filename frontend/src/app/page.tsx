@@ -30,7 +30,12 @@ export default async function Home({
 
   return (
     <AppShell
-      datasetMeta={{ attribution: meta.attribution, generatedAt: meta.generated_at, count: meta.count }}
+      datasetMeta={{
+        attribution: meta.attribution,
+        generatedAt: meta.generated_at,
+        count: meta.count,
+        cities: meta.cities,
+      }}
       initialState={initialState}
     />
   );
