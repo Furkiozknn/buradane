@@ -21,6 +21,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import type {
+  AccessType,
   AmenityKey,
   CategorySlug,
   Place,
@@ -39,7 +40,10 @@ interface RawDataset {
   license: string;
   attribution: string;
   count: number;
-  places: Omit<Place, "reliability_score" | "freshness_label" | "last_verified_at" | "verification_count" | "report_count">[];
+  places: (Omit<
+    Place,
+    "reliability_score" | "freshness_label" | "last_verified_at" | "verification_count" | "report_count" | "access"
+  > & { access?: AccessType })[];
 }
 
 export interface DatasetMeta {
@@ -112,6 +116,19 @@ function deriveCommunitySignals(place: RawDataset["places"][number]) {
   };
 }
 
+/**
+ * Who can actually walk in. Mirrors `_access_from_tags` in
+ * scripts/fetch_demo_data.py - the two must agree, or a re-pull would
+ * silently change which places are public.
+ */
+function accessFromTags(tags: Record<string, string> | undefined): AccessType {
+  const value = (tags?.access ?? "").trim().toLowerCase();
+  if (value === "private" || value === "no") return "private";
+  if (value === "customers") return "customers";
+  if (value === "permit" || value === "permissive") return "permit";
+  return "public";
+}
+
 /** Matches backend/app/services/reliability.py's `freshness_label` wording. */
 function freshnessLabel(ageDays: number): string {
   if (ageDays < 1) return "Bugün doğrulandı";
@@ -156,7 +173,15 @@ function loadDataset() {
     const slug = raw.city ?? file.replace(/^places\./, "").replace(/\.json$/, "");
 
     for (const place of raw.places) {
-      places.push({ ...place, ...deriveCommunitySignals(place) });
+      places.push({
+        ...place,
+        // Snapshots taken before the fetcher learned about `access` still
+        // carry the raw OSM tags, so the field is derived here rather than
+        // requiring a full re-pull through a rate-limited Overpass mirror.
+        // New snapshots ship it directly and this is a no-op.
+        access: place.access ?? accessFromTags(place.raw_tags),
+        ...deriveCommunitySignals(place),
+      });
     }
 
     cities.push({ slug, label: raw.city_label ?? slug, count: raw.places.length });
@@ -525,6 +550,15 @@ export function queryPlaces(
       const place = hasOverrides ? applyOverride(base, overrides[base.id]) : base;
 
       if (place.status === "pending_review" || place.status === "permanently_closed") continue;
+
+      // A place tagged `access=private` is inside someone's property. Sending
+      // a person in a hurry to a door that will not open is the worst thing
+      // this app can do, so these never reach a result - 146 places in the
+      // current snapshot restrict access, 17 of them toilets, and every one
+      // was being served as freely usable. `customers` and `permit` DO reach
+      // results: they are usable under a condition a person can meet, and
+      // they carry a badge saying so.
+      if (place.access === "private") continue;
 
       if (box) {
         // Cheap rejection before the trigonometry, same idea as PostGIS using

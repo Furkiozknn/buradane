@@ -162,6 +162,33 @@ def run_query(query: str, *, max_rounds: int = 4) -> list[dict]:
     raise RuntimeError(f"Overpass'ın tüm endpoint'leri {max_rounds} turda da başarısız: {last_error}")
 
 
+def _access_from_tags(tags: dict[str, str]) -> str:
+    """Who can actually walk in.
+
+    This is not decoration. A toilet tagged ``access=private`` is a toilet
+    inside someone's property; listing it as a public toilet sends a person
+    in a hurry to a door that will not open, which is the single worst thing
+    this app can do. 146 places in the current snapshot carry a restricting
+    value - 17 of them toilets - and every one of them was being served as
+    freely usable.
+
+    ``customers`` and ``permit`` are kept, because they *are* usable under a
+    condition a person can meet ("buy a tea, use the toilet" is how most of
+    Istanbul's usable toilets actually work). They are labelled rather than
+    hidden. ``private``/``no`` are not public facilities at all.
+    """
+    value = (tags.get("access") or "").strip().lower()
+    if value in {"private", "no"}:
+        return "private"
+    if value == "customers":
+        return "customers"
+    if value in {"permit", "permissive"}:
+        return "permit"
+    # Missing means unrestricted for civic features in OSM practice, and
+    # "yes"/"designated"/"public" say so explicitly.
+    return "public"
+
+
 def _tri_state(value: str | None, true_values: set[str], false_values: set[str]) -> bool | None:
     """OSM tag -> True/False/None. `None` means genuinely unknown and must
     never be rendered as "no" in the UI - the whole reason the schema uses
@@ -219,6 +246,7 @@ def normalize(element: dict, category: str) -> dict | None:
         "categories": [category],
         "status": "active",
         "price_type": price_type,
+        "access": _access_from_tags(tags),
         "address_line": _address_from_tags(tags),
         "opening_hours_raw": opening_hours,
         "is_24h": True if opening_hours == "24/7" else None,
@@ -227,7 +255,13 @@ def normalize(element: dict, category: str) -> dict | None:
         "description": tags.get("description"),
         "operator": tags.get("operator"),
         "amenities": {
-            "wheelchair_accessible": _tri_state(tags.get("wheelchair"), {"yes"}, {"no"}),
+            # `designated` is OSM's strongest accessibility claim - purpose-built
+            # for wheelchair users - and treating it as unknown understated
+            # exactly the places that took the trouble to say so.
+            # `limited` stays unknown: it means partially accessible, which is
+            # neither a yes nor a no, and it is surfaced verbatim on the
+            # detail page instead of being flattened into a boolean.
+            "wheelchair_accessible": _tri_state(tags.get("wheelchair"), {"yes", "designated"}, {"no"}),
             "has_ramp": _tri_state(tags.get("ramp"), {"yes"}, {"no"}),
             "baby_changing": _tri_state(tags.get("changing_table"), {"yes"}, {"no"}),
             "child_friendly": True if category == "cocuk-alani" else _tri_state(tags.get("playground"), {"yes"}, {"no"}),

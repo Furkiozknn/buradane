@@ -34,6 +34,17 @@ export type PlaceStatus = "active" | "temporarily_closed" | "permanently_closed"
 
 export type PriceType = "free" | "paid" | "unknown";
 
+/**
+ * Who can actually use the place.
+ *
+ * `private` is not a public facility and never reaches a search result. The
+ * middle two are usable under a condition a person can meet, so they are
+ * labelled rather than hidden - "buy a tea, use the toilet" is how a large
+ * share of Istanbul's usable toilets actually work, and dropping them would
+ * throw away real answers.
+ */
+export type AccessType = "public" | "customers" | "permit" | "private";
+
 export type AmenityKey =
   | "wheelchair_accessible"
   | "has_ramp"
@@ -65,6 +76,7 @@ export interface Place {
   categories: CategorySlug[];
   status: PlaceStatus;
   price_type: PriceType;
+  access: AccessType;
   address_line: string | null;
   opening_hours_raw: string | null;
   is_24h: boolean | null;

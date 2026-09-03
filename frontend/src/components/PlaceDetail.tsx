@@ -166,6 +166,35 @@ export function PlaceDetail({
             </span>
           </p>
 
+          {/* Stated up front, not buried in the amenity list: being turned
+              away at the door is the failure this app exists to prevent, and
+              a condition someone can plan around is only useful before they
+              walk. */}
+          {place.access !== "public" && (
+            <p
+              className="mt-2 rounded-lg px-3 py-2 text-[12.5px] leading-relaxed"
+              // Body text in --text, not --warning: amber on amber-soft
+              // measured 4.51:1, which passes AA by a hundredth and breaks
+              // the moment either token is nudged. The background already
+              // carries the "there is a condition" signal; the sentence only
+              // has to be readable.
+              style={{ background: "var(--warning-soft)", color: "var(--text)" }}
+            >
+              {place.access === "customers"
+                ? "OpenStreetMap kaydına göre burası müşterilere açık — girmeden önce bir şey almanız gerekebilir."
+                : "OpenStreetMap kaydına göre burası izinle giriliyor — herkese açık olmayabilir."}
+            </p>
+          )}
+
+          {/* `wheelchair=limited` is neither a yes nor a no, so it is not
+              flattened into the boolean amenity - but hiding it would drop
+              real information from the people who most need it. */}
+          {place.raw_tags?.wheelchair === "limited" && (
+            <p className="mt-2 text-[12.5px] leading-relaxed text-text-secondary">
+              Tekerlekli sandalye erişimi <strong>kısmen</strong> mümkün olarak kaydedilmiş.
+            </p>
+          )}
+
           <div className="mt-4 flex gap-2">
             <a
               href={directionsUrl(place)}

@@ -350,6 +350,47 @@ describe("facets", () => {
   });
 });
 
+describe("access restrictions", () => {
+  it("never returns a place the public cannot enter", () => {
+    // 146 places in the snapshot carry a restricting `access` tag, 17 of
+    // them toilets, and all of them used to be served as freely usable.
+    // Sending someone in a hurry to a door that will not open is the worst
+    // thing this app can do.
+    const { places } = queryPlaces({ ...ISTANBUL, radius_m: 40_000, limit: 20_000 });
+    expect(places.length).toBeGreaterThan(0);
+    for (const place of places) {
+      expect(place.access).not.toBe("private");
+      expect(place.raw_tags?.access).not.toBe("private");
+    }
+  });
+
+  it("keeps conditionally usable places, so they can be labelled instead of hidden", () => {
+    // "Buy a tea, use the toilet" is how a large share of Istanbul's usable
+    // toilets actually work; dropping them would throw away real answers.
+    const { places } = queryPlaces({ ...ISTANBUL, radius_m: 40_000, limit: 20_000 });
+    expect(places.some((p) => p.access === "customers" || p.access === "permit")).toBe(true);
+  });
+
+  it("gives every place an access value, defaulting to public", () => {
+    for (const place of allPlaces().slice(0, 1000)) {
+      expect(["public", "customers", "permit", "private"]).toContain(place.access);
+    }
+  });
+
+  it("counts facets over the visible set only", () => {
+    // A private place must not inflate a filter count either.
+    const result = queryPlaces({ ...ISTANBUL, radius_m: 40_000, categories: ["tuvalet"], limit: 5 });
+    const filtered = queryPlaces({
+      ...ISTANBUL,
+      radius_m: 40_000,
+      categories: ["tuvalet"],
+      freeOnly: true,
+      limit: 5,
+    });
+    expect(result.facets.freeOnly).toBe(filtered.total);
+  });
+});
+
 describe("payload shape", () => {
   it("strips raw_tags from list results", () => {
     const { places } = queryPlaces({ ...ISTANBUL, radius_m: 2000, limit: 20 });

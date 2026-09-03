@@ -490,6 +490,26 @@ sorgunun anlamını sessizce değiştirmek yerine.
   `backend/docs/DATA_SOURCES.md`'de not düşüldü, lisans doğrulaması
   entegrasyon öncesi tek tek yapılmalı.
 
+### Veriye karşı dürüstlük
+
+Açık coğrafi veri eşit dağılmıyor ve bir şeyin *bilinmemesi* ile *olmaması*
+arasındaki fark, bu uygulamada doğrudan birinin boşuna yürümesi demek. Ölçüp
+düzelttiğimiz üç nokta:
+
+| Bulgu | Veri | Karar |
+|---|---|---|
+| `access=private/no` | 146 mekan (17'si tuvalet) | Sonuçlara **hiç girmez**. Özel mülk içindeki bir tuvaleti umumi diye göstermek, acelesi olan birini açılmayacak bir kapıya göndermektir. |
+| `access=customers` / `permit` | 9 tuvalet + diğerleri | **Kalır ama etiketlenir.** "Bir çay al, tuvaleti kullan" İstanbul'da gerçekten işleyen bir çözüm; gizlemek gerçek bir cevabı çöpe atmak olurdu. |
+| `opening_hours` | 11.406 mekanın %5,5'inde var (514 açık, 17 kapalı, 10.875 bilinmiyor) | Filtre yalnızca **kapalı olduğu bilinenleri** eler; çipin adı da bu ("Kapalıları gizle"). |
+| `wheelchair=designated` | 3 mekan | Artık `true`. OSM'nin en güçlü erişilebilirlik iddiasıydı ve "bilinmiyor" sayılıyordu. |
+| `wheelchair=limited` | 70 mekan | Boolean'a **düşürülmüyor** (ne evet ne hayır), detay sayfasında olduğu gibi yazılıyor. |
+
+Aynı ilke özellik (amenity) alanlarında da geçerli: `null` "bilinmiyor"
+demek, "yok" demek değil, ve bir özellik filtresi asla `null`'ı eşleştirmez.
+Filtre çiplerindeki sayılar bu yüzden önemli — `Gölgelik 1` yazan bir çip,
+takılmış bir filtre gibi değil, henüz kimsenin haritalamadığı bir boşluk gibi
+okunuyor.
+
 ### Çevrimdışı çalışma
 
 Bu uygulama tam olarak ağın en kötü olduğu koşullarda kullanılıyor: dışarıda,
