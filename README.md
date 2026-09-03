@@ -10,14 +10,20 @@ Bu, "küçük bir Google Haritalar" değildir. Amaç genel amaçlı harita deği
 sorusuna hızlı ve güvenilir cevap vermek.
 
 İki parçadan oluşuyor: prod hedefi olan bir **FastAPI + PostGIS backend'i**
-ve bugün gerçek İstanbul verisiyle uçtan uca çalışan, bağımsız bir
+ve bugün gerçek OpenStreetMap verisiyle uçtan uca çalışan, bağımsız bir
 **Next.js + MapLibre GL JS demo arayüzü**. İkisi kasıtlı olarak aynı sorgu
 sözleşmesini konuşuyor (bkz. "Mimari") - demo, backend hazır olduğunda ona
 bağlanacak şekilde tasarlandı.
 
+Ürünün cevaplamaya çalıştığı iki soru var ve arayüz ikisine göre kuruldu:
+**"hangi yöne gideyim?"** (her sonuçta kuzeye göre yön oku + mesafe + yürüme
+süresi) ve **"bu bilgi hâlâ doğru mu?"** (tek dokunuşla "Evet, burada"
+doğrulaması, tazelik etiketi, kaynak ve güvenilirlik skoru).
+
 > **Demo ekran görüntüsü:** Henüz eklenmedi. Aşağıdaki "Hızlı Başlangıç →
-> Frontend" adımlarıyla demoyu yerelde çalıştırıp İstanbul'un 4.567 gerçek
-> OpenStreetMap mekanı üzerinde harita ve liste arayüzünü görebilirsiniz.
+> Frontend" adımlarıyla demoyu yerelde çalıştırıp **11.406 gerçek
+> OpenStreetMap mekanı** (İstanbul 6.481, Ankara 2.654, İzmir 2.271)
+> üzerinde harita ve liste arayüzünü görebilirsiniz.
 
 ## v1 Kapsamı
 
@@ -27,11 +33,16 @@ içinde hiçbir yerde "Turkey" sabiti hardcode edilmedi - ileride başka bir
 ülke eklenmek istenirse bu bir mimari değişiklik değil, bir konfigürasyon +
 veri yükleme işi olacak. Şu an için tek aktif ülke Türkiye.
 
-**Pilot sıra**: İstanbul → Ankara/İzmir/Antalya/Bursa/Kocaeli/Adana/
+**Pilot sıra**: İstanbul → Ankara/İzmir → Antalya/Bursa/Kocaeli/Adana/
 Gaziantep/Konya → geri kalan 81 il. Altyapı (idari hiyerarşi, veri modeli)
 81 ilin tamamını gün 1'den itibaren destekler; sadece veri doldurma bu
-sırayla ilerler. Demo şu an sadece İstanbul çekirdek şehir alanını
-kapsıyor (bkz. "Veri Pipeline").
+sırayla ilerler.
+
+Demo şu an **üç şehrin** çekirdek alanını kapsıyor (İstanbul, Ankara,
+İzmir). Her şehir kendi `places.<şehir>.json` dosyasında; okuma tarafı
+klasörü tarayarak hepsini yüklüyor, yani **dördüncü şehri eklemek bir
+konfigürasyon satırı + bir çekim koşusu** (bkz. "Veri Pipeline"), kod
+değişikliği değil.
 
 ## Hızlı Başlangıç
 
@@ -87,10 +98,10 @@ npm run dev
 ```
 
 `http://localhost:3000` adresinde açılır. Demo verisi
-(`frontend/data/places.istanbul.json`, 4.567 gerçek OSM mekanı) repoyla
-birlikte gelir - sadece demoyu denemek için "Veri Pipeline" adımlarını
-tekrar koşmanız gerekmez, onlar yalnızca İstanbul anlık görüntüsünü
-yenilemek istediğinizde gerekli.
+(`frontend/data/places.*.json`, üç şehir / 11.406 gerçek OSM mekanı, ~9 MB)
+repoyla birlikte gelir - sadece demoyu denemek için "Veri Pipeline"
+adımlarını tekrar koşmanız gerekmez, onlar yalnızca anlık görüntüyü
+yenilemek ya da yeni bir şehir eklemek istediğinizde gerekli.
 
 Production derlemesi:
 
@@ -123,8 +134,8 @@ yok.
 Frontend'in bir Postgres/Docker kurulumu olmadan, tek komutla ayağa
 kalkabilmesi gerekiyordu - hem hızlı iterasyon hem de demoyu paylaşmak
 için. `frontend/src/lib/places-repository.ts`, `scripts/fetch_demo_data.py`
-çıktısı olan gerçek İstanbul OSM anlık görüntüsünü
-(`frontend/data/places.istanbul.json`) okuyup backend'in `GET /places`
+çıktısı olan gerçek OSM anlık görüntülerini (`frontend/data/places.*.json`,
+her şehir için bir dosya) okuyup backend'in `GET /places`
 ucuyla **birebir aynı sorgu sözleşmesini** (yarıçap/bbox arama, çoklu
 kategori/amenity filtresi, serbest metin arama, sayfalama, aynı yanıt
 şekli) uygular. Next.js API route'ları (`frontend/src/app/api/places/
@@ -160,7 +171,7 @@ kendi konumu, nabız animasyonlu tek bir DOM marker'ı ile ayrıca gösterilir
 sheet, `vaul` tabanlı) açıkken harita `setPadding` ile görünür alanı
 sayfanın üstünde ortalar. Taban harita OpenFreeMap'in ücretsiz, API
 anahtarı gerektirmeyen "positron" stili - bilinçli olarak sade/gri:
-haritadaki her renk 9 kategori pin'ine ait, canlı bir taban harita yoğun
+haritadaki her renk 14 kategori pin'ine ait, canlı bir taban harita yoğun
 bir sonuç kümesini okunmaz hale getirirdi.
 
 ### Proje Yapısı
@@ -186,14 +197,18 @@ buradane/
 │   │   │   │   ├── places/route.ts                     # GET /api/places
 │   │   │   │   ├── places/[id]/route.ts                # GET /api/places/:id
 │   │   │   │   ├── contributions/route.ts               # GET/POST /api/contributions
-│   │   │   │   └── admin/contributions/[id]/route.ts    # PATCH (onayla/reddet)
-│   │   │   ├── admin/page.tsx                # Moderasyon paneli
-│   │   │   └── page.tsx                       # Ana sayfa
-│   │   ├── components/                        # MapCanvas, AppShell, PlaceCard, PlaceDetail, FilterSheet, CategoryPicker, ...
-│   │   └── lib/                                # types, places-repository (demo adaptörü), categories, contributions-store, geo, opening-hours, directions
+│   │   │   │   ├── admin/contributions/[id]/route.ts    # PATCH (onayla/reddet)
+│   │   │   │   └── admin/places/[id]/route.ts           # PATCH (düzenle) / DELETE (geri al)
+│   │   │   ├── admin/page.tsx                # Moderasyon + mekan düzenleme paneli
+│   │   │   ├── manifest.ts                    # PWA manifest
+│   │   │   └── page.tsx                       # Ana sayfa (URL state'i sunucuda ayrıştırır)
+│   │   ├── components/                        # MapCanvas, AppShell, PlaceCard, PlaceDetail, FilterSheet, CategoryPicker, CityPicker, DirectionArrow, AdminPlaceEditor, ...
+│   │   └── lib/                                # types, places-repository (demo adaptörü), categories, contributions-store, geo, opening-hours, directions, url-state, use-favorites, use-media-query
 │   ├── data/
-│   │   ├── places.istanbul.json               # 4.567 gerçek OSM mekanı (scripts/fetch_demo_data.py çıktısı)
-│   │   └── contributions.json                 # Kullanıcı katkıları + admin override'ları
+│   │   ├── places.istanbul.json               # 6.481 gerçek OSM mekanı
+│   │   ├── places.ankara.json                 # 2.654
+│   │   ├── places.izmir.json                  # 2.271
+│   │   └── contributions.json                 # Kullanıcı katkıları + admin override'ları (git'te değil)
 │   ├── public/maplibre/                        # MapLibre worker dosyaları (bkz. "Bilinen Tuhaflıklar")
 │   └── scripts/copy-maplibre-worker.mjs        # predev/prebuild'de otomatik çalışır
 ├── scripts/                  # Demo veri pipeline'ı (bkz. "Veri Pipeline") - backend/app/ingest'ten ayrı, PostGIS'e değil düz JSON'a yazar
@@ -206,19 +221,30 @@ buradane/
 ## Veri Pipeline
 
 Demo verisi üç script'in sırayla çalıştırılmasıyla üretildi. Her biri
-`frontend/data/places.istanbul.json`'ı okuyup yazıyor, tekrar
-çalıştırılabilir (idempotent) şekilde yazıldı. Veri zaten repoda mevcut
-olduğu için bunları koşmak sadece İstanbul anlık görüntüsünü yenilemek
-istediğinizde gerekli:
+`frontend/data/places.*.json` dosyalarının **tamamını** okuyup yazıyor,
+tekrar çalıştırılabilir (idempotent) şekilde yazıldı. Veri zaten repoda
+mevcut olduğu için bunları koşmak sadece anlık görüntüyü yenilemek ya da
+yeni bir şehir eklemek istediğinizde gerekli:
 
 ```bash
+# Tüm şehirler
 uv run --no-project python scripts/fetch_demo_data.py
+# ya da tek şehir
+uv run --no-project python scripts/fetch_demo_data.py --city ankara
+
 uv run --no-project python scripts/enrich_demo_data.py
 uv run --no-project python scripts/repair_demo_data.py
 ```
 
-1. **`fetch_demo_data.py`** - İstanbul'un çekirdek şehir alanı için (bkz.
-   script'teki `BBOX`) Overpass API'den 9 kategorinin OSM verisini çeker.
+**Yeni şehir eklemek:** `fetch_demo_data.py`'deki `CITIES` sözlüğüne bir
+satır (slug, etiket, bbox, cap ölçeği) ekleyip script'i o şehir için
+koşmak yeterli. Okuma tarafı `data/` klasörünü tarayarak yeni dosyayı
+kendiliğinden alır; `AppShell`'deki `CITY_CENTERS`'a şehrin merkezi
+eklenince şehir seçicide de görünür. Uygulama kodunda başka değişiklik
+gerekmez.
+
+1. **`fetch_demo_data.py`** - `CITIES`'te tanımlı her şehrin çekirdek alanı
+   için Overpass API'den 14 kategorinin OSM verisini çeker.
    `backend/app/ingest/osm_overpass.py`'den kasıtlı olarak ayrı: o script
    PostGIS'e yazar (prod yolu), bu script hiç Postgres/Docker
    gerektirmeden düz bir JSON dosyasına yazar. Overpass'ın ücretsiz uçları
@@ -236,9 +262,9 @@ uv run --no-project python scripts/repair_demo_data.py
    Bu yüzden konteyner kategoriler (`park`, `spor`) 120 metre yarıçapındaki
    tesislerden amenity bayrağı devralır - **kategoriler asla
    birleştirilmez** (çeşme parka dönüşmez) ve OSM'in açıkça belirttiği bir
-   değer asla üzerine yazılmaz. Gerçek çalıştırmada 398 konteyner mekan
-   zenginleştirildi, 388 amenity bayrağı eklendi (bkz.
-   `frontend/data/places.istanbul.json`'ın kendi `enrichment` alanı).
+   değer asla üzerine yazılmaz. Gerçek çalıştırmada üç şehirde toplam 815
+   konteyner mekan zenginleştirildi, 871 amenity bayrağı eklendi (her şehir
+   dosyasının kendi `enrichment` alanına bakın).
 3. **`repair_demo_data.py`** - Overpass'a tekrar gitmeden, zaten çekilmiş
    anlık görüntüdeki veri kusurlarını onarır: erken bir sürümün eksik ev
    numarasını koşulsuz araya sıkıştırmasından kalma "Yerebatan Caddesi
@@ -275,24 +301,38 @@ Tüm yazma uçları hesapsız kullanılabilir (`user_id` opsiyonel) - gizlilik-
 | `GET /api/places/:id` | Yer detayı; backend'deki `GET /places/{id}` ile aynı amaç. OSM id'leri `/` içerdiği için (`node/123`) URL-encoded alınır. Onaylanmış bir moderasyon kaydı varsa (`frontend/data/contributions.json`'daki `overrides`), sonucun üzerine okuma anında bindirilir - kaynak OSM anlık görüntüsü asla değiştirilmez. |
 | `GET /api/contributions` | Moderasyon kuyruğu - admin panelinin okuduğu uç. |
 | `POST /api/contributions` | "Mekan öner" / "yanlış bilgi bildir" / "kapalı bildir" - `kind` alanıyla ayrışan tek bir koleksiyon ucu (backend'de bunlar iki ayrı REST ucu: `POST /places/suggest` ve `POST /places/{id}/reports`; demo aynı `pending`-öncelikli moderasyon semantiğini tek bir uçta uyguluyor). Her zaman `pending` olarak başlar, herkese açık aramaya asla doğrudan düşmez. |
+| `PATCH /api/admin/places/:id` | Mekan düzenleme: ad, durum, ücret tipi, amenity'ler. `null` birinci sınıf bir değer - "bilinmiyor" ifade edilebilir kalır, yoksa moderatör yalnızca var/yok diyebilirdi. Düzenleme, OSM anlık görüntüsüne **katman** olarak yazılır: kaynak kayıt değişmez (yeniden içe aktarılabilir, lisanslı ve upstream id'si var), yani bir yazım düzeltmesi sonraki içe aktarımda sessizce kaybolmaz. |
+| `DELETE /api/admin/places/:id` | O mekandaki tüm düzeltmeleri geri alır, ham OSM kaydına döner. **Kalıcı silme yok**: artık var olmayan bir yer `permanently_closed` olur - aramadan kalkar ama kayıt (ve nedeni) denetim için durur. |
 | `PATCH /api/admin/contributions/:id` | `{ "action": "approve" \| "reject" }` - moderasyon onayı. Yalnızca `approve`, ve yalnızca rapor türü katkılar için bir override üretir (`report_closed` → `status: temporarily_closed`, `report_incorrect` → düşük güvenilirlik skoru). **Bu uçta kimlik doğrulama yok** - bilinçli, dokümante edilmiş bir demo sınırlaması (bkz. "Bilinen Sınırlamalar"); prod backend'de eşdeğer uçlar JWT arkasında olurdu. |
 
 ## Kategoriler ve Filtreler
 
-Demo, backend'in aktif kategori kümesinden 9 kategoriyle çalışıyor
+Demo, backend'in aktif kategori kümesinden 14 kategoriyle çalışıyor
 (`frontend/src/lib/categories.ts`):
 
-| Slug | Etiket |
-|---|---|
-| `tuvalet` | Tuvalet |
-| `park` | Park |
-| `su` | İçme Suyu |
-| `dinlenme` | Dinlenme Alanı |
-| `cocuk-alani` | Çocuk Alanı |
-| `spor` | Spor Alanı |
-| `otopark` | Otopark |
-| `dus` | Duş |
-| `wifi` | Ücretsiz Wi-Fi |
+| Slug | Etiket | Not |
+|---|---|---|
+| `tuvalet` | Tuvalet | |
+| `park` | Park | |
+| `su` | İçme Suyu | |
+| `dinlenme` | Dinlenme Alanı | |
+| `cocuk-alani` | Çocuk Alanı | |
+| `spor` | Spor Alanı | |
+| `otopark` | Otopark | |
+| `dus` | Duş | |
+| `wifi` | Ücretsiz Wi-Fi | |
+| `cami` | Cami | Türkiye'de en yaygın kamusal tesis; tanımadığın bir mahallede tuvalet ve akan suya erişmenin en güvenilir yolu |
+| `eczane` | Eczane | |
+| `toplanma-alani` | Acil Toplanma Alanı | Deprem hazırlık altyapısı - genel amaçlı hiçbir harita bunu birinci sınıf kategori olarak sunmuyor |
+| `kutuphane` | Kütüphane | |
+| `sarj` | Elektrikli Şarj | |
+
+Son beş kategori, genel amaçlı bir "tuvalet bulucu" ile Türkiye'ye özgü bir
+kamusal alan aracı arasındaki farkın olduğu yer. Cami, toplanma alanı ve
+kütüphane, OSM'de ücret etiketi yoksa "bilinmiyor" değil **ücretsiz**
+sayılır - Türkiye'de giriş ücreti almazlar ve "bilinmiyor" bırakmak
+"Ücretsiz" filtresini tam da insanların sığındığı yerler için işe yaramaz
+hale getiriyordu.
 
 Filtre çubuğunda kategorilere ek olarak 7 amenity üst-seviye filtre olarak
 sunuluyor: engelli erişimi, bebek bakım, çocuk dostu, evcil hayvan dostu,
@@ -405,9 +445,10 @@ sorgunun anlamını sessizce değiştirmek yerine.
 
 ## Bilinen Sınırlamalar
 
-- Demo'nun admin moderasyon ucunda (`PATCH /api/admin/contributions/:id`)
-  kimlik doğrulama yok - bilinçli, dokümante edilmiş bir demo sınırlaması;
-  prod backend'de eşdeğer uçlar JWT arkasındadır.
+- Demo'nun admin uçlarında (`/api/admin/contributions/:id`,
+  `/api/admin/places/:id`) kimlik doğrulama yok - bilinçli, dokümante
+  edilmiş bir demo sınırlaması; prod backend'de eşdeğer uçlar JWT
+  arkasındadır.
 - Demo'daki güvenilirlik skoru / doğrulama sayısı / tazelik etiketleri
   gerçek bir topluluk geçmişinden değil, OSM kaydının doluluğundan
   **deterministik olarak üretiliyor** (demo'nun hiç topluluk geçmişi yok).
@@ -423,30 +464,42 @@ sorgunun anlamını sessizce değiştirmek yerine.
   olan bir ortamda (yerel Docker veya CI) üretilmeli.
 - Fotoğraflar ve yorumlar backend'de modellendi (`PlacePhoto`/
   `PlaceReview`) ama ne backend API'sinde ne demo'da bir arayüzü var.
+  Fotoğraflar için OSM etiketleri ölçüldü ve **bilinçli olarak
+  ertelendi**: mekanların yalnızca %2,3'ünde (6.481'de 147) `image` ya da
+  `wikimedia_commons` etiketi var, yani özellik eklense detay
+  sayfalarının büyük çoğunluğu yine yer tutucuda kalır ve bugünkü tutarlı
+  görünümden daha kötü durur. Gerçek fotoğraf kaynağı, kullanıcı
+  yüklemeleri ya da belediye açık verisi olacak.
+- Kayıtlı yerler (favoriler) cihaza özel `localStorage`'da tutuluyor;
+  cihazlar arası senkron yok. Bu, hesapsız/gizlilik-öncelikli tasarımın
+  bilinçli bedeli - birinin düzenli kullandığı tuvalet ve duşların listesi
+  bir kimliğe bağlı sunucuda durmamalı.
 - **İBB/ULAŞAV entegrasyonu henüz yazılmadı** - araştırıldı,
   `backend/docs/DATA_SOURCES.md`'de not düşüldü, lisans doğrulaması
   entegrasyon öncesi tek tek yapılmalı.
 
 ## Yol Haritası
 
-**v1 (şu an)**: Türkiye haritası, konum, yakındaki yerler, kategori sistemi,
-temel kategoriler (tuvalet/park/su/dinlenme), yer detayı, arama/filtreleme,
-yol tarifi (harici harita uygulamasına link), OSM entegrasyonu, Türk idari
-bölge sistemi, kullanıcı önerisi/raporu, temel admin paneli, veri
-güvenilirliği, mobil öncelikli responsive arayüz - artık gerçek İstanbul
-OSM verisiyle çalışan bir Next.js + MapLibre GL JS demo dahil (bkz.
-"Mimari").
+**v1 (şu an, çalışıyor)**: Üç şehirde (İstanbul/Ankara/İzmir) 11.406 gerçek
+OSM mekanı üzerinde harita, konum, yakındakiler, 14 kategori, yer detayı,
+Türkçe doğal-dil araması, dinamik filtreler, sıralama (en yakın / en
+güvenilir), yön göstergesi, yol tarifi, tek dokunuşla yerinde doğrulama,
+kullanıcı önerisi ve sorun bildirimi, moderasyon + mekan düzenleme paneli,
+şehir seçici, paylaşılabilir derin bağlantılar, kayıtlı yerler, PWA,
+mobil sheet + masaüstü sidebar düzeni. Erişilebilirlik: Lighthouse 100.
 
 **Sıradaki adım (demo → prod)**: Demo'nun kendi Next.js API route'larını,
 statik JSON anlık görüntüsü yerine gerçek FastAPI+PostGIS backend'ine
 yönlendirmek (bkz. "Neden bir demo veri adaptörü var?") - sorgu sözleşmesi
 zaten aynı olduğu için bu bir taban-URL değişikliği olarak tasarlandı.
 
-**v2 (planlanan, henüz başlanmadı)**: Fotoğraflar, yorumlar/değerlendirmeler,
-favoriler, offline bölge indirme, erişilebilirlik/ihtiyaç profiline göre
-kişiselleştirme, gerçek bir semantik/AI destekli arama katmanı (demo'daki
-lookup-tablosu tabanlı ayrıştırmanın ötesinde), gelişmiş öneriler,
-oyunlaştırma (katkı puanı/rozet), PWA (offline-ready, iOS/Android'e hazır).
+**v2 (planlanan, henüz başlanmadı)**: Fotoğraflar (gerçek bir kaynak
+bulununca - bkz. "Bilinen Sınırlamalar"), yorumlar/değerlendirmeler,
+offline bölge indirme (service worker), erişilebilirlik/ihtiyaç profiline
+göre kişiselleştirme, gerçek bir semantik/AI destekli arama katmanı
+(demo'daki lookup-tablosu tabanlı ayrıştırmanın ötesinde), gelişmiş
+öneriler, oyunlaştırma (katkı puanı/rozet), belediye açık verisi
+(İBB/ULAŞAV) entegrasyonu, kalan 78 il.
 
 ## Lisans
 
