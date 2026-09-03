@@ -236,8 +236,11 @@ export function allPlaces(): Place[] {
   return loadDataset().places;
 }
 
-export function getPlaceById(id: string): Place | undefined {
-  return loadDataset().places.find((p) => p.id === id);
+export function getPlaceById(id: string, communityPlaces?: Place[]): Place | undefined {
+  return (
+    loadDataset().places.find((p) => p.id === id) ??
+    communityPlaces?.find((p) => p.id === id)
+  );
 }
 
 /**
@@ -431,6 +434,13 @@ export function queryPlaces(
      * would still match an "open now" search, and a just-verified place
      * would keep showing its stale freshness label in the list. */
     overrides?: Record<string, Partial<Place>>;
+    /**
+     * Places the community added and a moderator approved. Passed in rather
+     * than read here, because the snapshot loader is synchronous and the
+     * community layer lives behind async file IO - the same split the
+     * overrides already use.
+     */
+    communityPlaces?: Place[];
   },
 ): PlaceQueryResult {
   const {
@@ -446,6 +456,7 @@ export function queryPlaces(
     limit = 60,
     offset = 0,
     overrides,
+    communityPlaces,
     sort = "distance",
   } = query;
 
@@ -585,7 +596,16 @@ export function queryPlaces(
     const found: Place[] = [];
     const hasOverrides = overrides !== undefined && Object.keys(overrides).length > 0;
 
-    for (const base of loadDataset().places) {
+    // Community places are searched on exactly the same terms as OSM ones -
+    // same filters, same radius, same status rules. A contributed place that
+    // only showed up under special conditions would be a second-class record,
+    // and the whole point of approving it is that it is now part of the map.
+    const candidates =
+      communityPlaces && communityPlaces.length > 0
+        ? [...loadDataset().places, ...communityPlaces]
+        : loadDataset().places;
+
+    for (const base of candidates) {
       const place = hasOverrides ? applyOverride(base, overrides[base.id]) : base;
 
       if (place.status === "pending_review" || place.status === "permanently_closed") continue;

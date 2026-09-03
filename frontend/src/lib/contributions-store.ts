@@ -20,7 +20,17 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import type { Contribution, ContributionKind, Place } from "./types";
+import type {
+  Amenities,
+  CategorySlug,
+  Contribution,
+  ContributionKind,
+  Place,
+  PriceType,
+} from "./types";
+import { AMENITIES } from "./categories";
+
+const AMENITY_KEYS = AMENITIES.map((a) => a.key);
 
 const STORE_PATH = path.join(process.cwd(), "data", "contributions.json");
 
@@ -28,9 +38,17 @@ interface StoreShape {
   contributions: Contribution[];
   /** placeId -> partial Place, applied on read by the detail endpoint. */
   overrides: Record<string, Partial<Place>>;
+  /**
+   * Places the community added and a moderator approved.
+   *
+   * Kept beside the OSM snapshot rather than written into it, for the same
+   * reason overrides are: the snapshot has to stay re-importable, and a
+   * re-pull from Overpass must never silently erase what people contributed.
+   */
+  places: Place[];
 }
 
-const EMPTY: StoreShape = { contributions: [], overrides: {} };
+const EMPTY: StoreShape = { contributions: [], overrides: {}, places: [] };
 
 async function readStore(): Promise<StoreShape> {
   try {
@@ -39,6 +57,7 @@ async function readStore(): Promise<StoreShape> {
     return {
       contributions: parsed.contributions ?? [],
       overrides: parsed.overrides ?? {},
+      places: parsed.places ?? [],
     };
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
@@ -114,15 +133,52 @@ export async function addContribution(input: {
   return contribution;
 }
 
+export type ModerationResult =
+  | { ok: true; contribution: Contribution }
+  | { ok: false; reason: "not_found" | "unusable_suggestion" };
+
 export async function moderateContribution(
   id: string,
   action: "approve" | "reject",
-): Promise<Contribution | null> {
+): Promise<ModerationResult> {
   const store = await readStore();
   const contribution = store.contributions.find((c) => c.id === id);
-  if (!contribution) return null;
+  if (!contribution) return { ok: false, reason: "not_found" };
+
+  // A suggestion that cannot become a place must not be recorded as
+  // approved. Marking it done and creating nothing is the failure this whole
+  // change exists to remove; repeating it for bad payloads would just move
+  // the lie somewhere quieter.
+  if (action === "approve" && contribution.kind === "suggestion" && !contribution.placeId) {
+    if (!placeFromSuggestion(contribution)) {
+      return { ok: false, reason: "unusable_suggestion" };
+    }
+  }
 
   contribution.status = action === "approve" ? "approved" : "rejected";
+
+  // Rejecting after approving is an undo, and has to actually undo. Without
+  // this the place stayed on the map while the queue said "Reddedildi".
+  if (action === "reject" && contribution.kind === "suggestion" && contribution.placeId) {
+    store.places = store.places.filter((p) => p.id !== contribution.placeId);
+    contribution.placeId = null;
+  }
+
+  // Approving a suggestion is what makes contributing mean anything: before
+  // this, the place was marked "Onaylandı" in the queue and then never
+  // appeared anywhere, so the moderator was told the work had landed when
+  // nothing had. The place joins the community layer, never the snapshot.
+  if (action === "approve" && contribution.kind === "suggestion" && !contribution.placeId) {
+    const place = placeFromSuggestion(contribution);
+    if (place) {
+      const existing = store.places.findIndex((p) => p.id === place.id);
+      if (existing === -1) store.places.push(place);
+      else store.places[existing] = place;
+      // Recorded on the contribution so the queue can link to what it created
+      // and a second approval cannot mint a duplicate.
+      contribution.placeId = place.id;
+    }
+  }
 
   // Approving a "closed" report is the only path that changes what the
   // public sees - and even then it sets a status, it doesn't delete data.
@@ -144,7 +200,88 @@ export async function moderateContribution(
   }
 
   await writeStore(store);
-  return contribution;
+  return { ok: true, contribution };
+}
+
+/**
+ * Turns an approved suggestion into a real place.
+ *
+ * Everything the submitter did not tell us stays `null`, exactly as it would
+ * for a sparse OSM node - inventing "no" for an amenity nobody mentioned is
+ * the one thing this codebase refuses to do anywhere else, and a
+ * community-added place is not a licence to start.
+ *
+ * The source is stated as community rather than OSM. Attribution accuracy is
+ * not a formality here: the OSM snapshot is ODbL, and labelling a
+ * user-submitted place as OSM data would misattribute it in both directions.
+ */
+export function placeFromSuggestion(contribution: Contribution): Place | null {
+  const payload = contribution.payload as {
+    name?: string;
+    lat?: number;
+    lon?: number;
+    categories?: CategorySlug[];
+    price_type?: PriceType;
+    address_line?: string;
+    amenities?: Partial<Amenities>;
+  };
+
+  const lat = Number(payload.lat);
+  const lon = Number(payload.lon);
+  // Türkiye's mainland envelope. A suggestion outside it is a bad submission
+  // or a bad geocode, and admitting it would put a pin in the sea.
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  if (lat < 35.5 || lat > 42.5 || lon < 25.5 || lon > 45) return null;
+
+  const categories = (payload.categories ?? []).filter(Boolean);
+  if (categories.length === 0) return null;
+
+  const name = (payload.name ?? contribution.placeName ?? "").trim();
+  if (!name) return null;
+
+  const amenities = Object.fromEntries(
+    AMENITY_KEYS.map((key) => [key, payload.amenities?.[key] ?? null]),
+  ) as Amenities;
+
+  return {
+    id: `community/${contribution.id}`,
+    name,
+    lat,
+    lon,
+    categories,
+    status: "active",
+    price_type: payload.price_type ?? "unknown",
+    access: "public",
+    address_line: payload.address_line?.trim() || null,
+    opening_hours_raw: null,
+    is_24h: null,
+    website: null,
+    phone: null,
+    description: contribution.note,
+    operator: null,
+    amenities,
+    source: {
+      slug: "community",
+      name: "Topluluk katkısı",
+      license: "Kullanıcı katkısı",
+      url: "",
+    },
+    // One moderator approval and no independent confirmation yet. Starting
+    // level with a well-tagged OSM node would overstate it; starting at zero
+    // would bury a place somebody stood in front of. It rises the normal way,
+    // through verifications.
+    reliability_score: 0.5,
+    freshness_label: "Topluluk tarafından eklendi",
+    last_verified_at: contribution.createdAt,
+    verification_count: 0,
+    report_count: 0,
+  };
+}
+
+/** Places the community added and a moderator approved. */
+export async function listCommunityPlaces(): Promise<Place[]> {
+  const store = await readStore();
+  return store.places;
 }
 
 export async function getPlaceOverrides(placeId: string): Promise<Partial<Place>> {

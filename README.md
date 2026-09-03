@@ -490,6 +490,30 @@ sorgunun anlamını sessizce değiştirmek yerine.
   `backend/docs/DATA_SOURCES.md`'de not düşüldü, lisans doğrulaması
   entegrasyon öncesi tek tek yapılmalı.
 
+### Katkı döngüsü
+
+"Mekan öner → moderatör onaylar → haritada görünür" zincirinin tamamı çalışıyor.
+Onaylanan öneri, OSM anlık görüntüsüne **yazılmaz** — tıpkı override'lar gibi
+yanında duran bir topluluk katmanına eklenir; böylece anlık görüntü yeniden
+içe aktarılabilir kalır ve Overpass'tan yeni bir çekim insanların katkısını
+sessizce silmez.
+
+Kurallar:
+
+- **Kaynak dürüstlüğü**: kaynağı "Topluluk katkısı", OSM değil. Anlık görüntü
+  ODbL; kullanıcı gönderisini OSM verisi diye etiketlemek her iki yöne de yanlış
+  atf olurdu.
+- **Uydurma yok**: gönderenin söylemediği her özellik `null` kalır. `false`
+  varsaymak, sorulmamış bir mekan için "engelli erişimi yok" iddiası demek olurdu.
+- **Başlangıç güveni 0.5**: bir moderatör onayı var, bağımsız doğrulama yok. Sıfır,
+  birinin önünde durduğu bir mekanı gömer; iyi etiketlenmiş bir OSM node'uyla
+  eşitlemek ise abartı olur. Normal yoldan, doğrulamalarla yükselir.
+- **Onaylanamayan öneri onaylanmış görünmez**: adı, kategorisi ya da Türkiye
+  içinde geçerli konumu olmayan bir öneri 422 döner ve `pending` kalır. "Onaylandı"
+  yazıp hiçbir şey yaratmamak, bu değişikliğin ortadan kaldırdığı hatanın ta kendisi.
+- **Reddetmek gerçekten geri alır**: onayladıktan sonra reddedilen bir önerinin
+  mekanı haritadan kalkar. İki kez onaylamak kopya üretmez.
+
 ### Veriye karşı dürüstlük
 
 Açık coğrafi veri eşit dağılmıyor ve bir şeyin *bilinmemesi* ile *olmaması*

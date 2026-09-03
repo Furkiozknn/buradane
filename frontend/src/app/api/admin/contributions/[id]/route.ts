@@ -25,10 +25,22 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     return NextResponse.json({ error: "action 'approve' ya da 'reject' olmalı" }, { status: 400 });
   }
 
-  const updated = await moderateContribution(id, body.action);
-  if (!updated) {
-    return NextResponse.json({ error: "Katkı bulunamadı" }, { status: 404 });
+  const result = await moderateContribution(id, body.action);
+  if (!result.ok) {
+    if (result.reason === "not_found") {
+      return NextResponse.json({ error: "Katkı bulunamadı" }, { status: 404 });
+    }
+    // 422, not 400: the request itself is well-formed, the stored suggestion
+    // is the thing that cannot be turned into a place. Saying so beats
+    // reporting success and creating nothing.
+    return NextResponse.json(
+      {
+        error:
+          "Bu öneri mekana dönüştürülemiyor: ad, kategori ve Türkiye sınırları içinde geçerli bir konum gerekli.",
+      },
+      { status: 422 },
+    );
   }
 
-  return NextResponse.json(updated);
+  return NextResponse.json(result.contribution);
 }
