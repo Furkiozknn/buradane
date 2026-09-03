@@ -120,10 +120,19 @@ export interface PlaceQueryResult {
     openNow: boolean;
     q: string | null;
     radius_m: number | null;
-    /** True when a free-text needle was dropped because it would have
-     * returned nothing on its own - the UI tells the user results were
-     * broadened rather than silently changing the meaning of their query. */
+    /** True when the query had to be widened to return anything - the UI
+     * tells the user results were broadened rather than silently changing
+     * the meaning of what they asked for. */
     relaxed?: boolean;
+    /** Exactly what was given up, so the UI can name it. Categories and the
+     * free-only flag never appear here: those are never relaxed. */
+    relaxedBy?: {
+      /** Free text that matched no place name and was dropped. */
+      needle?: string;
+      /** Amenity filters dropped because our data has no evidence either
+       * way - `null` means unknown and is excluded on purpose. */
+      amenities?: AmenityKey[];
+    };
   };
 }
 

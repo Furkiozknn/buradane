@@ -110,8 +110,20 @@ npm run build
 npm run start
 ```
 
-`npm run lint` (ESLint) dışında şu an otomatik bir frontend test suite'i
-yok.
+Testler:
+
+```bash
+npm test          # Vitest, tek koşu
+npm run test:watch
+npm run lint      # ESLint
+```
+
+Test kapsamı bilinçli olarak **saf mantık katmanına** odaklı: sorgu motoru,
+çalışma saati ayrıştırıcısı, geo hesapları, Türkçe metin normalizasyonu ve URL
+durumu. Bu projede şimdiye kadar çıkan gerçek regresyonların tamamı bu
+katmandaydı (bir doğrulamanın güvenilirlik puanını *düşürmesi*, "KADIKÖY"
+ile "Kadıköy"ün eşleşmemesi, artakalan sorgu kelimelerinin sonucu sıfırlaması,
+"çocuğumla" kelimesinin "çocuk" olarak tanınmaması), React ağacında değil.
 
 ## Mimari
 

@@ -275,6 +275,34 @@ const STOPWORDS = new Set([
   "yerler",
 ]);
 
+/**
+ * Turkish is agglutinative, so glue words cannot be enumerated - one verb
+ * stem plus productive suffixes yields "gidebileceğim", "alabileceğim",
+ * "değiştirebileceğim", "çalışabileceğim", and any other verb a person
+ * happens to reach for. Matching the *suffix* covers the whole family;
+ * listing words one by one never will, and every miss becomes a literal
+ * place-name filter that silently empties the results.
+ */
+const GLUE_SUFFIXES: RegExp[] = [
+  // -abil/-ebil ability + participle/future: "gid-ebilece-ğim", "al-abilece-ğim"
+  /(a|e)bilece[kğ]i(m|n|z)?$/,
+  /(a|e)bilir(im|sin|iz)?$/,
+  // -acak/-ecek future participle: "gidilecek", "bulunacak"
+  /[ae]ca[kğ]ı?(m|n|z)?$/,
+  /[ae]ce[kğ]i?(m|n|z)?$/,
+  // "-mak/-mek istiyorum", "lazım", "gerek"
+  /^(istiyorum|isterim|lazım|lazim|gerek|gerekiyor)$/,
+  // question/locative glue: "nerede", "neredeki", "nereden", "hangisi"
+  /^nere/,
+  /^hangi/,
+];
+
+function isGlue(token: string): boolean {
+  const normalized = normalizeTr(token);
+  if (STOPWORDS.has(normalized)) return true;
+  return GLUE_SUFFIXES.some((suffix) => suffix.test(normalized));
+}
+
 export function parseQueryText(text: string): {
   categories: CategorySlug[];
   amenities: AmenityKey[];
@@ -283,22 +311,45 @@ export function parseQueryText(text: string): {
 } {
   const categories = new Set<CategorySlug>();
   const amenities = new Set<AmenityKey>();
+  const weakCategories = new Set<CategorySlug>();
+  const weakAmenities = new Set<AmenityKey>();
   let freeOnly = false;
-  let leftover = text;
+
+  // Token-wise, not substring-wise. Turkish is agglutinative: "çocuk" turns
+  // into "çocuğumla", so a substring replace leaves "umla" behind - and
+  // leftovers become a literal name filter, which is how this once returned
+  // zero results for a query it had otherwise understood perfectly. If a
+  // rule matches anywhere inside a word, that whole word was the signal.
+  const tokens = text.replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/).filter(Boolean);
+  const consumed = new Set<number>();
 
   for (const rule of SEARCH_SYNONYMS) {
-    if (!rule.pattern.test(text)) continue;
-    rule.categories?.forEach((c) => categories.add(c));
-    rule.amenities?.forEach((a) => amenities.add(a));
-    if (rule.freeOnly) freeOnly = true;
-    // Global flag so every occurrence is consumed, not just the first.
-    leftover = leftover.replace(new RegExp(rule.pattern.source, "gi"), " ");
+    let matched = false;
+    tokens.forEach((token, index) => {
+      if (!rule.pattern.test(token)) return;
+      consumed.add(index);
+      matched = true;
+    });
+    // Multi-word phrases ("bez değiştir", "park yeri") won't match a single
+    // token, so fall back to testing the whole string for those.
+    if (!matched && rule.pattern.test(text)) matched = true;
+    if (!matched) continue;
+
+    // A weak rule's token is still consumed above - it just parks its filters
+    // aside until we know whether anything specific matched.
+    const targetCategories = rule.weak ? weakCategories : categories;
+    const targetAmenities = rule.weak ? weakAmenities : amenities;
+    rule.categories?.forEach((c) => targetCategories.add(c));
+    rule.amenities?.forEach((a) => targetAmenities.add(a));
+    if (rule.freeOnly && !rule.weak) freeOnly = true;
   }
 
-  const residualTokens = leftover
-    .replace(/[^\p{L}\p{N}\s]/gu, " ")
-    .split(/\s+/)
-    .filter((token) => token.length >= 3 && !STOPWORDS.has(normalizeTr(token)));
+  if (categories.size === 0) weakCategories.forEach((c) => categories.add(c));
+  if (amenities.size === 0) weakAmenities.forEach((a) => amenities.add(a));
+
+  const residualTokens = tokens.filter(
+    (token, index) => !consumed.has(index) && token.length >= 3 && !isGlue(token),
+  );
 
   return {
     categories: [...categories],
@@ -352,20 +403,53 @@ export function queryPlaces(
   const hasCenter = typeof lat === "number" && typeof lon === "number";
   const box = hasCenter && radius_m ? boundingBox({ lat: lat!, lon: lon! }, radius_m) : null;
 
-  const run = (needle: string | null) => collect(needle);
-  let relaxed = false;
-  let results = run(textNeedle);
+  const hasStructure = effectiveCategories.length > 0 || effectiveAmenities.length > 0 || effectiveFreeOnly;
 
-  // Graceful relaxation: residual free text is matched against place names,
-  // and most Turkish POIs in OSM are unnamed - so a query we already
-  // understood structurally ("ücretsiz tuvalet") must not return nothing just
-  // because no place is literally *called* that. If the text needle empties
-  // the result set but we did extract real filters, drop the needle and say
-  // so, rather than showing a dead end.
-  if (results.length === 0 && textNeedle && (effectiveCategories.length > 0 || effectiveAmenities.length > 0 || effectiveFreeOnly)) {
-    results = run(null);
-    relaxed = results.length > 0;
+  /**
+   * Graceful relaxation, in order of what costs the user least to lose.
+   *
+   * 1. The free-text needle. Residual text is matched against place names and
+   *    most Turkish POIs in OSM are unnamed, so "ücretsiz tuvalet" must not
+   *    dead-end merely because nothing is literally *called* that.
+   * 2. Amenity filters, dropped one at a time, keeping whichever survives
+   *    best. Amenities are the sparsest field we have - `null` means unknown
+   *    and is excluded on purpose, so an empty result here usually reflects a
+   *    gap in the map rather than a gap in the city.
+   *
+   * Categories and "ücretsiz" are never dropped: they *are* the question. A
+   * paid toilet is not an answer to a search for a free one, and quietly
+   * widening that would be worse than an honest empty state.
+   */
+  let relaxedNeedle: string | null = null;
+  let droppedAmenities: AmenityKey[] = [];
+  let activeAmenities = effectiveAmenities;
+  let results = collect(textNeedle, activeAmenities);
+
+  if (results.length === 0 && textNeedle && hasStructure) {
+    const widened = collect(null, activeAmenities);
+    if (widened.length > 0) {
+      results = widened;
+      relaxedNeedle = parsedFromText.leftover;
+    }
   }
+
+  while (results.length === 0 && activeAmenities.length > 0 && (effectiveCategories.length > 0 || activeAmenities.length > 1)) {
+    // Try dropping each remaining amenity and keep the variant that recovers
+    // the most places, so we shed the single most restrictive constraint
+    // rather than an arbitrary one.
+    let best: { amenity: AmenityKey; found: Place[] } | null = null;
+    for (const amenity of activeAmenities) {
+      const without = activeAmenities.filter((a) => a !== amenity);
+      const found = collect(relaxedNeedle ? null : textNeedle, without);
+      if (!best || found.length > best.found.length) best = { amenity, found };
+    }
+    if (!best) break;
+    activeAmenities = activeAmenities.filter((a) => a !== best!.amenity);
+    droppedAmenities = [...droppedAmenities, best.amenity];
+    results = best.found;
+  }
+
+  const relaxed = relaxedNeedle !== null || droppedAmenities.length > 0;
 
   results.sort((a, b) => {
     if (sort === "reliability") {
@@ -394,10 +478,19 @@ export function queryPlaces(
       q: q?.trim() || null,
       radius_m: radius_m ?? null,
       relaxed,
+      // What we widened, so the UI can say it out loud. `amenities` above
+      // stays the *requested* set - the filter chips must keep reflecting
+      // what the user asked for, not quietly uncheck themselves.
+      relaxedBy: relaxed
+        ? {
+            ...(relaxedNeedle ? { needle: relaxedNeedle } : {}),
+            ...(droppedAmenities.length > 0 ? { amenities: droppedAmenities } : {}),
+          }
+        : undefined,
     },
   };
 
-  function collect(needle: string | null): Place[] {
+  function collect(needle: string | null, activeAmenities: AmenityKey[]): Place[] {
     const found: Place[] = [];
     const hasOverrides = overrides !== undefined && Object.keys(overrides).length > 0;
 
@@ -423,7 +516,7 @@ export function queryPlaces(
 
       // An amenity filter means "definitely yes" - `null` (unknown) must not
       // satisfy it, or the app would claim facilities it has no evidence for.
-      if (effectiveAmenities.length > 0 && !effectiveAmenities.every((key) => place.amenities[key] === true)) continue;
+      if (activeAmenities.length > 0 && !activeAmenities.every((key) => place.amenities[key] === true)) continue;
 
       if (effectiveFreeOnly && place.price_type !== "free") continue;
 

@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 
+import { AMENITY_BY_KEY } from "@/lib/categories";
 import { CategoryChips, CategoryGrid } from "./CategoryPicker";
 import { PlaceCard, PlaceCardSkeleton } from "./PlaceCard";
 import { PlaceDetail } from "./PlaceDetail";
@@ -64,6 +65,17 @@ const SNAP_HEIGHT: Record<SheetSnap, string> = {
   // map visible so the user never loses spatial context.
   full: "calc(100dvh - 136px)",
 };
+
+/** Turns the query engine's relaxation report into one short Turkish phrase. */
+function relaxationDetail(relaxedBy: PlaceQueryResult["applied"]["relaxedBy"]): string {
+  const dropped = relaxedBy?.amenities ?? [];
+  if (dropped.length > 0) {
+    const labels = dropped.map((key) => AMENITY_BY_KEY[key]?.filterLabel ?? key);
+    return `${labels.join(", ").toLocaleLowerCase("tr-TR")} filtresi kaldırıldı`;
+  }
+  if (relaxedBy?.needle) return `“${relaxedBy.needle}” aranmadı`;
+  return "arama genişletildi";
+}
 
 export function AppShell({
   datasetMeta,
@@ -616,7 +628,14 @@ export function AppShell({
                         }`}
                 </p>
                 {result?.applied.relaxed && !loading && (
-                  <span className="shrink-0 text-[11.5px] text-text-muted">arama genişletildi</span>
+                  // Naming what was dropped matters more than admitting that
+                  // something was: "arama genişletildi" leaves the user
+                  // wondering whether these results still answer their
+                  // question. Saying "bebek bakım filtresi kaldırıldı" lets
+                  // them judge it themselves.
+                  <span className="shrink-0 text-[11.5px] text-text-muted" title={relaxationDetail(result.applied.relaxedBy)}>
+                    {relaxationDetail(result.applied.relaxedBy)}
+                  </span>
                 )}
                 {/* Sorting matters here in a way it wouldn't in a normal
                     directory: open civic data is uneven, so the nearest
