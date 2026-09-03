@@ -130,6 +130,85 @@ describe("Turkish text handling", () => {
   });
 });
 
+describe("administrative search", () => {
+  it("finds a district typed without Turkish diacritics", () => {
+    // Phone keyboards without a Turkish layout are the normal case, not an
+    // edge case. Before this, "kadikoy" returned the two places that happened
+    // to be spelled that way and missed the other 34.
+    for (const [withDiacritics, without] of [
+      ["Kadıköy", "kadikoy"],
+      ["Beyoğlu", "beyoglu"],
+      ["Şişli", "sisli"],
+      ["Üsküdar", "uskudar"],
+    ]) {
+      const a = queryPlaces({ q: withDiacritics, limit: 5000 }).total;
+      const b = queryPlaces({ q: without, limit: 5000 }).total;
+      expect(a).toBeGreaterThan(0);
+      expect(b).toBe(a);
+    }
+  });
+
+  it("matches the resolved district, not the raw tag spelling", () => {
+    // İstanbul's 39 districts arrive as 48 distinct `addr:district` values.
+    // Searching the raw string splits Kadıköy across four spellings.
+    //
+    // The assertion folds before comparing, because a hit is allowed to be a
+    // place whose *name* is spelled without diacritics ("İBB Kadiköy İskele
+    // Kütüphanesi") - matching that is the feature, not a leak.
+    const fold = (v: string) =>
+      v
+        .replace(/İ/g, "i")
+        .replace(/I/g, "ı")
+        .toLocaleLowerCase("tr-TR")
+        .replace(/ı/g, "i")
+        .replace(/ö/g, "o")
+        .replace(/ü/g, "u")
+        .replace(/ç/g, "c")
+        .replace(/ş/g, "s")
+        .replace(/ğ/g, "g");
+
+    const result = queryPlaces({ q: "Kadıköy", limit: 5000 });
+    expect(result.total).toBeGreaterThan(0);
+    for (const place of result.places.slice(0, 50)) {
+      const haystack = fold(
+        [place.name, place.address_line, place.district, place.province].filter(Boolean).join(" "),
+      );
+      expect(haystack).toContain("kadikoy");
+    }
+  });
+
+  it("displays one canonical spelling per district", () => {
+    // Folding grouped the variants, but each place kept whatever the tag
+    // said - so the same district still displayed three ways and any filter
+    // built on the label would fragment.
+    const spellings = new Set(
+      allPlaces()
+        .map((p) => p.district)
+        .filter((d): d is string => d !== null && /kadik|kadık/i.test(d)),
+    );
+    expect(spellings.size).toBe(1);
+    expect([...spellings][0]).toBe("Kadıköy");
+  });
+
+  it("gives places a canonical district and province where the tags allow", () => {
+    const withDistrict = allPlaces().filter((p) => p.district);
+    expect(withDistrict.length).toBeGreaterThan(500);
+    // No raw-tag artefacts survive into the resolved field.
+    const names = new Set(withDistrict.map((p) => p.district));
+    expect(names.has("Kadikoy")).toBe(false);
+    expect(names.has("kadıköy")).toBe(false);
+    expect(names.has("Eyüp")).toBe(false);
+    expect(names.has("Küçükçemece")).toBe(false);
+  });
+
+  it("resolves a province out of a compound 'İlçe/İl' tag", () => {
+    // `addr:city` holds "Seyhan/Adana" as often as it holds a province name.
+    const adana = allPlaces().filter((p) => p.province === "Adana");
+    expect(adana.length).toBeGreaterThan(0);
+    expect(adana.some((p) => p.district === "Seyhan")).toBe(true);
+  });
+});
+
 describe("natural-language search", () => {
   it("extracts a category from free text", () => {
     const parsed = parseQueryText("yakınımda bir tuvalet");

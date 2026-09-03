@@ -31,6 +31,7 @@ import type {
 import { boundingBox, haversineMeters } from "./geo";
 import { isOpenNow } from "./opening-hours";
 import { QUERY_NOTICES, SEARCH_SYNONYMS, type QueryNotice } from "./categories";
+import { foldAscii, parseLocality, resolveDistrict } from "./administrative";
 
 interface RawDataset {
   city?: string;
@@ -42,8 +43,23 @@ interface RawDataset {
   count: number;
   places: (Omit<
     Place,
-    "reliability_score" | "freshness_label" | "last_verified_at" | "verification_count" | "report_count" | "access"
-  > & { access?: AccessType })[];
+    | "reliability_score"
+    | "freshness_label"
+    | "last_verified_at"
+    | "verification_count"
+    | "report_count"
+    | "access"
+    | "district"
+    | "province"
+  > & {
+    access?: AccessType;
+    district?: string | null;
+    province?: string | null;
+    /** Untouched OSM values, emitted by newer snapshots. Resolution happens
+     * on read so improvements to the rules apply without a re-pull. */
+    district_raw?: string | null;
+    province_raw?: string | null;
+  })[];
 }
 
 export interface DatasetMeta {
@@ -70,7 +86,7 @@ export interface DatasetMeta {
   }[];
 }
 
-let cache: { places: Place[]; meta: DatasetMeta } | null = null;
+let cache: { places: Place[]; meta: DatasetMeta; searchText: Map<string, string> } | null = null;
 
 /** Deterministic 0..1 hash of a string - same input always yields the same
  * value, so the demo doesn't shuffle its own numbers on every request. */
@@ -132,6 +148,40 @@ function deriveCommunitySignals(place: RawDataset["places"][number]) {
 }
 
 /**
+ * Resolves a place's district and province from whatever the tags contain.
+ *
+ * `addr:district` first, because it is the field that means what it says;
+ * `addr:city` is the fallback and routinely holds a compound "İlçe/İl". Doing
+ * this once at load beats doing it per query, and it is what makes district
+ * search work at all - matching the raw tag would miss "Kadıköy" for every
+ * place tagged "Kadikoy".
+ */
+function localityFromTags(
+  tags: Record<string, string> | undefined,
+  raw?: { district?: string | null; province?: string | null },
+): {
+  district: string | null;
+  province: string | null;
+} {
+  // Newer snapshots carry the raw values directly; older ones only have the
+  // tag bag. Either way the resolution happens here, so a re-pull is never
+  // needed to pick up an improvement to the rules.
+  const districtRaw = raw?.district ?? tags?.["addr:district"] ?? tags?.["addr:suburb"];
+  const provinceRaw = raw?.province ?? tags?.["addr:province"] ?? tags?.["addr:city"];
+  if (!districtRaw && !provinceRaw) return { district: null, province: null };
+
+  const fromCity = parseLocality(provinceRaw);
+  const explicitDistrict = resolveDistrict(districtRaw);
+
+  return {
+    district: explicitDistrict?.name ?? fromCity.district?.name ?? null,
+    // A district we recognised may name its own province (the fixes table
+    // knows which province a mislabelled neighbourhood belongs to).
+    province: fromCity.province?.name ?? explicitDistrict?.province ?? null,
+  };
+}
+
+/**
  * Who can actually walk in. Mirrors `_access_from_tags` in
  * scripts/fetch_demo_data.py - the two must agree, or a re-pull would
  * silently change which places are public.
@@ -188,13 +238,19 @@ function loadDataset() {
     const slug = raw.city ?? file.replace(/^places\./, "").replace(/\.json$/, "");
 
     for (const place of raw.places) {
+      const locality = localityFromTags(place.raw_tags, {
+        district: place.district_raw,
+        province: place.province_raw,
+      });
       places.push({
         ...place,
-        // Snapshots taken before the fetcher learned about `access` still
-        // carry the raw OSM tags, so the field is derived here rather than
+        // Snapshots taken before the fetcher learned about these still carry
+        // the raw OSM tags, so the fields are derived here rather than
         // requiring a full re-pull through a rate-limited Overpass mirror.
-        // New snapshots ship it directly and this is a no-op.
+        // New snapshots ship them directly and this is a no-op.
         access: place.access ?? accessFromTags(place.raw_tags),
+        district: place.district ?? locality.district,
+        province: place.province ?? locality.province,
         ...deriveCommunitySignals(place),
       });
     }
@@ -211,9 +267,68 @@ function loadDataset() {
     source = raw.source ?? source;
   }
 
+  // One canonical spelling per district.
+  //
+  // Folding already groups "Kadıköy", "Kadiköy" and "Kadikoy" onto one key,
+  // but each place kept whatever the tag said, so the same district still
+  // *displayed* three ways and a filter built on the label would fragment.
+  // The winner is the variant carrying the most Turkish-specific characters,
+  // because a spelling with ı/ğ/ü/ş/ö/ç is strictly more informative than one
+  // that lost them - an ASCII form can only be a degraded copy, never the
+  // other way round. Frequency breaks ties.
+  //
+  // Derived from the data rather than from a hardcoded list of 973 districts:
+  // a list written from memory is one nobody can check.
+  const variants = new Map<string, Map<string, number>>();
+  for (const place of places) {
+    if (!place.district) continue;
+    const key = foldAscii(place.district);
+    const forms = variants.get(key) ?? new Map<string, number>();
+    forms.set(place.district, (forms.get(place.district) ?? 0) + 1);
+    variants.set(key, forms);
+  }
+
+  const canonical = new Map<string, string>();
+  for (const [key, forms] of variants) {
+    let best: { name: string; marks: number; count: number } | null = null;
+    for (const [name, count] of forms) {
+      const marks = (name.match(/[ıİğĞüÜşŞöÖçÇâîû]/gu) ?? []).length;
+      if (
+        !best ||
+        marks > best.marks ||
+        (marks === best.marks && count > best.count) ||
+        (marks === best.marks && count === best.count && name.localeCompare(best.name, "tr") < 0)
+      ) {
+        best = { name, marks, count };
+      }
+    }
+    if (best) canonical.set(key, best.name);
+  }
+
+  for (const place of places) {
+    if (!place.district) continue;
+    place.district = canonical.get(foldAscii(place.district)) ?? place.district;
+  }
+
+  // Precomputed once, not per query: folding 17,000 names on every keystroke
+  // would be the most expensive thing in the request. Diacritic-free, so
+  // someone typing "kadikoy" on a phone keyboard without a Turkish layout
+  // finds the 32 places tagged "Kadıköy" instead of the 2 that happen to be
+  // spelled without them.
+  const searchText = new Map<string, string>();
+  for (const place of places) {
+    searchText.set(
+      place.id,
+      foldAscii(
+        [place.name, place.address_line, place.district, place.province].filter(Boolean).join(" "),
+      ),
+    );
+  }
+
   cache = {
     places,
     meta: { generated_at: newest, source, license, attribution, count: places.length, cities },
+    searchText,
   };
   return cache;
 }
@@ -472,7 +587,9 @@ export function queryPlaces(
   const effectiveCategories = [...new Set([...categories, ...parsedFromText.categories])];
   const effectiveAmenities = [...new Set([...amenities, ...parsedFromText.amenities])];
   const effectiveFreeOnly = freeOnly || parsedFromText.freeOnly;
-  const textNeedle = parsedFromText.leftover ? normalizeTr(parsedFromText.leftover) : null;
+  // Folded with the same function the index was built with, or the two would
+  // simply never meet.
+  const textNeedle = parsedFromText.leftover ? foldAscii(parsedFromText.leftover) : null;
 
   const hasCenter = typeof lat === "number" && typeof lon === "number";
   const box = hasCenter && radius_m ? boundingBox({ lat: lat!, lon: lon! }, radius_m) : null;
@@ -654,12 +771,16 @@ export function queryPlaces(
       // The chip is labelled "Kapalıları gizle" to match exactly this.
       if (openNow && isOpenNow(place.opening_hours_raw) === "closed") continue;
 
-      if (
-        needle &&
-        !normalizeTr(place.name).includes(needle) &&
-        !normalizeTr(place.address_line ?? "").includes(needle)
-      ) {
-        continue;
+      // Matched against a precomputed, diacritic-free blob of name, address,
+      // district and province. Two things this fixes at once: "Kadıköy" now
+      // finds the places tagged "Kadikoy" (resolved district, not raw text),
+      // and "kadikoy" typed without a Turkish keyboard finds all of them
+      // rather than the two spelled that way.
+      if (needle) {
+        const haystack =
+          loadDataset().searchText.get(place.id) ??
+          foldAscii([place.name, place.address_line, place.district, place.province].filter(Boolean).join(" "));
+        if (!haystack.includes(needle)) continue;
       }
 
       let distance: number | null = null;

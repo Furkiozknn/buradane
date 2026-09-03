@@ -283,6 +283,13 @@ def normalize(element: dict, category: str) -> dict | None:
         "price_type": price_type,
         "access": _access_from_tags(tags),
         "address_line": _address_from_tags(tags),
+        # Raw values only. Canonicalisation (Turkish folding, the 2018 Eyüp
+        # rename, neighbourhoods mislabelled as districts, "İlçe/İl" crammed
+        # into one field) happens in frontend/src/lib/administrative.ts,
+        # which is where it can be tested and where a snapshot taken before
+        # any of it existed still benefits.
+        "district_raw": tags.get("addr:district") or tags.get("addr:suburb"),
+        "province_raw": tags.get("addr:province") or tags.get("addr:city"),
         "opening_hours_raw": opening_hours,
         "is_24h": True if opening_hours == "24/7" else None,
         "website": tags.get("website") or tags.get("contact:website"),

@@ -29,6 +29,7 @@ import type {
   PriceType,
 } from "./types";
 import { AMENITIES } from "./categories";
+import { parseLocality } from "./administrative";
 
 const AMENITY_KEYS = AMENITIES.map((a) => a.key);
 
@@ -239,6 +240,8 @@ export function placeFromSuggestion(contribution: Contribution): Place | null {
   const name = (payload.name ?? contribution.placeName ?? "").trim();
   if (!name) return null;
 
+  const locality = parseLocality(payload.address_line ?? null);
+
   const amenities = Object.fromEntries(
     AMENITY_KEYS.map((key) => [key, payload.amenities?.[key] ?? null]),
   ) as Amenities;
@@ -253,6 +256,11 @@ export function placeFromSuggestion(contribution: Contribution): Place | null {
     price_type: payload.price_type ?? "unknown",
     access: "public",
     address_line: payload.address_line?.trim() || null,
+    // Resolved from what the submitter typed, through the same table the
+    // OSM records go through - so a contributed place is findable by district
+    // exactly like every other one.
+    district: locality.district?.name ?? null,
+    province: locality.province?.name ?? null,
     opening_hours_raw: null,
     is_24h: null,
     website: null,

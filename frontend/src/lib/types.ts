@@ -80,6 +80,16 @@ export interface Place {
   price_type: PriceType;
   access: AccessType;
   address_line: string | null;
+  /**
+   * Resolved administrative location, derived rather than taken raw.
+   *
+   * The raw tags cannot be trusted for grouping or search: İstanbul's 39
+   * districts arrive as 48 distinct `addr:district` spellings, and
+   * `addr:city` as often holds "Seyhan/Adana" as it holds a province. These
+   * two fields are what the app actually matches and displays.
+   */
+  district: string | null;
+  province: string | null;
   opening_hours_raw: string | null;
   is_24h: boolean | null;
   website: string | null;

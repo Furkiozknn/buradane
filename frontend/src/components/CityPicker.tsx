@@ -3,6 +3,8 @@
 import { useEffect } from "react";
 import { MapPin, X } from "lucide-react";
 
+import { TOTALS, findProvince } from "@/lib/administrative";
+
 export interface CityOption {
   slug: string;
   label: string;
@@ -38,6 +40,14 @@ export function CityPicker({
   // dotted İ that ASCII ordering puts in the wrong place entirely, which in
   // a Turkish city list reads as a bug.
   const sorted = [...cities].sort((a, b) => a.label.localeCompare(b.label, "tr"));
+
+  // Resolved through the province table rather than counted as city files:
+  // the two are the same today, but a city slug is a fetch unit and a
+  // province is an administrative fact, and they will diverge the moment a
+  // province is fetched as two bounding boxes.
+  const coveredProvinces = new Set(
+    cities.map((c) => findProvince(c.label)?.code).filter((code): code is number => code !== undefined),
+  ).size;
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
@@ -124,8 +134,19 @@ export function CityPicker({
           })}
         </ul>
 
+        {/* Coverage stated as a fraction. "6 il" on its own means nothing;
+            "81 ilin 6'sı" is the difference between a reader assuming the
+            app covers the country and knowing exactly how far along it is.
+            Counted from the cities actually loaded, so it cannot drift out
+            of step with the data the way a written number would. */}
         <p className="mt-3 text-center text-[11.5px] text-text-muted">
-          Daha fazla şehir yolda — veri il il ekleniyor.
+          {/* "tanesi", not the numeric possessive: the correct suffix depends
+              on how the number is *pronounced* (7'si, 8'i, 9'u, 40'ı, 81'i),
+              so a template that appends one is wrong for most values it will
+              ever hold as coverage grows from 1 to 81. */}
+          Türkiye&apos;deki {TOTALS.provinces} ilin{" "}
+          <strong className="font-semibold text-text-secondary">{coveredProvinces}</strong> tanesi
+          kapsanıyor — veri il il ekleniyor.
         </p>
       </div>
     </div>
