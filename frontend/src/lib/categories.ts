@@ -234,7 +234,10 @@ export const AMENITY_BY_KEY: Record<AmenityKey, AmenityMeta> = Object.fromEntrie
 
 /** Non-amenity filters that live in the same chip row. */
 export const EXTRA_FILTERS = [
-  { key: "openNow" as const, label: "Şu an açık", icon: Clock },
+  // "Şu an açık" would be a promise the data cannot keep - 94.5% of places
+  // have no opening hours, so the honest job this filter does is hide the
+  // ones known to be closed. The label says that.
+  { key: "openNow" as const, label: "Kapalıları gizle", icon: Clock },
   { key: "freeOnly" as const, label: "Ücretsiz", icon: BadgeTurkishLira },
 ];
 

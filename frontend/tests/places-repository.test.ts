@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { allPlaces, applyOverride, datasetMeta, parseQueryText, queryPlaces } from "@/lib/places-repository";
+import { isOpenNow } from "@/lib/opening-hours";
 import type { Place } from "@/lib/types";
 
 const ISTANBUL = { lat: 41.0082, lon: 28.9784 };
@@ -249,6 +250,33 @@ describe("natural-language search", () => {
     const result = queryPlaces({ ...ISTANBUL, radius_m: 20_000, q: "zzzqqxyz", limit: 50 });
     expect(result.total).toBe(0);
     expect(result.applied.relaxed).toBeFalsy();
+  });
+});
+
+describe("open-now filter", () => {
+  it("hides places KNOWN to be closed, not places with no hours", () => {
+    // 94.5% of the dataset has no opening_hours. Requiring "open" discarded
+    // ~10,875 places to exclude 17, and hid 544 of 569 toilets while not one
+    // of them was known to be closed. Silence is not a closed sign.
+    const strict = queryPlaces({ ...ISTANBUL, radius_m: 20_000, categories: ["tuvalet"], limit: 400 });
+    const filtered = queryPlaces({
+      ...ISTANBUL,
+      radius_m: 20_000,
+      categories: ["tuvalet"],
+      openNow: true,
+      limit: 400,
+    });
+    expect(filtered.total).toBeGreaterThan(strict.total * 0.5);
+    for (const place of filtered.places) {
+      expect(isOpenNow(place.opening_hours_raw)).not.toBe("closed");
+    }
+  });
+
+  it("still excludes something - the filter is not a no-op", () => {
+    const all = queryPlaces({ ...ISTANBUL, radius_m: 40_000, limit: 20_000 });
+    const filtered = queryPlaces({ ...ISTANBUL, radius_m: 40_000, openNow: true, limit: 20_000 });
+    const closed = all.places.filter((p) => isOpenNow(p.opening_hours_raw) === "closed").length;
+    expect(all.total - filtered.total).toBe(closed);
   });
 });
 

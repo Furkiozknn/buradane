@@ -201,14 +201,32 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (request.mode === "navigate") {
+    // The moderation panel is deliberately not cached. Its writes fail
+    // offline and its queue reads are excluded above, so an offline copy
+    // could only mislead a moderator - and, before this was split out, every
+    // navigation was stored under "/", which meant visiting /admin once put
+    // the admin document behind the *homepage* for anyone who later opened
+    // it offline.
+    if (url.pathname.startsWith("/admin")) return;
+
+    // Keyed by path, without the query string: "/?k=tuvalet" and "/" are the
+    // same document, and the app restores its own state from the URL on
+    // load, so one entry per route is both correct and enough.
+    const key = new Request(url.origin + url.pathname, { mode: "same-origin" });
+
     event.respondWith(
       fetch(request)
         .then((response) => {
           const copy = response.clone();
-          caches.open(SHELL_CACHE).then((cache) => cache.put("/", copy));
+          event.waitUntil(caches.open(SHELL_CACHE).then((cache) => cache.put(key, copy)));
           return response;
         })
-        .catch(async () => (await caches.match("/")) ?? Response.error()),
+        .catch(async () => {
+          const cache = await caches.open(SHELL_CACHE);
+          // The exact route first, then the app entry point - landing on the
+          // map is a reasonable answer for a route we have never seen.
+          return (await cache.match(key)) ?? (await cache.match("/")) ?? Response.error();
+        }),
     );
   }
 });

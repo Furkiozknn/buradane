@@ -520,7 +520,19 @@ export function queryPlaces(
 
       if (effectiveFreeOnly && place.price_type !== "free") continue;
 
-      if (openNow && isOpenNow(place.opening_hours_raw) !== "open") continue;
+      // Excludes places we KNOW are closed, not places we have no hours for.
+      //
+      // Only 5.5% of the dataset carries `opening_hours` at all: across
+      // 11,406 places, 514 are known open, 17 are known closed, and 10,875
+      // are unknown. Requiring "open" therefore discarded ~10,875 places to
+      // filter out 17 - and for toilets specifically it hid 544 of 569 while
+      // not a single one was known to be closed. A park with no posted hours
+      // is almost certainly open; treating silence as "closed" is the same
+      // mistake as treating a null amenity as "no", and here it made the
+      // filter actively harmful.
+      //
+      // The chip is labelled "Kapalıları gizle" to match exactly this.
+      if (openNow && isOpenNow(place.opening_hours_raw) === "closed") continue;
 
       if (
         needle &&

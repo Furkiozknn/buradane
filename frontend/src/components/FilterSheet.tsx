@@ -106,6 +106,16 @@ export function FilterSheet({
             })}
           </div>
 
+          {/* The two filters above behave differently on missing data, and
+              that difference decides what the user gets back - so it is
+              stated rather than left to be discovered. */}
+          <p className="-mt-3 mb-5 text-[12.5px] leading-relaxed text-text-muted">
+            <strong>Kapalıları gizle</strong>, yalnızca çalışma saati bilinen ve şu an{" "}
+            <strong>kapalı</strong> olan mekanları çıkarır. Saati bilinmeyen mekanlar listede
+            kalır — açık kaynak verinin %94&apos;ünde çalışma saati yok, onları da elemek
+            kapalı olduklarını iddia etmek olurdu.
+          </p>
+
           <h3 className="mb-2 text-[12.5px] font-semibold uppercase tracking-wide text-text-muted">
             Özellikler
           </h3>
