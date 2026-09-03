@@ -21,14 +21,23 @@ export interface CityOption {
 export function CityPicker({
   cities,
   activeCity,
+  nearestCity,
   onSelect,
   onClose,
 }: {
   cities: CityOption[];
   activeCity: string | null;
+  /** Slug of the city closest to the device, when we have a fix. Marked
+   * rather than sorted to the top: a list that reorders itself between
+   * openings costs more in muscle memory than the hint is worth. */
+  nearestCity?: string | null;
   onSelect: (city: CityOption) => void;
   onClose: () => void;
 }) {
+  // Turkish collation, not the default. "İstanbul" and "İzmir" sort under a
+  // dotted İ that ASCII ordering puts in the wrong place entirely, which in
+  // a Turkish city list reads as a bug.
+  const sorted = [...cities].sort((a, b) => a.label.localeCompare(b.label, "tr"));
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
@@ -52,7 +61,7 @@ export function CityPicker({
               Şehir seç
             </h2>
             <p className="mt-0.5 text-[13px] text-text-secondary">
-              Konumun kapalıysa buradan devam edebilirsin.
+              Başka bir şehre bakabilir, konumun kapalıysa buradan devam edebilirsin.
             </p>
           </div>
           <button
@@ -65,8 +74,11 @@ export function CityPicker({
           </button>
         </div>
 
-        <ul className="space-y-1.5">
-          {cities.map((city) => {
+        {/* Scrolls: at nine cities the list already outgrew a small phone,
+            and without this the ones at the bottom simply could not be
+            reached. Sized in vh so it keeps working as provinces are added. */}
+        <ul className="max-h-[55vh] space-y-1.5 overflow-y-auto">
+          {sorted.map((city) => {
             const isActive = city.slug === activeCity;
             return (
               <li key={city.slug}>
@@ -91,7 +103,17 @@ export function CityPicker({
                     />
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block text-[15px] font-semibold text-text">{city.label}</span>
+                    <span className="flex items-center gap-1.5 text-[15px] font-semibold text-text">
+                      {city.label}
+                      {city.slug === nearestCity && (
+                        <span
+                          className="rounded-full px-1.5 py-0.5 text-[10.5px] font-semibold"
+                          style={{ background: "var(--brand-soft)", color: "var(--brand)" }}
+                        >
+                          en yakın
+                        </span>
+                      )}
+                    </span>
                     <span className="block text-[12.5px] tabular-nums text-text-secondary">
                       {city.count.toLocaleString("tr-TR")} kayıtlı yer
                     </span>

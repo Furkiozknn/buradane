@@ -24,6 +24,7 @@ import { SuggestPlaceDialog } from "./SuggestPlaceDialog";
 import { CityPicker } from "./CityPicker";
 import { DESKTOP_QUERY, useMediaQuery } from "@/lib/use-media-query";
 import { buildUrlSearch, type UrlState } from "@/lib/url-state";
+import { haversineMeters } from "@/lib/geo";
 import { useFavorites } from "@/lib/use-favorites";
 import { useOnlineStatus } from "@/lib/use-online-status";
 import type { CategorySlug, Place, PlaceQueryResult, SortKey } from "@/lib/types";
@@ -444,6 +445,18 @@ export function AppShell({
   );
 
   const cityOptions = datasetMeta.cities;
+
+  /** The city closest to the device, when we have a fix. With nine cities
+   * and counting, "which one am I in?" stops being obvious from a list. */
+  const nearestCity = useMemo(() => {
+    if (location.status !== "granted") return null;
+    let best: { slug: string; d: number } | null = null;
+    for (const city of datasetMeta.cities) {
+      const d = haversineMeters({ lat: location.lat, lon: location.lon }, city.center);
+      if (!best || d < best.d) best = { slug: city.slug, d };
+    }
+    return best?.slug ?? null;
+  }, [location, datasetMeta.cities]);
   const activeCityLabel =
     datasetMeta.cities.find((c) => c.slug === activeCity)?.label ?? "İstanbul";
 
@@ -918,6 +931,7 @@ export function AppShell({
         <CityPicker
           cities={cityOptions}
           activeCity={activeCity}
+          nearestCity={nearestCity}
           onSelect={(city) => {
             setActiveCity(city.slug);
             setCityPickerOpen(false);
