@@ -241,6 +241,36 @@ export const EXTRA_FILTERS = [
   { key: "freeOnly" as const, label: "Ücretsiz", icon: BadgeTurkishLira },
 ];
 
+/**
+ * Questions our data cannot answer, and where the answer actually lives.
+ *
+ * Some searches have a correct answer that open geodata structurally does
+ * not contain. "Nöbetçi eczane" is the clearest case and probably the most
+ * common civic query in Turkey after dark: the duty roster rotates daily,
+ * is set by the provincial chambers, and appears in no OSM tag. Matching the
+ * word and returning all 594 pharmacies in the city is not a partial answer,
+ * it is a wrong one - so the query says so and points at the real source.
+ *
+ * Kept as a table rather than a special case in the UI, because the same
+ * shape will be needed the moment another query has this property.
+ */
+export type QueryNotice = "pharmacy_duty_roster";
+
+export const QUERY_NOTICES: { pattern: RegExp; notice: QueryNotice }[] = [
+  { pattern: /nöbet|nobet/i, notice: "pharmacy_duty_roster" },
+];
+
+export const NOTICE_CONTENT: Record<QueryNotice, { text: string; linkLabel: string; href: string }> = {
+  pharmacy_duty_roster: {
+    text: "Nöbetçi eczane listesi her gün değişir ve açık haritalama verisinde yer almaz. Aşağıda bölgedeki tüm eczaneler var.",
+    linkLabel: "Bugünün resmî nöbetçi listesi (e-Devlet)",
+    // TİTCK's own service: the chambers report the roster and provincial
+    // health directorates approve it, so this is the authoritative list
+    // rather than one of the many scraped mirrors.
+    href: "https://www.turkiye.gov.tr/saglik-titck-nobetci-eczane-sorgulama",
+  },
+};
+
 export const ALL_CATEGORY_SLUGS = CATEGORIES.map((c) => c.slug);
 
 /** Used by the "natural language-ish" search: maps free text to the

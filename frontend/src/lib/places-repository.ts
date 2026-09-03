@@ -30,7 +30,7 @@ import type {
 } from "./types";
 import { boundingBox, haversineMeters } from "./geo";
 import { isOpenNow } from "./opening-hours";
-import { SEARCH_SYNONYMS } from "./categories";
+import { QUERY_NOTICES, SEARCH_SYNONYMS, type QueryNotice } from "./categories";
 
 interface RawDataset {
   city?: string;
@@ -333,6 +333,7 @@ export function parseQueryText(text: string): {
   amenities: AmenityKey[];
   freeOnly: boolean;
   leftover: string;
+  notices: QueryNotice[];
 } {
   const categories = new Set<CategorySlug>();
   const amenities = new Set<AmenityKey>();
@@ -381,6 +382,7 @@ export function parseQueryText(text: string): {
     amenities: [...amenities],
     freeOnly,
     leftover: residualTokens.join(" ").trim(),
+    notices: QUERY_NOTICES.filter((rule) => rule.pattern.test(text)).map((rule) => rule.notice),
   };
 }
 
@@ -417,7 +419,13 @@ export function queryPlaces(
     sort = "distance",
   } = query;
 
-  let parsedFromText = { categories: [] as CategorySlug[], amenities: [] as AmenityKey[], freeOnly: false, leftover: "" };
+  let parsedFromText = {
+    categories: [] as CategorySlug[],
+    amenities: [] as AmenityKey[],
+    freeOnly: false,
+    leftover: "",
+    notices: [] as QueryNotice[],
+  };
   if (q && q.trim()) parsedFromText = parseQueryText(q);
 
   const effectiveCategories = [...new Set([...categories, ...parsedFromText.categories])];
@@ -529,6 +537,7 @@ export function queryPlaces(
       openNow,
       q: q?.trim() || null,
       radius_m: radius_m ?? null,
+      notices: parsedFromText.notices.length > 0 ? parsedFromText.notices : undefined,
       relaxed,
       // What we widened, so the UI can say it out loud. `amenities` above
       // stays the *requested* set - the filter chips must keep reflecting

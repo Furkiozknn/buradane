@@ -280,6 +280,22 @@ describe("open-now filter", () => {
   });
 });
 
+describe("data-gap notices", () => {
+  it("admits it cannot answer 'nöbetçi eczane' instead of returning every pharmacy", () => {
+    // The duty roster rotates daily, is set by the provincial chambers, and
+    // appears in no OSM tag. Returning all 594 pharmacies is a wrong answer,
+    // not a partial one.
+    const result = queryPlaces({ ...ISTANBUL, radius_m: 20_000, q: "nöbetçi eczane", limit: 20 });
+    expect(result.applied.categories).toContain("eczane");
+    expect(result.applied.notices).toContain("pharmacy_duty_roster");
+  });
+
+  it("stays quiet on a plain pharmacy search", () => {
+    const result = queryPlaces({ ...ISTANBUL, radius_m: 20_000, q: "eczane", limit: 20 });
+    expect(result.applied.notices).toBeUndefined();
+  });
+});
+
 describe("sorting", () => {
   it("orders by reliability when asked, with distance breaking ties", () => {
     const { places } = queryPlaces({

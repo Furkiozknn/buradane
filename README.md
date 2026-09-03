@@ -504,6 +504,15 @@ düzelttiğimiz üç nokta:
 | `wheelchair=designated` | 3 mekan | Artık `true`. OSM'nin en güçlü erişilebilirlik iddiasıydı ve "bilinmiyor" sayılıyordu. |
 | `wheelchair=limited` | 70 mekan | Boolean'a **düşürülmüyor** (ne evet ne hayır), detay sayfasında olduğu gibi yazılıyor. |
 
+**Cevabı bizde olmayan sorular.** Bazı aramaların doğru cevabı açık
+haritalama verisinde yapısal olarak yok. En net örnek "nöbetçi eczane":
+nöbet listesi her gün değişir, il eczacı odalarınca belirlenir ve hiçbir OSM
+etiketinde geçmez. Kelimeyi eşleştirip şehirdeki 594 eczaneyi döndürmek eksik
+bir cevap değil, **yanlış** bir cevaptır. Bu yüzden sorgu bunu söylüyor ve
+gerçek kaynağa — TİTCK'nın e-Devlet üzerindeki resmî sorgusuna — yönlendiriyor
+(`QUERY_NOTICES`, `categories.ts`). UI'da özel bir durum olarak değil, tablo
+olarak duruyor; aynı şekle sahip ikinci soru geldiğinde hazır.
+
 Aynı ilke özellik (amenity) alanlarında da geçerli: `null` "bilinmiyor"
 demek, "yok" demek değil, ve bir özellik filtresi asla `null`'ı eşleştirmez.
 Filtre çiplerindeki sayılar bu yüzden önemli — `Gölgelik 1` yazan bir çip,

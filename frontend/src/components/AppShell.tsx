@@ -15,7 +15,7 @@ import {
   X,
 } from "lucide-react";
 
-import { AMENITY_BY_KEY } from "@/lib/categories";
+import { AMENITY_BY_KEY, NOTICE_CONTENT } from "@/lib/categories";
 import { CategoryChips, CategoryGrid } from "./CategoryPicker";
 import { PlaceCard, PlaceCardSkeleton } from "./PlaceCard";
 import { PlaceDetail } from "./PlaceDetail";
@@ -664,6 +664,34 @@ export function AppShell({
                   </span>
                 </div>
               )}
+              {/* Some questions have a correct answer that open geodata
+                  structurally does not hold. Returning every pharmacy in the
+                  city for "nöbetçi eczane" is not a partial answer, it is a
+                  wrong one - so the app says so and points at the roster
+                  that is actually authoritative. */}
+              {result?.applied.notices?.map((notice) => {
+                const content = NOTICE_CONTENT[notice];
+                if (!content) return null;
+                return (
+                  <div
+                    key={notice}
+                    className="mx-4 mb-1 mt-2 rounded-lg px-3 py-2 text-[12.5px] leading-relaxed"
+                    style={{ background: "var(--warning-soft)", color: "var(--text)" }}
+                  >
+                    {content.text}{" "}
+                    <a
+                      href={content.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-semibold underline underline-offset-2"
+                      style={{ color: "var(--text)" }}
+                    >
+                      {content.linkLabel}
+                    </a>
+                  </div>
+                );
+              })}
+
               {category === null && (isDesktop || snap !== "peek") ? (
                 <CategoryGrid selected={category} onSelect={setCategory} counts={counts} />
               ) : (

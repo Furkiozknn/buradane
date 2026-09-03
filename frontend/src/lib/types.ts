@@ -12,6 +12,8 @@
  * wheelchair access.
  */
 
+import type { QueryNotice } from "./categories";
+
 export type CategorySlug =
   | "tuvalet"
   | "park"
@@ -136,6 +138,10 @@ export interface PlaceQueryResult {
      * tells the user results were broadened rather than silently changing
      * the meaning of what they asked for. */
     relaxed?: boolean;
+    /** Questions the dataset structurally cannot answer, so the UI can say
+     * so and point at the real source instead of returning a confident
+     * wrong answer. See QUERY_NOTICES in categories.ts. */
+    notices?: QueryNotice[];
     /** Exactly what was given up, so the UI can name it. Categories and the
      * free-only flag never appear here: those are never relaxed. */
     relaxedBy?: {
