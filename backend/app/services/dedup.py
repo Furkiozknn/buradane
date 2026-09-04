@@ -14,9 +14,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 
-from geoalchemy2.functions import ST_DWithin, ST_MakePoint, ST_SetSRID
-from geoalchemy2.shape import to_shape
-from sqlalchemy import select
+from geoalchemy2 import Geometry
+from geoalchemy2.functions import ST_DWithin, ST_MakePoint, ST_SetSRID, ST_X, ST_Y
+from sqlalchemy import cast, select
 from sqlalchemy.orm import Session
 
 from app.models.place import Place, PlaceStatus
@@ -43,25 +43,36 @@ def find_duplicate(db: Session, *, name: str, lat: float, lon: float) -> DedupCa
     """Return the best matching existing Place for an incoming (name, lat,
     lon), or None if nothing crosses the confidence threshold."""
     point = ST_SetSRID(ST_MakePoint(lon, lat), 4326)
+    # Ask the database for each candidate's lat/lon instead of parsing the
+    # ORM attribute: a Place created and flushed in the same session still
+    # holds whatever Python value it was assigned (a WKT string), which
+    # to_shape() cannot read - rows straight from a query always can be,
+    # but "always" stopped being true the first time dedup ran inside the
+    # same transaction that inserted a place.
+    location_geom = cast(Place.location, Geometry(geometry_type="POINT", srid=4326))
     query = (
-        select(Place)
+        select(Place, ST_Y(location_geom), ST_X(location_geom))
         .where(Place.status != PlaceStatus.pending_review)
         .where(ST_DWithin(Place.location, point, CANDIDATE_RADIUS_M))
     )
-    candidates = db.execute(query).scalars().all()
-    if not candidates:
+    rows = db.execute(query).all()
+    if not rows:
         return None
 
-    scored = [_score_candidate(candidate, name, lat, lon) for candidate in candidates]
+    scored = [
+        _score_candidate(candidate, name, lat, lon, candidate_lat, candidate_lon)
+        for candidate, candidate_lat, candidate_lon in rows
+    ]
     best = max(scored, key=lambda c: c.confidence)
     if best.confidence < MATCH_CONFIDENCE_THRESHOLD:
         return None
     return best
 
 
-def _score_candidate(place: Place, name: str, lat: float, lon: float) -> DedupCandidate:
-    point = to_shape(place.location)  # shapely Point, (x=lon, y=lat)
-    distance_m = _haversine_m(lat, lon, point.y, point.x)
+def _score_candidate(
+    place: Place, name: str, lat: float, lon: float, place_lat: float, place_lon: float
+) -> DedupCandidate:
+    distance_m = _haversine_m(lat, lon, place_lat, place_lon)
     name_similarity = _name_similarity(name, place.name)
 
     # Distance contributes more at close range and fades out entirely past

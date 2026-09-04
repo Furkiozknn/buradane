@@ -48,30 +48,111 @@ def test_report_lands_as_pending_status(db_session):
     assert report.status == ReportStatus.pending
 
 
-def test_verification_immediately_updates_the_named_field(db_session):
-    place = Place(
-        name="Belirsiz Erişim", location="SRID=4326;POINT(29.0 41.0)", country_code="TR", wheelchair_accessible=None
-    )
+def test_single_device_verification_does_not_flip_the_field(db_session):
+    place = Place(name="Erişim Testi", location="SRID=4326;POINT(29.0 41.0)", country_code="TR",
+                  wheelchair_accessible=None)
     db_session.add(place)
     db_session.commit()
 
-    create_place_verification(db_session, place=place, field="wheelchair_accessible", confirmed_value=True, user=None)
+    create_place_verification(db_session, place=place, field="wheelchair_accessible",
+                              confirmed_value=True, user=None, device_token_hash="a" * 64)
     db_session.commit()
 
-    assert place.wheelchair_accessible is True
+    assert place.wheelchair_accessible is None  # one submitter is a signal, not a fact
     assert place.last_verified_at is not None
 
 
-def test_verification_recomputes_reliability_score(db_session):
-    place = Place(name="Doğrulanacak Yer", location="SRID=4326;POINT(29.0 41.0)", country_code="TR")
+def test_second_distinct_device_reaches_consensus_and_applies(db_session):
+    place = Place(name="Erişim Testi", location="SRID=4326;POINT(29.0 41.0)", country_code="TR",
+                  wheelchair_accessible=None)
     db_session.add(place)
     db_session.commit()
-    before = place.reliability_score
 
-    create_place_verification(db_session, place=place, field="has_drinking_water", confirmed_value=True, user=None)
+    create_place_verification(db_session, place=place, field="wheelchair_accessible",
+                              confirmed_value=True, user=None, device_token_hash="a" * 64)
+    create_place_verification(db_session, place=place, field="wheelchair_accessible",
+                              confirmed_value=True, user=None, device_token_hash="b" * 64)
     db_session.commit()
 
-    assert place.reliability_score != before
+    assert place.wheelchair_accessible is True
+
+
+def test_the_same_device_repeating_never_reaches_consensus(db_session):
+    # The audit's live demo: one shell loop flipped the field. Twenty
+    # confirmations from one identity must count as one.
+    place = Place(name="Erişim Testi", location="SRID=4326;POINT(29.0 41.0)", country_code="TR",
+                  wheelchair_accessible=None)
+    db_session.add(place)
+    db_session.commit()
+
+    for _ in range(20):
+        create_place_verification(db_session, place=place, field="wheelchair_accessible",
+                                  confirmed_value=False, user=None, device_token_hash="a" * 64)
+    db_session.commit()
+
+    assert place.wheelchair_accessible is None
+
+
+def test_identityless_verification_neither_flips_nor_refreshes(db_session):
+    # Without the header the write is a weak signal only - otherwise
+    # omitting X-Device-Token would be the trivial bypass.
+    place = Place(name="Erişim Testi", location="SRID=4326;POINT(29.0 41.0)", country_code="TR",
+                  wheelchair_accessible=None)
+    db_session.add(place)
+    db_session.commit()
+
+    for _ in range(5):
+        create_place_verification(db_session, place=place, field="wheelchair_accessible",
+                                  confirmed_value=True, user=None, device_token_hash=None)
+    db_session.commit()
+
+    assert place.wheelchair_accessible is None
+    assert place.last_verified_at is None
+
+
+def test_contradicted_verification_does_not_apply(db_session):
+    place = Place(name="Erişim Testi", location="SRID=4326;POINT(29.0 41.0)", country_code="TR",
+                  wheelchair_accessible=None)
+    db_session.add(place)
+    db_session.commit()
+
+    create_place_verification(db_session, place=place, field="wheelchair_accessible",
+                              confirmed_value=False, user=None, device_token_hash="x" * 64)
+    create_place_verification(db_session, place=place, field="wheelchair_accessible",
+                              confirmed_value=False, user=None, device_token_hash="y" * 64)
+    create_place_verification(db_session, place=place, field="wheelchair_accessible",
+                              confirmed_value=True, user=None, device_token_hash="a" * 64)
+    create_place_verification(db_session, place=place, field="wheelchair_accessible",
+                              confirmed_value=True, user=None, device_token_hash="b" * 64)
+    db_session.commit()
+
+    # The False pair reached consensus first (2-0) and applied; the later
+    # True pair only ties it 2-2, and a tie must never overturn what
+    # consensus established - supporters must STRICTLY outnumber.
+    assert place.wheelchair_accessible is False
+
+
+def test_repeat_verifications_from_one_device_do_not_pump_reliability(db_session):
+    place = Place(name="Çeşme", location="SRID=4326;POINT(29.0 41.0)", country_code="TR")
+    db_session.add(place)
+    db_session.commit()
+
+    create_place_verification(db_session, place=place, field="has_drinking_water",
+                              confirmed_value=True, user=None, device_token_hash="a" * 64)
+    db_session.commit()
+    score_after_one = place.reliability_score
+
+    for _ in range(20):
+        create_place_verification(db_session, place=place, field="has_drinking_water",
+                                  confirmed_value=True, user=None, device_token_hash="a" * 64)
+    db_session.commit()
+
+    assert place.reliability_score == score_after_one  # one identity, one signal
+
+    create_place_verification(db_session, place=place, field="has_drinking_water",
+                              confirmed_value=True, user=None, device_token_hash="b" * 64)
+    db_session.commit()
+    assert place.reliability_score > score_after_one  # a second person does count
 
 
 def test_user_contribution_counters_increment(db_session):
