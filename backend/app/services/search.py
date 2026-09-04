@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 
 from geoalchemy2 import Geometry
 from geoalchemy2.functions import ST_Distance, ST_DWithin, ST_MakeEnvelope, ST_MakePoint, ST_SetSRID, ST_Within
-from sqlalchemy import Float, cast, literal, null, select
+from sqlalchemy import Float, cast, null, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.category import Category, PlaceCategory
