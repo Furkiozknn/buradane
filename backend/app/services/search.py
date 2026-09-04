@@ -12,8 +12,9 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 
+from geoalchemy2 import Geometry
 from geoalchemy2.functions import ST_Distance, ST_DWithin, ST_MakeEnvelope, ST_MakePoint, ST_SetSRID, ST_Within
-from sqlalchemy import Float, literal, select
+from sqlalchemy import Float, cast, literal, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.category import Category, PlaceCategory
@@ -84,7 +85,16 @@ def search_places(db: Session, params: PlaceSearchParams) -> list[tuple[Place, f
     elif params.bbox is not None:
         min_lon, min_lat, max_lon, max_lat = params.bbox
         envelope = ST_SetSRID(ST_MakeEnvelope(min_lon, min_lat, max_lon, max_lat), 4326)
-        query = query.where(ST_Within(Place.location, envelope))
+        # Place.location is a *geography* column (so ST_DWithin/ST_Distance
+        # above measure metres on the sphere), but ST_MakeEnvelope produces a
+        # *geometry*, and PostGIS has no ST_Within(geography, geometry) -
+        # this exact call failed in CI with "function st_within(geography,
+        # geometry) does not exist". A bounding box is a lat/lon rectangle,
+        # which is a planar notion, so the right fix is to compare in
+        # geometry space: cast the point, not the box. (Casting the box to
+        # geography would silently turn its edges into great-circle arcs.)
+        location_as_geometry = cast(Place.location, Geometry(geometry_type="POINT", srid=4326))
+        query = query.where(ST_Within(location_as_geometry, envelope))
 
     if params.category_slugs:
         query = query.join(PlaceCategory, PlaceCategory.place_id == Place.id).join(
