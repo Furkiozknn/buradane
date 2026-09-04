@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 
 from geoalchemy2 import Geometry
 from geoalchemy2.functions import ST_Distance, ST_DWithin, ST_MakeEnvelope, ST_MakePoint, ST_SetSRID, ST_Within
-from sqlalchemy import Float, cast, literal, select
+from sqlalchemy import Float, cast, literal, null, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.category import Category, PlaceCategory
@@ -70,10 +70,17 @@ def search_places(db: Session, params: PlaceSearchParams) -> list[tuple[Place, f
     is_radius_search = params.lat is not None and params.lon is not None and params.radius_m is not None
 
     # Always select (Place, distance) as a pair, even when distance isn't
-    # meaningful (bbox/plain filtering) - a literal NULL there keeps the
-    # row shape identical across both query paths, so the code below and
-    # the caller never need an isinstance check on what db.execute returned.
-    distance_expr = literal(None, type_=Float)
+    # meaningful (bbox/plain filtering) - a NULL there keeps the row shape
+    # identical across both query paths, so the code below and the caller
+    # never need an isinstance check on what db.execute returned.
+    #
+    # It must be CAST(NULL AS FLOAT), not a bound `literal(None, Float)`:
+    # psycopg3 sends an untyped None parameter, PostgreSQL infers `text`
+    # (OID 25) for that result column, and SQLAlchemy's Float processor then
+    # fails with "Unknown PG numeric type: 25" - which is what every
+    # non-radius search test hit in CI. The explicit cast makes the column
+    # float8 on the server side, with no bind parameter to mis-infer.
+    distance_expr = cast(null(), Float)
     query = select(Place, distance_expr).where(Place.status == PlaceStatus.active)
 
     if is_radius_search:
