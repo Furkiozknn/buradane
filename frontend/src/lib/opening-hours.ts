@@ -75,9 +75,39 @@ function parseRule(rule: string): Interval[] | null {
   return intervals;
 }
 
+// OSM opening_hours values describe the wall clock at the place, and every
+// place here is in Türkiye - so "now" must be read in Europe/Istanbul, not
+// in whatever timezone the runtime happens to be in. Using getDay()/getHours()
+// directly was wrong by 3 hours on any UTC server render and for any
+// traveller whose phone is set to another zone.
+const ISTANBUL_CLOCK = new Intl.DateTimeFormat("en-US", {
+  timeZone: "Europe/Istanbul",
+  weekday: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+
+const WEEKDAY_INDEX: Record<string, number> = {
+  Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
+};
+
+function istanbulDayAndMinutes(now: Date): { day: number; minutes: number } {
+  const parts = ISTANBUL_CLOCK.formatToParts(now);
+  const part = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  const day = WEEKDAY_INDEX[part("weekday")];
+  const minutes = Number(part("hour")) * 60 + Number(part("minute"));
+  if (day === undefined || Number.isNaN(minutes)) {
+    // An Intl surprise should degrade to the runtime clock, not crash the map.
+    return { day: now.getDay(), minutes: now.getHours() * 60 + now.getMinutes() };
+  }
+  return { day, minutes };
+}
+
 /**
  * @param raw the OSM `opening_hours` value
- * @param now injectable for tests - never read the clock implicitly
+ * @param now injectable for tests - never read the clock implicitly. The
+ *   instant is interpreted in Europe/Istanbul regardless of runtime zone.
  */
 export function isOpenNow(raw: string | null | undefined, now: Date = new Date()): OpenState {
   if (!raw) return "unknown";
@@ -94,8 +124,7 @@ export function isOpenNow(raw: string | null | undefined, now: Date = new Date()
   }
   if (intervals.length === 0) return "unknown";
 
-  const day = now.getDay();
-  const minutes = now.getHours() * 60 + now.getMinutes();
+  const { day, minutes } = istanbulDayAndMinutes(now);
 
   for (const interval of intervals) {
     if (!interval.days.has(day)) continue;

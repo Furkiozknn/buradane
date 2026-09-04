@@ -80,15 +80,27 @@ def search_places(db: Session, params: PlaceSearchParams) -> list[tuple[Place, f
     # fails with "Unknown PG numeric type: 25" - which is what every
     # non-radius search test hit in CI. The explicit cast makes the column
     # float8 on the server side, with no bind parameter to mis-infer.
+    # Default visibility follows the PlaceStatus contract (models/place.py),
+    # as an explicit allow-list so a future status is hidden until someone
+    # decides otherwise: `active` and `temporarily_closed` are shown (a
+    # closed toilet you can see and route around beats one that silently
+    # vanished); `permanently_closed` and `pending_review` are not.
+    # Filtering to `active` alone contradicted the model's own contract and
+    # made every temporarily-closed place disappear from search.
     distance_expr = cast(null(), Float)
-    query = select(Place, distance_expr).where(Place.status == PlaceStatus.active)
+    query = select(Place, distance_expr).where(
+        Place.status.in_((PlaceStatus.active, PlaceStatus.temporarily_closed))
+    )
 
     if is_radius_search:
         point = ST_SetSRID(ST_MakePoint(params.lon, params.lat), 4326)
         distance_expr = ST_Distance(Place.location, point)
-        query = select(Place, distance_expr).where(Place.status == PlaceStatus.active)
+        query = select(Place, distance_expr).where(
+        Place.status.in_((PlaceStatus.active, PlaceStatus.temporarily_closed))
+    )
         query = query.where(ST_DWithin(Place.location, point, params.radius_m))
-        query = query.order_by(distance_expr)
+        # Place.id as a tie-break makes equal-distance rows page stably.
+        query = query.order_by(distance_expr, Place.id)
     elif params.bbox is not None:
         min_lon, min_lat, max_lon, max_lat = params.bbox
         envelope = ST_SetSRID(ST_MakeEnvelope(min_lon, min_lat, max_lon, max_lat), 4326)
@@ -128,6 +140,13 @@ def search_places(db: Session, params: PlaceSearchParams) -> list[tuple[Place, f
     # predicate in v1 to avoid a half-correct parser silently hiding open
     # places. See docs/ROADMAP.md; for now this param is accepted by the
     # API but has no filtering effect, which is safer than a wrong one.
+
+    if not is_radius_search:
+        # bbox and plain searches previously had no ORDER BY at all, so
+        # LIMIT/OFFSET pagination returned whatever order the planner felt
+        # like - rows could repeat or vanish between pages. Most-trusted
+        # first is the useful order for a map/list; id breaks ties stably.
+        query = query.order_by(Place.reliability_score.desc(), Place.id)
 
     query = query.distinct().options(selectinload(Place.place_categories).selectinload(PlaceCategory.category))
     query = query.limit(params.limit).offset(params.offset)
