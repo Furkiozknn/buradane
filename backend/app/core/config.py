@@ -31,5 +31,21 @@ class Settings(BaseSettings):
 
     cors_origins: list[str] = ["http://localhost:3000"]
 
+    # How many DISTINCT submitters (accounts or anonymous devices) must
+    # confirm the same field/value inside the freshness window before a
+    # verification actually flips the public record. One phone in a shell
+    # loop must never be able to falsify accessibility data - the audit
+    # demonstrated exactly that against the previous apply-immediately
+    # behavior.
+    verification_consensus: int = 2
+
+    # Community writes per client IP: a refilling budget of
+    # write_rate_limit_per_hour with short bursts up to
+    # write_rate_limit_burst. In-process state - honest for the current
+    # single-process deployment; a multi-process deployment moves this to
+    # its proxy or a shared store.
+    write_rate_limit_per_hour: int = 30
+    write_rate_limit_burst: int = 10
+
 
 settings = Settings()

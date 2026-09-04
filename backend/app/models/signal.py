@@ -17,7 +17,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import Enum as SAEnum
-from sqlalchemy import ForeignKey, String, Text
+from sqlalchemy import ForeignKey, Index, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
@@ -53,6 +53,11 @@ class PlaceReport(Base):
     place_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("places.id"), nullable=False)
     user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
 
+    # sha256 hex of the submitter's anonymous device token (see
+    # api/deps.py). Identity for abuse-resistance without an account and
+    # without storing anything a person typed - never the raw token.
+    device_token_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
     report_type: Mapped[ReportType] = mapped_column(SAEnum(ReportType), nullable=False)
     # For broken_amenity, which Place column this refers to (e.g.
     # "has_drinking_water") - free text, validated at the API layer against
@@ -77,7 +82,13 @@ class PlaceVerification(Base):
     place_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("places.id"), nullable=False)
     user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
 
+    device_token_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
     field: Mapped[str] = mapped_column(String(80), nullable=False)  # e.g. "wheelchair_accessible", "is_active"
     confirmed_value: Mapped[bool] = mapped_column(nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+    # The consensus check in services/moderation.py reads all recent
+    # verifications for one (place, field); this is its access path.
+    __table_args__ = (Index("ix_place_verifications_place_field", "place_id", "field"),)

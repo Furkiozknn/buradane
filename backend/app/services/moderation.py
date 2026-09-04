@@ -79,11 +79,19 @@ def create_place_suggestion(db: Session, *, payload: PlaceSuggestionIn, categori
 
 
 def create_place_report(
-    db: Session, *, place: Place, report_type: ReportType, field: str | None, note: str | None, user: User | None
+    db: Session,
+    *,
+    place: Place,
+    report_type: ReportType,
+    field: str | None,
+    note: str | None,
+    user: User | None,
+    device_token_hash: str | None = None,
 ) -> PlaceReport:
     report = PlaceReport(
         place_id=place.id,
         user_id=user.id if user else None,
+        device_token_hash=device_token_hash,
         report_type=report_type,
         field=field,
         note=note,
@@ -98,25 +106,91 @@ def create_place_report(
     return report
 
 
-def create_place_verification(db: Session, *, place: Place, field: str, confirmed_value: bool, user: User | None) -> PlaceVerification:
+def _verification_identity(user: User | None, device_token_hash: str | None) -> str | None:
+    """One string per submitter, or None when there is nothing to tell
+    submitters apart by. An account outranks a device token: the same
+    person logged in on their phone is still one person."""
+    if user is not None:
+        return f"user:{user.id}"
+    if device_token_hash:
+        return f"device:{device_token_hash}"
+    return None
+
+
+def create_place_verification(
+    db: Session,
+    *,
+    place: Place,
+    field: str,
+    confirmed_value: bool,
+    user: User | None,
+    device_token_hash: str | None = None,
+) -> PlaceVerification:
+    """Record a "this is still true/false" signal, and apply it to the
+    public record only on consensus.
+
+    The previous behavior applied the field immediately, and the audit
+    demonstrated the consequence live: 21 unauthenticated requests from one
+    shell loop flipped wheelchair_accessible and pumped the reliability
+    score. Now a field changes only when at least
+    ``settings.verification_consensus`` DISTINCT submitters (accounts or
+    anonymous device tokens - see api/deps.py) confirm the same value
+    inside the freshness window, and supporters strictly outnumber recent
+    contradicters. A verification carrying no identity at all is stored as
+    a weak signal but can neither flip a field nor refresh
+    last_verified_at - otherwise omitting the header would be the bypass.
+    """
     verification = PlaceVerification(
-        place_id=place.id, user_id=user.id if user else None, field=field, confirmed_value=confirmed_value
+        place_id=place.id,
+        user_id=user.id if user else None,
+        device_token_hash=device_token_hash,
+        field=field,
+        confirmed_value=confirmed_value,
     )
     db.add(verification)
+    db.flush()
 
-    # A verification is applied immediately to the named field (unlike a
-    # report) - it's a low-risk positive confirmation, and if it's wrong,
-    # a subsequent report or contradicting verification corrects it, same
-    # as the brief's "birden fazla kullanıcı doğruladığında güvenilirlik
-    # artar" model.
-    if hasattr(place, field):
-        setattr(place, field, confirmed_value)
-    place.last_verified_at = datetime.now(timezone.utc)
+    identity = _verification_identity(user, device_token_hash)
+    if identity is not None:
+        window_start = datetime.now(timezone.utc) - _stale_window()
+        supporters = _distinct_verifier_count(db, place, field, confirmed_value, window_start)
+        contradicters = _distinct_verifier_count(db, place, field, not confirmed_value, window_start)
+        if (
+            supporters >= settings.verification_consensus
+            and supporters > contradicters
+            and hasattr(place, field)
+        ):
+            setattr(place, field, confirmed_value)
+        place.last_verified_at = datetime.now(timezone.utc)
+
     if user is not None:
         user.verification_count += 1
 
     _recompute_reliability(db, place)
     return verification
+
+
+def _distinct_verifier_count(
+    db: Session, place: Place, field: str, confirmed_value: bool, window_start: datetime
+) -> int:
+    return db.execute(
+        select(func.count(func.distinct(_identity_expr())))
+        .select_from(PlaceVerification)
+        .where(
+            PlaceVerification.place_id == place.id,
+            PlaceVerification.field == field,
+            PlaceVerification.confirmed_value == confirmed_value,
+            PlaceVerification.created_at >= window_start,
+            _identity_expr().is_not(None),
+        )
+    ).scalar_one()
+
+
+def _identity_expr():
+    from sqlalchemy import String as SAString
+    from sqlalchemy import cast as sa_cast
+
+    return func.coalesce(sa_cast(PlaceVerification.user_id, SAString), PlaceVerification.device_token_hash)
 
 
 def _recompute_reliability(db: Session, place: Place) -> None:
@@ -132,10 +206,18 @@ def _recompute_reliability(db: Session, place: Place) -> None:
         .scalars()
         .all()
     )
+    # Distinct submitters, not rows: the same device confirming twenty
+    # times is one signal, not twenty - counting rows is how one shell
+    # loop pumped a score from 0.5 to 0.85 in the audit. Identity-less
+    # verifications contribute nothing here for the same reason.
     recent_verification_count = db.execute(
-        select(func.count())
+        select(func.count(func.distinct(_identity_expr())))
         .select_from(PlaceVerification)
-        .where(PlaceVerification.place_id == place.id, PlaceVerification.created_at >= window_start)
+        .where(
+            PlaceVerification.place_id == place.id,
+            PlaceVerification.created_at >= window_start,
+            _identity_expr().is_not(None),
+        )
     ).scalar_one()
     pending_conflicting_reports = db.execute(
         select(func.count())
