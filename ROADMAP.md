@@ -111,12 +111,18 @@ belirsizse, belirsiz olduğu açıkça yazılıdır.
   ortamında Docker/Postgres yoktu. Kod doğru API'lere karşı yazıldı ama
   yerelde koşturulmadı.
 - 🚧 **Gerçek Alembic migration'ı yok** — şema `create_all` ile kuruluyor
-- 🚧 Frontend'in son eklediği alanların (`access`, `district`, `province`,
-  `facets`, `applied.notices`) backend şemasındaki karşılığı **doğrulanmadı**
+- ✅ Frontend ↔ backend sözleşmesi **alan alan karşılaştırıldı** — sonuç:
+  [docs/api-sozlesme-farklari.md](docs/api-sozlesme-farklari.md). Zarf farkı
+  (çıplak liste vs `{places,total,applied,facets}`), id şeması farkı
+  (UUID vs OSM ref), listede eksik alanlar (`access`, `district`,
+  `amenities`, `source`...), eksik parametreler (`q`, `open_now`, `sort`)
+  ve kapanış sırası orada.
 
 ### Demo ↔ backend geçişi
-- ✅ Demo API route'ları backend'le aynı sorgu sözleşmesini uyguluyor
-- 🚧 "Taban-URL değişikliğiyle geçiş" tasarımı **test edilmedi**
+- 🚧 "Taban-URL değişikliğiyle geçiş" vaadi **bugün geçerli değil** — farklar
+  ve önerilen kapanış sırası: [docs/api-sozlesme-farklari.md](docs/api-sozlesme-farklari.md).
+  Gerçekçi ilk hedef: Next.js API route'larının backend'i çağıran ince bir
+  uyarlama katmanına dönüşmesi.
 
 ### Türkiye kapsamı
 - ✅ 9 il
