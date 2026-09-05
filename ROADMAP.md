@@ -141,10 +141,13 @@ belirsizse, belirsiz olduğu açıkça yazılıdır.
 
 ### Yüksek öncelik: dayanıklılık
 
-- 📋 **React error boundary'leri** (`app/error.tsx`, `global-error.tsx`,
-  `not-found.tsx`). Şu an bir bileşen patlarsa kullanıcı boş sayfa görüyor.
-- 📋 **`contributions.json` yazımında eşzamanlılık güvenliği.** Oku-değiştir-yaz
-  döngüsü yarış koşuluna açık; eşzamanlı iki katkı birbirini sessizce ezebilir.
+- ✅ **React error boundary'leri** — `error.tsx` (digest kodlu, tekrar dene +
+  haritaya dön), `global-error.tsx` (kök layout çöktüğünde token'sız çalışır),
+  `not-found.tsx`.
+- ✅ **`contributions.json` yazım güvenliği** — tüm oku-değiştir-yaz
+  işlemleri tek kuyruğta serileşiyor; yazım atomik (geçici dosya + rename).
+  Testler yazarken paylaşılan-mutable-varsayılan kaynaklı gerçek bir durum
+  sızıntısı da bulundu ve kapatıldı.
 
 ### Yüksek öncelik: erişilebilirlik
 

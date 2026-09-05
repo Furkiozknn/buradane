@@ -33,7 +33,17 @@ import { parseLocality } from "./administrative";
 
 const AMENITY_KEYS = AMENITIES.map((a) => a.key);
 
-const STORE_PATH = path.join(process.cwd(), "data", "contributions.json");
+/**
+ * Resolved per call rather than once at import, and overridable with
+ * BURADANE_DATA_DIR. Two consumers need that: tests, which must never write
+ * into the real data/ directory, and deployments that mount a writable
+ * volume somewhere other than the working directory. Reading an env var per
+ * operation costs nothing next to the file IO beside it.
+ */
+function storePath(): string {
+  const dir = process.env.BURADANE_DATA_DIR ?? path.join(process.cwd(), "data");
+  return path.join(dir, "contributions.json");
+}
 
 interface StoreShape {
   contributions: Contribution[];
@@ -49,11 +59,23 @@ interface StoreShape {
   places: Place[];
 }
 
-const EMPTY: StoreShape = { contributions: [], overrides: {}, places: [] };
+/**
+ * A FUNCTION, not a shared constant, and that distinction was a real bug:
+ * the previous `{ ...EMPTY }` spread copied the top level but shared the
+ * nested array and objects, so every "file missing" read handed out the
+ * SAME contributions array - and each store-creating write pushed into it.
+ * State then leaked across what should have been independent empty stores:
+ * the concurrency suite caught earlier tests' first entries reappearing
+ * inside brand-new temp directories, one per store creation, exactly the
+ * signature of a shared mutable default.
+ */
+function emptyStore(): StoreShape {
+  return { contributions: [], overrides: {}, places: [] };
+}
 
 async function readStore(): Promise<StoreShape> {
   try {
-    const raw = await fs.readFile(STORE_PATH, "utf-8");
+    const raw = await fs.readFile(storePath(), "utf-8");
     const parsed = JSON.parse(raw) as Partial<StoreShape>;
     return {
       contributions: parsed.contributions ?? [],
@@ -62,17 +84,51 @@ async function readStore(): Promise<StoreShape> {
     };
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
-    if (code === "ENOENT") return { ...EMPTY };
+    if (code === "ENOENT") return emptyStore();
     // A corrupt store must not take down the whole app - the demo degrades
     // to "no contributions yet" and logs, rather than 500ing every request.
     console.error("contributions store okunamadı, boş kabul ediliyor:", error);
-    return { ...EMPTY };
+    return emptyStore();
   }
 }
 
 async function writeStore(store: StoreShape): Promise<void> {
-  await fs.mkdir(path.dirname(STORE_PATH), { recursive: true });
-  await fs.writeFile(STORE_PATH, JSON.stringify(store, null, 2), "utf-8");
+  const target = storePath();
+  await fs.mkdir(path.dirname(target), { recursive: true });
+  // Write-then-rename, never write-in-place: the whole file is rewritten on
+  // every mutation, so a process dying mid-write used to leave it truncated
+  // and unparseable - and readStore treats a corrupt file as "no
+  // contributions yet", which silently discards everyone's work. A rename is
+  // atomic at the filesystem level (Node maps it to MOVEFILE_REPLACE_EXISTING
+  // on Windows), so readers only ever see the old complete file or the new
+  // complete file.
+  const tmp = `${target}.tmp-${process.pid}-${Math.random().toString(36).slice(2, 8)}`;
+  await fs.writeFile(tmp, JSON.stringify(store, null, 2), "utf-8");
+  await fs.rename(tmp, target);
+}
+
+/**
+ * Serialises every read-modify-write against the store.
+ *
+ * Each mutator does readStore -> mutate -> writeStore, and two of those
+ * interleaving silently drop one side's changes: both read the same file,
+ * both write the whole file back, last writer wins. Two people tapping
+ * "Evet, burada" at the same moment is not a hypothetical - it is the
+ * app's single most common write. A promise chain is enough because this
+ * store is one Node process's JSON file by design (see the module
+ * docstring); cross-process locking is the database's job, and the real
+ * backend has one.
+ *
+ * The chain swallows the previous operation's error on purpose: one failed
+ * write must not poison the queue for every write after it - the failure
+ * still reaches its own caller through the returned promise.
+ */
+let storeQueue: Promise<unknown> = Promise.resolve();
+
+function withStoreLock<T>(operation: () => Promise<T>): Promise<T> {
+  const run = storeQueue.then(operation, operation);
+  storeQueue = run.catch(() => undefined);
+  return run;
 }
 
 export async function listContributions(): Promise<Contribution[]> {
@@ -81,6 +137,16 @@ export async function listContributions(): Promise<Contribution[]> {
 }
 
 export async function addContribution(input: {
+  kind: ContributionKind;
+  placeId?: string | null;
+  placeName?: string | null;
+  payload?: Record<string, unknown>;
+  note?: string | null;
+}): Promise<Contribution> {
+  return withStoreLock(() => addContributionUnlocked(input));
+}
+
+async function addContributionUnlocked(input: {
   kind: ContributionKind;
   placeId?: string | null;
   placeName?: string | null;
@@ -139,6 +205,13 @@ export type ModerationResult =
   | { ok: false; reason: "not_found" | "unusable_suggestion" };
 
 export async function moderateContribution(
+  id: string,
+  action: "approve" | "reject",
+): Promise<ModerationResult> {
+  return withStoreLock(() => moderateContributionUnlocked(id, action));
+}
+
+async function moderateContributionUnlocked(
   id: string,
   action: "approve" | "reject",
 ): Promise<ModerationResult> {
@@ -298,15 +371,19 @@ export async function getPlaceOverrides(placeId: string): Promise<Partial<Place>
 }
 
 export async function setPlaceOverride(placeId: string, patch: Partial<Place>): Promise<void> {
-  const store = await readStore();
-  store.overrides[placeId] = { ...(store.overrides[placeId] ?? {}), ...patch };
-  await writeStore(store);
+  return withStoreLock(async () => {
+    const store = await readStore();
+    store.overrides[placeId] = { ...(store.overrides[placeId] ?? {}), ...patch };
+    await writeStore(store);
+  });
 }
 
 export async function clearPlaceOverride(placeId: string): Promise<void> {
-  const store = await readStore();
-  delete store.overrides[placeId];
-  await writeStore(store);
+  return withStoreLock(async () => {
+    const store = await readStore();
+    delete store.overrides[placeId];
+    await writeStore(store);
+  });
 }
 
 export async function listOverrides(): Promise<Record<string, Partial<Place>>> {
