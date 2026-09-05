@@ -75,7 +75,7 @@ döngüsüyle çözmek Türkiye ölçeğinde işlemez.
 buradane/
 ├── frontend/
 │   ├── data/                       # OSM anlık görüntüleri (COMMIT'Lİ, ~15 MB)
-│   │   ├── places.<il>.json        # il başına bir dosya, 9 il / 18.974 mekan
+│   │   ├── places.<il>.json        # il başına bir dosya; kapsam 81 ile doğru büyüyor
 │   │   └── contributions.json      # ÇALIŞMA ZAMANI durumu, .gitignore'da
 │   ├── public/
 │   │   ├── sw.js                   # Service worker (çevrimdışı katman)

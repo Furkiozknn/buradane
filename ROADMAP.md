@@ -78,8 +78,8 @@ belirsizse, belirsiz olduğu açıkça yazılıdır.
 - ✅ Kapsam göstergesi ("81 ilin 9 tanesi")
 
 ### Veri
-- ✅ 9 il / **18.974** gerçek OpenStreetMap mekanı
-  (İstanbul, Ankara, İzmir, Antalya, Bursa, Adana, Konya, Gaziantep, Trabzon)
+- ✅ 15 il / **25.742** gerçek OpenStreetMap mekanı (2026-09-04); kalan
+  iller arka planda il il iniyor - bkz. aşağıdaki 🚧
 - ✅ Overpass veri boru hattı: il+kategori bazında checkpoint, üstel geri
   çekilme, çok aynalı
 - ✅ İl başına ayrı anlık görüntü dosyası — il eklemek bir config satırı
@@ -125,8 +125,12 @@ belirsizse, belirsiz olduğu açıkça yazılıdır.
   uyarlama katmanına dönüşmesi.
 
 ### Türkiye kapsamı
-- ✅ 9 il
-- 📋 Kalan 72 il — boru hattı hazır, yalnızca çekim süresi gerekiyor
+- ✅ 15 il indi ve doğrulandı
+- 🚧 Kalan 66 il — bbox'lar OSM'in kendi il-merkezi çapalarından üretiliyor
+  (`scripts/fetch_admin_divisions.py` + sentezlenmiş yapılandırma), ulusal
+  çekim `--only-missing` ile sürüyor
+- 🚧 973 ilçelik resmî liste OSM sınırlarından iniyor; ileri testler
+  (81/973 + ad çapraz kontrolü) veri iner inmez otomatik doğrulayacak
 
 ---
 
