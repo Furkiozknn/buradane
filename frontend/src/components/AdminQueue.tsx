@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, Clock, X } from "lucide-react";
 import { adminFetch } from "@/lib/admin-token";
 
@@ -23,10 +23,47 @@ const REASON_LABEL: Record<string, string> = {
   locked: "Kilitli / girilemiyor",
 };
 
-export function AdminQueue({ initialContributions }: { initialContributions: Contribution[] }) {
-  const [contributions, setContributions] = useState(initialContributions);
+/**
+ * Fetches its own data, after the token gate, instead of receiving it as a
+ * server prop. The prop version leaked: props passed from a Server
+ * Component into a client component serialise into the RSC payload of the
+ * first response, token or no token - the gate only controlled whether the
+ * DOM showed them, while view-source showed everything, free-text
+ * moderator notes included. Client-side fetch through adminFetch means the
+ * queue crosses the wire only with a token the server has accepted.
+ */
+export function AdminQueue() {
+  const [contributions, setContributions] = useState<Contribution[] | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await adminFetch("/api/contributions");
+        if (!response.ok) throw new Error(`Sunucu ${response.status} döndü`);
+        const data = (await response.json()) as { contributions: Contribution[] };
+        if (!cancelled) setContributions(data.contributions);
+      } catch (err) {
+        if (!cancelled) {
+          setContributions([]);
+          setError(err instanceof Error ? err.message : "Kuyruk yüklenemedi");
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (contributions === null) {
+    return (
+      <div className="rounded-xl border border-border bg-surface p-4 text-[13.5px] text-text-secondary">
+        Kuyruk yükleniyor…
+      </div>
+    );
+  }
 
   async function moderate(id: string, action: "approve" | "reject") {
     setBusyId(id);
@@ -42,7 +79,7 @@ export function AdminQueue({ initialContributions }: { initialContributions: Con
         throw new Error(body.error ?? "İşlem başarısız");
       }
       const updated = (await response.json()) as Contribution;
-      setContributions((current) => current.map((c) => (c.id === id ? updated : c)));
+      setContributions((current) => (current ?? []).map((c) => (c.id === id ? updated : c)));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Bilinmeyen hata");
     } finally {

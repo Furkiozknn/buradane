@@ -99,7 +99,10 @@ export default async function AdminPage() {
               </span>
             )}
           </h2>
-          <AdminQueue initialContributions={contributions} />
+          {/* No server prop: the list itself is fetched client-side after
+              the gate accepts a token (see AdminQueue). Only the aggregate
+              counts above render from the server - numbers, not notes. */}
+          <AdminQueue />
         </section>
       </AdminTokenGate>
     </main>

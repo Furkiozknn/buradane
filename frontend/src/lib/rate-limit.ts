@@ -106,6 +106,26 @@ export function checkRateLimit(key: string, now?: number): RateLimitResult {
   return contributionsLimiter.check(key, now);
 }
 
+// The auth probe is an online oracle (204 vs 401) with a constant-time
+// comparison behind it - which protects the single comparison, not the
+// number of attempts. Unlimited tries against it is a token brute-force
+// endpoint. Ten per minute is far above any human flow (the gate probes
+// once per page load, once per token entry) and reduces an online
+// exhaustive search from "bounded by network speed" to "bounded by
+// centuries".
+const AUTH_PROBE_WINDOW_MS = 60 * 1000;
+const AUTH_PROBE_MAX_REQUESTS = 10;
+
+const authProbeLimiter = createRateLimiter({
+  windowMs: AUTH_PROBE_WINDOW_MS,
+  maxRequests: AUTH_PROBE_MAX_REQUESTS,
+});
+
+/** Rate limit gate for GET /api/admin/auth. */
+export function checkAuthProbeLimit(key: string, now?: number): RateLimitResult {
+  return authProbeLimiter.check(key, now);
+}
+
 /**
  * Best-effort caller identity from proxy headers - the standard `Request`
  * App Router handlers receive carries no lower-level connection info to

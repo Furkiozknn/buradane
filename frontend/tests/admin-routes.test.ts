@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { GET as adminAuthGET } from "@/app/api/admin/auth/route";
 import { PATCH as placePATCH, DELETE as placeDELETE } from "@/app/api/admin/places/[id]/route";
 import { PATCH as contributionPATCH } from "@/app/api/admin/contributions/[id]/route";
+import { GET as contributionsGET } from "@/app/api/contributions/route";
 
 /**
  * Route-level auth tests: the handlers themselves, not the helper.
@@ -96,6 +97,33 @@ describe("admin route guards", () => {
     expect(denied.status).toBe(401);
     const granted = await adminAuthGET(req({ "x-admin-token": TOKEN }));
     expect(granted.status).toBe(204);
+  });
+
+  it("moderation queue read: no token → 401, valid token → 200", async () => {
+    // The queue's rows carry free-text notes written for moderators; the
+    // read side is an admin surface even though the path is not /api/admin.
+    expect((await contributionsGET(req())).status).toBe(401);
+    const granted = await contributionsGET(req({ "x-admin-token": TOKEN }));
+    expect(granted.status).toBe(200);
+    const body = (await granted.json()) as { contributions: unknown[] };
+    expect(Array.isArray(body.contributions)).toBe(true);
+  });
+
+  it("auth probe rate-limits an address after repeated tries", async () => {
+    // Distinct forwarded address per test run so parallel tests never share
+    // a bucket; eleven tries, the eleventh must hit the brake - and the 429
+    // must arrive regardless of whether the guess was right.
+    const ip = `10.9.9.${Math.floor(Math.random() * 250)}`;
+    let last: Response | null = null;
+    for (let i = 0; i < 11; i += 1) {
+      last = await adminAuthGET(req({ "x-forwarded-for": ip, "x-admin-token": "yanlis" }));
+    }
+    expect(last!.status).toBe(429);
+    expect(last!.headers.get("Retry-After")).toBeTruthy();
+    const rightTokenSameIp = await adminAuthGET(
+      req({ "x-forwarded-for": ip, "x-admin-token": TOKEN }),
+    );
+    expect(rightTokenSameIp.status).toBe(429);
   });
 
   it("fails CLOSED at the route when no token is configured", async () => {

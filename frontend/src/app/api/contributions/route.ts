@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { adminAuthErrorResponse, checkAdminAuth } from "@/lib/admin-auth";
 import { addContribution, listContributions } from "@/lib/contributions-store";
 import { checkRateLimit, getClientKey } from "@/lib/rate-limit";
 import type { ContributionKind } from "@/lib/types";
@@ -11,8 +12,18 @@ const VALID_KINDS: ContributionKind[] = [
   "verify_present",
 ];
 
-/** GET /api/contributions - the moderation queue (admin panel reads this). */
-export async function GET() {
+/**
+ * GET /api/contributions - the moderation queue.
+ *
+ * Admin-token gated even though it lives outside /api/admin/: it is an
+ * admin surface (the only in-app reader is the moderation panel), and its
+ * rows carry free-text notes people wrote for moderators, not for the
+ * public. The write half below stays open - contributing is the public
+ * act, reading the queue is not.
+ */
+export async function GET(request: Request) {
+  const auth = checkAdminAuth(request);
+  if (!auth.ok) return adminAuthErrorResponse(auth);
   return NextResponse.json({ contributions: await listContributions() });
 }
 
