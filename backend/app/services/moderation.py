@@ -102,8 +102,56 @@ def create_place_report(
     if user is not None:
         user.contribution_count += 1
 
+    # The session runs autoflush=False (core/db.py), so the recompute's
+    # pending-report count query would not see this report without an
+    # explicit flush - the drag would land one recompute late.
+    db.flush()
     _recompute_reliability(db, place)
     return report
+
+
+# What accepting a report does to its Place. Only effects a moderator's
+# single click can safely mean are automated: the status types move status,
+# broken_amenity clears the named amenity flag. The informational types
+# (incorrect_location, incorrect_info, overcrowded, other) mark the report
+# accepted and release its reliability drag, but the data fix itself stays
+# a deliberate admin edit - "accepted" must never guess a coordinate.
+_ACCEPT_STATUS_EFFECT = {
+    ReportType.closed: PlaceStatus.temporarily_closed,
+    ReportType.under_maintenance: PlaceStatus.temporarily_closed,
+    ReportType.reopened: PlaceStatus.active,
+}
+
+
+def resolve_report(db: Session, *, report: PlaceReport, place: Place, accept: bool) -> None:
+    """The exit of the moderation loop: a pending report either applies or
+    is moderated out, and either way stops dragging the place's
+    reliability score (each pending report costs it - see reliability.py).
+    Before this existed, every report was a permanent, irreversible score
+    penalty and the queue only ever grew."""
+    if report.status != ReportStatus.pending:
+        raise ValueError("report is already resolved")
+    report.status = ReportStatus.accepted if accept else ReportStatus.rejected
+    report.resolved_at = datetime.now(timezone.utc)
+    if accept:
+        new_status = _ACCEPT_STATUS_EFFECT.get(report.report_type)
+        if new_status is not None:
+            place.status = new_status
+        elif report.report_type == ReportType.broken_amenity and report.field in _amenity_fields():
+            # The allow-list, not hasattr: a report row predating submit-time
+            # field validation must never reach setattr with a column like
+            # "reliability_score".
+            setattr(place, report.field, False)
+    # autoflush=False: without this the pending count still includes the
+    # report just resolved, and the drag would not actually release here.
+    db.flush()
+    _recompute_reliability(db, place)
+
+
+def _amenity_fields() -> frozenset[str]:
+    from app.services.search import FILTERABLE_AMENITIES
+
+    return frozenset(FILTERABLE_AMENITIES)
 
 
 def _verification_identity(user: User | None, device_token_hash: str | None) -> str | None:

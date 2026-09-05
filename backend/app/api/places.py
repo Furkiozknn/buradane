@@ -140,6 +140,14 @@ def report_place(
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST, f"unknown report_type (expected one of {[t.value for t in ReportType]})"
         ) from exc
+    # signal.py promises this validation happens at the API layer; keeping
+    # the promise matters because an accepted broken_amenity report
+    # setattr()s this field name onto the Place (services/moderation.py).
+    if report_type == ReportType.broken_amenity and payload.field not in FILTERABLE_AMENITIES:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"broken_amenity requires field to be one of {sorted(FILTERABLE_AMENITIES)}",
+        )
 
     report = create_place_report(
         db, place=place, report_type=report_type, field=payload.field, note=payload.note, user=user,

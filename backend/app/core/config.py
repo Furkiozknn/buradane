@@ -24,6 +24,14 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 60 * 24 * 14  # 14 days
 
+    # The bootstrap moderator (see app/services/bootstrap.py). v1 has no
+    # self-serve registration - accounts exist only to moderate or
+    # attribute - so the single admin comes from the environment. Both must
+    # be set for a bootstrap to happen; unset (the default) means startup
+    # touches nothing and discovery-only deployments need no auth at all.
+    admin_email: str | None = None
+    admin_password: str | None = None
+
     # A time-decayed report/verification older than this is still shown, but
     # flagged as low-confidence in the reliability score (see
     # app/services/reliability.py) rather than silently trusted forever.
