@@ -151,8 +151,10 @@ belirsizse, belirsiz olduğu açıkça yazılıdır.
 
 ### Yüksek öncelik: erişilebilirlik
 
-- 📋 **Haritada klavye ve ekran okuyucu erişimi.** Sonuç listesi klavyeyle
-  geziliyor ama haritadaki işaretçilere yalnızca fare/dokunmayla ulaşılabiliyor.
+- ✅ **Haritada klavye ve ekran okuyucu erişimi** — canvas'tan sonra tek bir
+  durak (skip-link deseni): ok tuşları görünür işaretçilerde dolaşır, Enter
+  seçer, `aria-live` duyurur, harita her adımda işaretçiye kayar. MapLibre'nin
+  kendi canvas kısayollarına (ok = kaydır, +/- = yakınlaştır) dokunulmadı.
 
 ### Orta öncelik
 

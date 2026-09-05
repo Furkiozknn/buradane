@@ -70,7 +70,6 @@ export function AdminTokenGate({ children }: { children: React.ReactNode }) {
     };
     window.addEventListener(ADMIN_TOKEN_CLEARED_EVENT, onCleared);
     return () => window.removeEventListener(ADMIN_TOKEN_CLEARED_EVENT, onCleared);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function submit(event: React.FormEvent) {

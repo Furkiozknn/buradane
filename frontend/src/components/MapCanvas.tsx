@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   AttributionControl,
   Map as MapLibreMap,
@@ -47,6 +47,7 @@ const CLUSTER_COUNT_LAYER = "cluster-count";
 const POINT_LAYER = "place-points";
 const LABEL_LAYER = "place-labels";
 const SELECTED_LAYER = "place-selected";
+const KB_FOCUS_LAYER = "place-kb-focus";
 
 /**
  * Basemap: OpenFreeMap's public "positron" style - no API key, no signup,
@@ -258,6 +259,27 @@ export default function MapCanvas({
       });
 
       map.addLayer({
+        // Keyboard-focus preview ring. Separate from SELECTED_LAYER on
+        // purpose: selection opens the card and is a commitment; this ring
+        // only shows where keyboard browsing currently points, before Enter
+        // commits. Amber, so the two states cannot be confused, and drawn
+        // wider than the selection ring so it reads as "focus" even to
+        // someone who cannot distinguish the hues.
+        id: KB_FOCUS_LAYER,
+        type: "circle",
+        source: SOURCE_ID,
+        filter: ["==", ["get", "id"], "__none__"],
+        paint: {
+          "circle-radius": 30,
+          "circle-color": "#B45309",
+          "circle-opacity": 0.15,
+          "circle-stroke-width": 3,
+          "circle-stroke-color": "#B45309",
+          "circle-stroke-opacity": 0.85,
+        },
+      });
+
+      map.addLayer({
         id: POINT_LAYER,
         type: "symbol",
         source: SOURCE_ID,
@@ -462,6 +484,156 @@ export default function MapCanvas({
     });
   }, [padding.bottom, padding.left]);
 
+  /**
+   * Keyboard access to the markers.
+   *
+   * The list has always been keyboard-navigable; the map was not - a person
+   * browsing by keyboard or screen reader could see that pins exist and
+   * reach none of them, in an app whose stated audience includes people
+   * looking for accessible facilities.
+   *
+   * Design: one extra tab stop AFTER the canvas, not new key bindings ON
+   * it. MapLibre already owns the canvas's keyboard (arrows pan, +/- zoom)
+   * and taking those keys over would trade one access barrier for another.
+   * The stop is visually hidden until focused (the skip-link pattern);
+   * focused, it shows itself, arrows walk the visible markers, Enter
+   * selects, Escape drops the preview ring, and Tab simply moves on - a
+   * single stop cannot trap anyone.
+   *
+   * The walk list is captured when the stop receives focus and stays fixed
+   * for that session: browsing pans the map to each marker, which changes
+   * what is rendered, and a list that reshuffled under the arrow keys would
+   * be unusable. Capped and sorted by screen position (left to right, the
+   * reading order a sighted keyboard user sees) rather than by distance,
+   * which jumps around confusingly as the map pans.
+   */
+  const [kbSession, setKbSession] = useState<{
+    items: { id: string; name: string; category: string; lon: number; lat: number }[];
+    index: number;
+  } | null>(null);
+
+  const KB_MAX_ITEMS = 40;
+
+  const startKbSession = useCallback(() => {
+    const map = mapRef.current;
+    if (!map || !readyRef.current) {
+      setKbSession({ items: [], index: -1 });
+      return;
+    }
+    const rendered = map.queryRenderedFeatures(undefined, { layers: [POINT_LAYER] });
+    // queryRenderedFeatures returns one entry per tile a feature touches;
+    // dedupe by id or border-straddling pins appear twice in the walk.
+    const seen = new Set<string>();
+    const items: { id: string; name: string; category: string; lon: number; lat: number; x: number }[] = [];
+    for (const feature of rendered) {
+      const id = feature.properties?.id as string | undefined;
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      const [lon, lat] = (feature.geometry as GeoJSON.Point).coordinates;
+      items.push({
+        id,
+        name: (feature.properties?.name as string) || "İsimsiz mekan",
+        category: (feature.properties?.category as string) || "park",
+        lon,
+        lat,
+        x: map.project([lon, lat]).x,
+      });
+    }
+    items.sort((a, b) => a.x - b.x);
+    setKbSession({
+      items: items
+        .slice(0, KB_MAX_ITEMS)
+        .map((item) => ({ id: item.id, name: item.name, category: item.category, lon: item.lon, lat: item.lat })),
+      index: -1,
+    });
+  }, []);
+
+  const moveKbFocus = useCallback(
+    (delta: number | "first" | "last") => {
+      setKbSession((session) => {
+        if (!session || session.items.length === 0) return session;
+        const last = session.items.length - 1;
+        const index =
+          delta === "first"
+            ? 0
+            : delta === "last"
+              ? last
+              : Math.min(last, Math.max(0, (session.index === -1 ? (delta > 0 ? -1 : session.items.length) : session.index) + delta));
+        const item = session.items[index];
+        const map = mapRef.current;
+        if (map && item) {
+          map.easeTo({
+            center: [item.lon, item.lat],
+            duration: prefersReducedMotion() ? 0 : 300,
+          });
+        }
+        return { ...session, index };
+      });
+    },
+    [],
+  );
+
+  const endKbSession = useCallback(() => {
+    setKbSession(null);
+  }, []);
+
+  const onKbKeyDown = useCallback(
+    (event: React.KeyboardEvent) => {
+      switch (event.key) {
+        case "ArrowRight":
+        case "ArrowDown":
+          event.preventDefault();
+          moveKbFocus(1);
+          break;
+        case "ArrowLeft":
+        case "ArrowUp":
+          event.preventDefault();
+          moveKbFocus(-1);
+          break;
+        case "Home":
+          event.preventDefault();
+          moveKbFocus("first");
+          break;
+        case "End":
+          event.preventDefault();
+          moveKbFocus("last");
+          break;
+        case "Enter":
+        case " ": {
+          event.preventDefault();
+          const item = kbSession?.items[kbSession.index];
+          if (item) handlersRef.current.onSelect({ id: item.id } as Place);
+          break;
+        }
+        case "Escape":
+          // Drops the preview ring but keeps focus on the stop; Tab remains
+          // the way OUT, so Escape can never strand anyone.
+          event.preventDefault();
+          setKbSession((session) => (session ? { ...session, index: -1 } : session));
+          break;
+      }
+    },
+    [kbSession, moveKbFocus],
+  );
+
+  // The preview ring follows the keyboard session.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !readyRef.current) return;
+    if (!map.getLayer(KB_FOCUS_LAYER)) return;
+    const focusedId = kbSession && kbSession.index >= 0 ? kbSession.items[kbSession.index]?.id : null;
+    map.setFilter(KB_FOCUS_LAYER, ["==", ["get", "id"], focusedId ?? "__none__"]);
+  }, [kbSession]);
+
+  const kbFocusedItem = kbSession && kbSession.index >= 0 ? kbSession.items[kbSession.index] : null;
+  const kbAnnouncement = !kbSession
+    ? ""
+    : kbSession.items.length === 0
+      ? "Görünür alanda tekil işaretçi yok. Yakınlaştırıp tekrar deneyin - kümeler yakınlaşınca işaretçilere ayrılır."
+      : kbFocusedItem
+        ? `${kbSession.index + 1} / ${kbSession.items.length}: ${kbFocusedItem.name}, ${categoryMeta(kbFocusedItem.category as Parameters<typeof categoryMeta>[0]).label}`
+        : `${kbSession.items.length} işaretçi gezilebilir. Ok tuşlarıyla ilerleyin, Enter ile seçin.`;
+
   // User location dot. A DOM marker is right here: exactly one, and it needs
   // a pulsing halo that a symbol layer can't express.
   useEffect(() => {
@@ -488,6 +660,35 @@ export default function MapCanvas({
   return (
     <div className="absolute inset-0">
       <div ref={containerRef} className="h-full w-full" />
+
+      {/* Keyboard marker navigation - the skip-link pattern: sr-only until
+          focused, then a visible pill. It must be a sibling AFTER the canvas
+          so Tab order reads "map, then its markers", and it must be visible
+          while focused or sighted keyboard users would be typing into
+          nothing. */}
+      <div
+        role="group"
+        aria-label="Haritadaki işaretçilerde klavye ile gezinme"
+        className="absolute bottom-3 left-1/2 z-20 -translate-x-1/2"
+      >
+        <button
+          type="button"
+          onFocus={startKbSession}
+          onBlur={endKbSession}
+          onKeyDown={onKbKeyDown}
+          aria-label="Haritadaki işaretçilerde gezin. Ok tuşları ilerletir, Enter seçer, Escape vurguyu kaldırır."
+          className="sr-only rounded-full border border-border bg-surface px-4 py-2.5 text-[13px] font-medium text-text shadow-lg focus:not-sr-only focus:outline-none focus:ring-2 focus:ring-brand"
+        >
+          {kbFocusedItem
+            ? `${kbSession!.index + 1}/${kbSession!.items.length} · ${kbFocusedItem.name}`
+            : "İşaretçilerde gezin: ← → tuşları, Enter seç"}
+        </button>
+        {/* polite, not assertive: announcements follow key presses the user
+            just made, so interrupting other output would add nothing. */}
+        <span aria-live="polite" className="sr-only">
+          {kbAnnouncement}
+        </span>
+      </div>
       <style jsx global>{`
         .buradane-user-dot {
           width: 20px;
