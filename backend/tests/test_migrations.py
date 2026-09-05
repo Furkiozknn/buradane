@@ -60,7 +60,13 @@ def test_upgrade_downgrade_upgrade_cycle_leaves_no_debris(monkeypatch):
     cfg = AlembicConfig(str(backend_dir / "alembic.ini"))
     cfg.set_main_option("script_location", str(backend_dir / "alembic"))
     # env.py reads settings.database_url at run time; point it at scratch.
-    monkeypatch.setattr(settings, "database_url", str(scratch_url))
+    # render_as_string(hide_password=False), NOT str(): URL.__str__ masks
+    # the password as literal "***", which a trust-auth local cluster
+    # happily accepts and CI's scram-auth Postgres rejects - exactly the
+    # local-green/CI-red gap this suite exists to close.
+    monkeypatch.setattr(
+        settings, "database_url", scratch_url.render_as_string(hide_password=False)
+    )
 
     try:
         with create_engine(scratch_url).connect() as conn:
