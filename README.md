@@ -57,8 +57,8 @@ uv sync
 # Yerel veritabanını başlat (Postgres + PostGIS)
 docker compose up -d
 
-# Şemayı oluştur (henüz gerçek bir Alembic migration'ı yok - bkz. "Bilinen Sınırlamalar")
-uv run python -c "from app.core.db import Base, engine; import app.models; Base.metadata.create_all(engine)"
+# Şemayı oluştur (Alembic migration'ları ile)
+uv run alembic upgrade head
 
 # Başlangıç kategorilerini yükle (~55 kategori, 10 grup altında)
 uv run python -m app.ingest.seed_categories
@@ -458,11 +458,11 @@ sorgunun anlamını sessizce değiştirmek yerine.
 - Demo, backend/PostGIS'e değil statik bir JSON anlık görüntüsüne bağlı -
   iki taraf aynı sorgu sözleşmesini konuşuyor ama henüz birbirine
   bağlanmadı; bkz. "Yol Haritası".
-- **Henüz gerçek bir Alembic migration'ı yok.** Bu geliştirme ortamında
-  Docker/Postgres erişilebilir olmadığı için `alembic revision --autogenerate`
-  çalıştırılamadı - şema `Base.metadata.create_all()` ile oluşturuluyor
-  (yukarıdaki kurulum adımı). İlk gerçek migration, bir Postgres'e erişimi
-  olan bir ortamda (yerel Docker veya CI) üretilmeli.
+- ~~Henüz gerçek bir Alembic migration'ı yok.~~ **Çözüldü**: v1 şemasının
+  tamamı tek bir baseline migration'da (`alembic/versions/`), gerçek bir
+  PostGIS'e karşı üretilip doğrulandı (upgrade → autogenerate boş çıkıyor →
+  downgrade temiz). `tests/test_migrations.py` model-migration eşitliğini
+  CI'da denetler: migration'sız yeni bir model tablosu testi kırar.
 - Fotoğraflar ve yorumlar backend'de modellendi (`PlacePhoto`/
   `PlaceReview`) ama ne backend API'sinde ne demo'da bir arayüzü var.
   Fotoğraflar için OSM etiketleri ölçüldü ve **bilinçli olarak
