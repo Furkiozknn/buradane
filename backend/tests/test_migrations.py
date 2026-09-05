@@ -8,6 +8,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
+
 import app.models  # noqa: F401 - populates Base.metadata
 from app.core.db import Base
 
