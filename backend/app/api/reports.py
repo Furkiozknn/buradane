@@ -78,12 +78,27 @@ def list_reports(
 def resolve_report_endpoint(
     report_id: uuid.UUID, payload: ReportResolutionIn, db: DbSession, admin: AdminUser
 ) -> ReportOut:
-    report = db.get(PlaceReport, report_id)
+    # Row lock BEFORE the status check. Two moderators resolving the same
+    # report concurrently each ran check-then-act in their own transaction:
+    # both read `pending`, both applied their (possibly opposite) decision,
+    # and the later commit silently overwrote the earlier one - accept and
+    # reject both "succeeded", the place's status kept whichever transaction
+    # happened to finish last. The sequential double-resolve test never saw
+    # this; only interleaving does. with_for_update makes the second
+    # transaction wait on the first's lock, and populate_existing forces a
+    # fresh read after the wait, so the second sees `accepted`/`rejected`
+    # and gets the 409 it always should have.
+    report = db.get(
+        PlaceReport, report_id, with_for_update=True, populate_existing=True
+    )
     if report is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "report not found")
     if report.status != ReportStatus.pending:
         raise HTTPException(status.HTTP_409_CONFLICT, f"report is already {report.status.value}")
-    place = db.get(Place, report.place_id)
+    # The place is written too (status flips, reliability recomputes), so it
+    # takes the same lock - always in report -> place order, so two resolvers
+    # of different reports on the same place serialise instead of deadlocking.
+    place = db.get(Place, report.place_id, with_for_update=True, populate_existing=True)
     resolve_report(db, report=report, place=place, accept=payload.action == "accept")
     db.commit()
     db.refresh(report)
