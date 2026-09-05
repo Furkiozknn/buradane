@@ -21,6 +21,14 @@ def client(db_session, monkeypatch):
     monkeypatch.setattr(
         ratelimit, "_write_limiter", ratelimit.TokenBucketLimiter(per_hour=10_000, burst=1_000)
     )
+    # The verification limiter is opened wide here for the same reason: the
+    # consensus tests exercise the counting mechanics with several device
+    # tokens behind TestClient's single address, which the production
+    # limiter now deliberately forbids. The limiter itself gets its own
+    # dedicated attack test below, with realistic settings.
+    monkeypatch.setattr(
+        ratelimit, "_verification_limiter", ratelimit.TokenBucketLimiter(per_hour=10_000, burst=1_000)
+    )
     app.dependency_overrides[get_db] = lambda: db_session
     try:
         with TestClient(app) as test_client:
@@ -51,6 +59,61 @@ class TestRateLimiting:
         assert statuses[3] == 429
         resp = client.post("/places/suggest", json=body)
         assert "retry-after" in {k.lower() for k in resp.headers}
+
+    def test_device_token_rotation_cannot_reach_consensus_from_one_address(
+        self, client, db_session, park, monkeypatch
+    ):
+        """The audit's falsification demo, plus one line of token rotation.
+
+        Consensus counts distinct submitter identities, and the identity is
+        a client-minted X-Device-Token - so without this limiter, one IP
+        rotating random tokens supplies the whole consensus threshold inside
+        the general burst. The per-IP-per-place bucket holds one address
+        BELOW the threshold: the second same-place verification from the
+        same address 429s, so a lone script can never flip a field, while a
+        different place (fresh key) sails through untouched.
+        """
+        monkeypatch.setattr(
+            ratelimit,
+            "_verification_limiter",
+            ratelimit.TokenBucketLimiter(per_hour=1, burst=1),
+        )
+        place = Place(
+            name="Rotasyon Testi", location="SRID=4326;POINT(29.05 41.01)",
+            country_code="TR", wheelchair_accessible=True,
+        )
+        other = Place(
+            name="Başka Mekan", location="SRID=4326;POINT(29.20 41.05)",
+            country_code="TR", wheelchair_accessible=True,
+        )
+        db_session.add_all([place, other])
+        db_session.flush()
+
+        body = {"field": "wheelchair_accessible", "confirmed_value": False}
+        first = client.post(
+            f"/places/{place.id}/verifications", json=body,
+            headers={"X-Device-Token": "attacker-token-0001"},
+        )
+        assert first.status_code == 201
+
+        second = client.post(
+            f"/places/{place.id}/verifications", json=body,
+            headers={"X-Device-Token": "attacker-token-0002"},
+        )
+        assert second.status_code == 429, (
+            "token rotasyonu ikinci 'kimliği' geçirdi - konsensüs tek IP'den doldurulabilir"
+        )
+
+        db_session.refresh(place)
+        assert place.wheelchair_accessible is True, "tek adres alanı çevirebildi"
+
+        other_place = client.post(
+            f"/places/{other.id}/verifications", json=body,
+            headers={"X-Device-Token": "attacker-token-0003"},
+        )
+        assert other_place.status_code == 201, (
+            "farklı mekan ayrı anahtar olmalı - gerçek kullanıcı yürüyüşte birden çok yer doğrular"
+        )
 
     def test_the_bucket_refills_with_time(self):
         clock = {"t": 0.0}

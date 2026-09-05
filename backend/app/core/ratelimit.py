@@ -64,6 +64,24 @@ _write_limiter = TokenBucketLimiter(
     per_hour=settings.write_rate_limit_per_hour, burst=settings.write_rate_limit_burst
 )
 
+# Verifications get their own, much tighter bucket, keyed by IP+place.
+#
+# Why the general limiter is not enough: consensus counts DISTINCT submitter
+# identities, and the identity is the client-minted X-Device-Token - so one
+# IP rotating random tokens in a shell loop supplies `verification_consensus`
+# (2) identities well inside the general burst (10). That is the audit's
+# falsification demo with one extra line of script. Keying this bucket by
+# IP+place and holding its burst UNDER the consensus threshold makes the
+# arithmetic safe again: a single address cannot mint enough "distinct"
+# confirmations for any one place inside the window, while a real person
+# verifying several different places on a walk is untouched (each place is
+# its own key), and two genuinely different households still reach
+# consensus exactly as designed.
+_verification_limiter = TokenBucketLimiter(
+    per_hour=max(1, settings.verification_consensus - 1),
+    burst=max(1, settings.verification_consensus - 1),
+)
+
 
 def limit_writes(request: Request) -> None:
     """FastAPI dependency: one token per community write, keyed by client IP.
@@ -74,3 +92,12 @@ def limit_writes(request: Request) -> None:
     """
     client = request.client
     _write_limiter.check(client.host if client else "unknown")
+
+
+def limit_verifications(request: Request) -> None:
+    """Per-IP-per-place ceiling for verification writes, below the consensus
+    threshold - see _verification_limiter's comment for why the general
+    write limiter cannot protect consensus on its own."""
+    client = request.client
+    place_id = request.path_params.get("place_id", "")
+    _verification_limiter.check(f"{client.host if client else 'unknown'}:{place_id}")
