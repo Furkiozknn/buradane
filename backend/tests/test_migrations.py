@@ -1,7 +1,13 @@
 """The Alembic baseline must not drift from the models: every table the
 metadata knows must be created by a migration, and vice versa. Static
 parity - no database needed - so adding a model without writing its
-migration fails CI immediately instead of surfacing at deploy time."""
+migration fails CI immediately instead of surfacing at deploy time.
+
+Scope, honestly: the static check compares TABLE NAMES only. A new column,
+index or constraint added to a model without a migration slips past both
+tests here - the cycle test below proves reversibility, not column parity.
+Full autogenerate-diff parity is an open follow-up; until then, reviewers
+must eyeball model diffs against the migration chain by hand."""
 
 from __future__ import annotations
 

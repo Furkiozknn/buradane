@@ -75,11 +75,15 @@ belirsizse, belirsiz olduğu açıkça yazılıdır.
 - ✅ İlçe adı çözümleyici (Türkçe katlama, yeniden adlandırmalar, ilçe sanılan
   mahalleler)
 - ✅ Birleşik "İlçe/İl" etiketlerinin ayrıştırılması
-- ✅ Kapsam göstergesi ("81 ilin 9 tanesi")
+- ✅ Kapsam göstergesi ("81 ilin N tanesi" — sayı veriden hesaplanır)
+- ✅ **973 ilçelik resmî referans listesi** OSM `admin_level=6` sınırlarından
+  indi (`frontend/data/admin-divisions.json`, 81/973 tam); testler sayıyı ve
+  adları plaka tablosuyla çapraz doğruluyor. Sunucu tarafında
+  `admin-divisions.ts` ilçe adlarını kanonikleştiriyor.
 
 ### Veri
-- ✅ 15 il / **25.742** gerçek OpenStreetMap mekanı (2026-09-04); kalan
-  iller arka planda il il iniyor - bkz. aşağıdaki 🚧
+- ✅ 23 il / **29.664** gerçek OpenStreetMap mekanı (2026-09-05 tabanı);
+  kalan iller arka planda il il iniyor - bkz. aşağıdaki 🚧
 - ✅ Overpass veri boru hattı: il+kategori bazında checkpoint, üstel geri
   çekilme, çok aynalı
 - ✅ İl başına ayrı anlık görüntü dosyası — il eklemek bir config satırı
@@ -95,7 +99,7 @@ belirsizse, belirsiz olduğu açıkça yazılıdır.
 
 ### Kalite
 - ✅ Lighthouse: erişilebilirlik 100, best practices 100, SEO 100
-- ✅ 123 frontend testi (Vitest)
+- ✅ 143 frontend testi (Vitest) + 81 backend testi (pytest, DB'li kısmı CI'da)
 - ✅ 0 TypeScript hatası, 0 ESLint hatası
 
 ---
@@ -107,10 +111,14 @@ belirsizse, belirsiz olduğu açıkça yazılıdır.
   moderation, reliability, search), veri alım modülleri **yazıldı**
 - ✅ `docker-compose.yml` ile PostGIS servisi tanımlı
 - ✅ pytest test dosyaları mevcut; CI'da gerçek PostGIS servisiyle koşuyor
-- 🚧 **Backend hiç canlı veritabanına karşı çalıştırılmadı.** Geliştirme
-  ortamında Docker/Postgres yoktu. Kod doğru API'lere karşı yazıldı ama
-  yerelde koşturulmadı.
-- 🚧 **Gerçek Alembic migration'ı yok** — şema `create_all` ile kuruluyor
+- ✅ **Backend CI'da gerçek Postgres+PostGIS'e karşı koşuyor** — migration
+  döngüsü (upgrade → downgrade → upgrade), yarış testleri ve model/migration
+  eşitlik kontrolü dahil. Geliştirme makinesinde Docker olmadığı için
+  yerelde bu testler skip eder; "yerelde geçti" DB testlerinin koştuğu
+  anlamına gelmez.
+- ✅ **Baseline Alembic migration'ı depoda**
+  (`backend/alembic/versions/a237a92362fc_baseline_full_v1_schema.py`);
+  şema artık `create_all`'a değil migration zincirine dayanıyor
 - ✅ Frontend ↔ backend sözleşmesi **alan alan karşılaştırıldı** — sonuç:
   [docs/api-sozlesme-farklari.md](docs/api-sozlesme-farklari.md). Zarf farkı
   (çıplak liste vs `{places,total,applied,facets}`), id şeması farkı
@@ -125,12 +133,13 @@ belirsizse, belirsiz olduğu açıkça yazılıdır.
   uyarlama katmanına dönüşmesi.
 
 ### Türkiye kapsamı
-- ✅ 15 il indi ve doğrulandı
-- 🚧 Kalan 66 il — bbox'lar OSM'in kendi il-merkezi çapalarından üretiliyor
+- ✅ 23 il indi ve doğrulandı (2026-09-05 tabanı; güncel liste şehir
+  seçicisinde)
+- 🚧 Kalan iller — bbox'lar OSM'in kendi il-merkezi çapalarından üretiliyor
   (`scripts/fetch_admin_divisions.py` + sentezlenmiş yapılandırma), ulusal
-  çekim `--only-missing` ile sürüyor
-- 🚧 973 ilçelik resmî liste OSM sınırlarından iniyor; ileri testler
-  (81/973 + ad çapraz kontrolü) veri iner inmez otomatik doğrulayacak
+  çekim `--only-missing` ile il il sürüyor
+- ✅ 973 ilçelik resmî liste indi ve testlerle doğrulandı (81 il / 973 ilçe
+  tam; ad çapraz kontrolü dahil)
 
 ---
 
@@ -143,8 +152,14 @@ belirsizse, belirsiz olduğu açıkça yazılıdır.
   Panel token'ı sekme ömrü boyunca `sessionStorage`'da tutar.
 - ✅ **Katkı gönderiminde hız sınırı** — IP başına kayan pencere
   (10 istek / 10 dk), 429 + `Retry-After`.
-- 🚧 Yönetim panelinin **görüntülenmesi** hâlâ açık (kuyruk sunucuda render
-  ediliyor); okuma tarafını da kapatmak çerez tabanlı oturum ister.
+- ✅ **Moderasyon kuyruğunun okunması da token'lı** — kuyruk artık sunucuda
+  render edilmiyor; panel token doğrulandıktan sonra `GET /api/contributions`
+  üzerinden çeker ve o uç da admin token'ı ister. `/admin` sayfası token
+  girilmeden yalnızca giriş kapısını (`AdminTokenGate`) gösterir; veri
+  taşıyan hiçbir şey sunucu yanıtında yer almaz.
+- ✅ **Admin token probe'una hız freni** — `GET /api/admin/auth` IP başına
+  10 deneme/dk ile sınırlı (429 + `Retry-After`); kaba kuvvet token tahmini
+  pratikte kapalı.
 - 🚧 **Backend'de varsayılan JWT sırrı** — iki katman: bootstrap admin
   varsayılan sır altında **oluşturulmayı reddediyor** (`services/bootstrap.py`,
   asıl kontrol) ve her başlangıçta uyarı basılıyor (`app/main.py`, mevcut-admin
@@ -161,6 +176,14 @@ belirsizse, belirsiz olduğu açıkça yazılıdır.
   işlemleri tek kuyruğta serileşiyor; yazım atomik (geçici dosya + rename).
   Testler yazarken paylaşılan-mutable-varsayılan kaynaklı gerçek bir durum
   sızıntısı da bulundu ve kapatıldı.
+- ✅ **Rapor kararında yarış koşulu kapalı** — `PATCH /reports/{id}` rapor ve
+  mekan satırlarını kilitleyerek (`SELECT ... FOR UPDATE`) çalışır; aynı
+  rapora eşzamanlı iki karar artık çift etki üretemez, ikincisi 409 alır
+  (iki gerçek bağlantıyla kanıtlayan test: `test_report_resolution_race.py`).
+- ✅ **Doğrulama konsensüsü token rotasyonuna dayanıklı** — cihaz token'ı
+  istemci ürettiği için "farklı katılımcı" kanıtı değildir; IP+mekan başına
+  doğrulama bütçesi konsensüs eşiğinin altında tutulur (`consensus-1`), tek
+  adres token değiştirerek eşiğe ulaşamaz.
 
 ### Yüksek öncelik: erişilebilirlik
 
@@ -181,8 +204,8 @@ belirsizse, belirsiz olduğu açıkça yazılıdır.
   türden kayıtlar aranır ve gösterilir; "Bu o" mevcut kaydı **doğrulamaya**
   çevirir (tazelik sinyali), "Hayır, yeni yer" öneriyi yine de gönderir.
   Kontrol bir kapı değil: başarısız olursa öneri normal yoldan geçer.
-- 📋 **Kalan 72 il** için veri çekimi
-- 📋 **Gerçek ilk Alembic migration'ı**
+- 🚧 **Kalan iller** için veri çekimi (ulusal çekim sürüyor — bkz. "Türkiye
+  kapsamı")
 
 ### Düşük öncelik / ileride
 

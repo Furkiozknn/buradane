@@ -28,8 +28,21 @@ BURADANE_JWT_SECRET=dev-secret-change-in-production
 BURADANE_JWT_ALGORITHM=HS256
 BURADANE_JWT_EXPIRE_MINUTES=20160
 
+# --- Bootstrap moderatör (opsiyonel) ---------------------------------------
+# İkisi birden tanımlıysa açılışta TEK bir moderatör hesabı oluşturulur
+# (varsa asla üzerine yazılmaz). Varsayılan JWT sırrı ile birlikte
+# kullanılırsa uygulama bilerek başlamayı REDDEDER.
+# BURADANE_ADMIN_EMAIL=
+# BURADANE_ADMIN_PASSWORD=
+
 # --- Veri güvenilirliği ----------------------------------------------------
 BURADANE_STALE_AFTER_DAYS=90
+# Bir alan değişikliğinin uygulanması için gereken FARKLI katılımcı sayısı.
+BURADANE_VERIFICATION_CONSENSUS=2
+
+# --- Yazma hız sınırı -------------------------------------------------------
+BURADANE_WRITE_RATE_LIMIT_PER_HOUR=30
+BURADANE_WRITE_RATE_LIMIT_BURST=10
 
 # --- CORS ------------------------------------------------------------------
 BURADANE_CORS_ORIGINS=["http://localhost:3000"]
@@ -48,6 +61,10 @@ BURADANE_CORS_ORIGINS=["http://localhost:3000"]
 | `BURADANE_JWT_EXPIRE_MINUTES` | `20160` (14 gün) | Token ömrü. |
 | `BURADANE_STALE_AFTER_DAYS` | `90` | Bu süreden eski bir doğrulama/bildirim hâlâ gösterilir ama güvenilirlik skorunda **düşük güvenli** olarak işaretlenir — sonsuza kadar doğru sayılmaz (`app/services/reliability.py`). |
 | `BURADANE_CORS_ORIGINS` | `["http://localhost:3000"]` | JSON dizi biçiminde köken listesi. |
+| `BURADANE_ADMIN_EMAIL` / `BURADANE_ADMIN_PASSWORD` | tanımsız | İkisi birden tanımlıysa açılışta tek bir bootstrap moderatör hesabı oluşturulur (`app/services/bootstrap.py`); mevcut hesabın üzerine asla yazılmaz. Varsayılan JWT sırrı ile birlikte ayarlanırsa açılış `RuntimeError` ile **reddedilir**. |
+| `BURADANE_VERIFICATION_CONSENSUS` | `2` | Bir alan doğrulamasının mekana uygulanması için gereken farklı katılımcı sayısı. `1` yapmak tek kişilik onayı açar — üretimde düşürme. |
+| `BURADANE_WRITE_RATE_LIMIT_PER_HOUR` | `30` | IP başına saatlik yazma bütçesi (öneri/bildirim/doğrulama/login). |
+| `BURADANE_WRITE_RATE_LIMIT_BURST` | `10` | Aynı bütçenin anlık patlama tavanı. Doğrulama ucunda ayrıca IP+mekan başına ikinci bir sınır vardır; ayrı bir değişkeni yoktur, bilinçli olarak `BURADANE_VERIFICATION_CONSENSUS - 1`'den türetilir. |
 
 ---
 

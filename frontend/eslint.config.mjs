@@ -17,6 +17,18 @@ const eslintConfig = defineConfig([
     // linting it produces hundreds of meaningless warnings.
     "public/maplibre/**",
   ]),
+  {
+    rules: {
+      // A leading underscore is this codebase's idiom for "deliberately
+      // unused": rest-destructuring a field away (`{ raw_tags: _omit,
+      // ...place }`) is the cheapest way to strip a key, and the binding
+      // it creates is the point, not an oversight.
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        { varsIgnorePattern: "^_", argsIgnorePattern: "^_" },
+      ],
+    },
+  },
 ]);
 
 export default eslintConfig;

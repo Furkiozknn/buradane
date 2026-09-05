@@ -395,6 +395,12 @@ export default function MapCanvas({
       mapRef.current = null;
       readyRef.current = false;
     };
+    // initialView is deliberately read once: it seeds the map at mount, and
+    // later view changes travel through flyTo/easeTo on the live instance.
+    // Adding it to the deps would tear down and rebuild the whole MapLibre
+    // map (losing tiles, handlers and viewport) every time the parent
+    // recomputes the object.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Feed results into the map source. Before the map is ready this is a

@@ -24,7 +24,7 @@ doğrulaması, tazelik etiketi, kaynak ve güvenilirlik skoru).
 > Frontend" adımlarıyla demoyu yerelde çalıştırıp **25.000'i aşkın gerçek
 > OpenStreetMap mekanı** üzerinde harita ve liste arayüzünü görebilirsiniz.
 > Kapsam il il 81'e doğru genişliyor; güncel il listesi ve sayılar şehir
-> seçicide görünür (son doğrulanan taban: 15 il / 25.742 mekan).
+> seçicide görünür (son doğrulanan taban 2026-09-05: 23 il / 29.664 mekan; ulusal çekim sürüyor).
 
 ## v1 Kapsamı
 
@@ -99,8 +99,8 @@ npm run dev
 ```
 
 `http://localhost:3000` adresinde açılır. Demo verisi
-(`frontend/data/places.*.json`, il başına bir dosya; 2026-09-04 itibarıyla
-15 il / 25.742 gerçek OSM mekanı ve 81'e doğru büyüyor)
+(`frontend/data/places.*.json`, il başına bir dosya; 81'e doğru il il
+büyüyor - güncel il listesi ve sayılar uygulamanın şehir seçicisinde)
 repoyla birlikte gelir - sadece demoyu denemek için "Veri Pipeline"
 adımlarını tekrar koşmanız gerekmez, onlar yalnızca anlık görüntüyü
 yenilemek ya da yeni bir şehir eklemek istediğinizde gerekli.
@@ -299,9 +299,12 @@ FastAPI otomatik dokümantasyonu çalışırken `/docs` (Swagger) ve `/redoc`
 | `GET /places/{id}` | Yer detayı (tüm amenity'ler, kaynak/güncellik bilgisi) |
 | `POST /places/suggest` | Yeni yer öner (→ `pending_review`, moderasyon bekler) |
 | `POST /places/{id}/reports` | Bir yer hakkında sorun bildir (kapalı, bakımda, bilgi yanlış, ...) |
-| `POST /places/{id}/verifications` | Bir alanı doğrula (ör. "evet, tekerlekli sandalye erişimi var") - anında uygulanır, güvenilirlik skorunu yeniden hesaplar |
+| `POST /places/{id}/verifications` | Bir alanı doğrula (ör. "evet, tekerlekli sandalye erişimi var") - tek bildirim anında uygulanmaz: alan ancak en az `verification_consensus` (vars. 2) farklı katılımcı aynı değeri doğrularsa değişir; her bildirim güvenilirlik skorunu yeniden hesaplatır |
 | `GET /categories` | Aktif kategori listesi |
 | `GET /admin-regions?level=&parent_id=` | İdari hiyerarşi gezinme (il → ilçe → mahalle) |
+| `POST /auth/login` | `{email, password}` → `{access_token}`. Token almanın tek yolu; self-serve kayıt bilinçli olarak yok. |
+| `GET /reports?status=` | Moderasyon kuyruğu (admin token'ı gerektirir), en eski önce. |
+| `PATCH /reports/{id}` | `{"action": "accept"\|"reject"}` - raporu karara bağlar; kabul edilen tür mekana etkisini uygular, her iki karar da bekleyen-rapor baskısını kaldırır. Satır kilidiyle yarışsız. |
 | `GET /health` | Sağlık kontrolü |
 
 Tüm yazma uçları hesapsız kullanılabilir (`user_id` opsiyonel) - gizlilik-
@@ -394,7 +397,6 @@ uv run pytest tests/ -v
 - **Saf mantık testleri** (`test_reliability.py`, `test_dedup_math.py`) - veritabanı gerektirmez, her ortamda çalışır.
 - **Veritabanı-bağımlı testler** (`test_search.py`, `test_dedup_integration.py`, `test_moderation.py`) - gerçek bir PostGIS bağlantısı gerektirir; `docker compose up -d` çalışıyorsa yerelde, yoksa CI'da (`.github/workflows/ci.yml`, `postgis/postgis` servis konteyneri ile) çalışır. Veritabanı yoksa bu testler **skip** edilir, başarısız olmaz - sahte bir "yeşil" göstermek yerine dürüst bir sinyal.
 
-Frontend'de şu an otomatik bir test suite'i yok - sadece `npm run lint`
 (ESLint) var.
 
 ## Güvenlik
@@ -404,8 +406,6 @@ Frontend'de şu an otomatik bir test suite'i yok - sadece `npm run lint`
 - JWT tabanlı opsiyonel kimlik doğrulama (`python-jose`), şifreler `bcrypt` ile hash'lenir. Token almanın tek yolu `POST /auth/login`; self-serve kayıt bilinçli olarak yok (hesaplar yalnızca moderasyon/atıf içindir).
 - Moderasyon çıkışı: `BURADANE_ADMIN_EMAIL`/`BURADANE_ADMIN_PASSWORD` ile açılışta tek bir bootstrap moderatör oluşturulur (varsa asla üzerine yazılmaz); bekleyen raporlar `GET /reports` ile listelenir, `PATCH /reports/{id}` (`{"action": "accept"|"reject"}`) ile karara bağlanır. Kabul edilen `closed`/`under_maintenance` raporu mekanı `temporarily_closed` yapar, `reopened` tekrar `active` yapar, `broken_amenity` ilgili amenity bayrağını temizler; bilgilendirme türleri (yanlış konum/bilgi vb.) yalnızca raporu kapatır - veri düzeltmesi bilinçli bir admin düzenlemesi olarak kalır. Her iki karar da raporun güvenilirlik skoru üzerindeki bekleyen-rapor baskısını kaldırır.
 - `BURADANE_JWT_SECRET` artık yalnızca bir tavsiye değil: bootstrap admin yapılandırılmışken secret hâlâ varsayılan dev değerindeyse sunucu açılışta **açıkça reddeder** (herkesin forge edebileceği bir admin token'ı, admin'in hiç olmamasından kötüdür). Keşif-amaçlı, admin'siz çalıştırmalar secret'sız çalışmaya devam eder.
-- JWT tabanlı opsiyonel kimlik doğrulama (`python-jose`), şifreler `passlib[bcrypt]` ile hash'lenir.
-- `BURADANE_JWT_SECRET` prod'da mutlaka değiştirilmeli - varsayılan değer sadece yerel geliştirme içindir.
 - **Demo'nun admin uçları (`/api/admin/*`) paylaşılan-sır token'ı ile korunur.**
   Sunucuda `BURADANE_ADMIN_TOKEN` tanımlanır (frontend için `frontend/.env.local`);
   yönetim paneli token'ı bir kez ister ve sekme kapanana kadar `sessionStorage`'da
@@ -603,7 +603,7 @@ dev sunucusunun önünde HMR'ı keser. Test etmek için: `npm run build && npm r
 
 ## Yol Haritası
 
-**v1 (şu an, çalışıyor)**: 15+ ilde (81'e doğru il il tamamlanıyor)
+**v1 (şu an, çalışıyor)**: 20+ ilde (81'e doğru il il tamamlanıyor)
 25.000'i aşkın gerçek OSM mekanı üzerinde harita, konum, yakındakiler, 14 kategori, yer detayı,
 Türkçe doğal-dil araması, dinamik filtreler, sıralama (en yakın / en
 güvenilir), yön göstergesi, yol tarifi, tek dokunuşla yerinde doğrulama,

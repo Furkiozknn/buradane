@@ -1,6 +1,7 @@
 # Frontend ↔ Backend API Sözleşme Farkları
 
-**Durum: 2026-09-04 itibarıyla, alan alan karşılaştırmayla çıkarıldı.**
+**Durum: 2026-09-04'te alan alan karşılaştırmayla çıkarıldı; 2026-09-05'te
+uç adları ve §7 güncel duruma göre düzeltildi.**
 
 Projenin mimari vaadi, demo'nun yerel JSON adaptöründen gerçek FastAPI+PostGIS
 backend'ine geçişin bir **taban-URL değişikliği** olması. Bu belge o vaadin
@@ -98,19 +99,22 @@ yapısal filtre geçmeli. İkinci yol "taban-URL değişikliği" vaadini
 
 | | Frontend (demo) | Backend |
 |---|---|---|
-| Uç | `POST /api/contributions` (tek uç, `kind` alanı) | `POST /places/suggest`, `POST /places/{id}/report`, `POST /places/{id}/verify` (üç ayrı uç) |
-| Doğrulama şekli | `kind: "verify_present"` | `PlaceVerificationIn { field, confirmed_value }` — alan bazlı |
-| Moderasyon | `PATCH /api/admin/contributions/{id}` `{action}` | `app/services/moderation.py` (uç karşılaştırması yapılmadı) |
+| Uç | `POST /api/contributions` (tek uç, `kind` alanı) | `POST /places/suggest`, `POST /places/{id}/reports`, `POST /places/{id}/verifications` (üç ayrı uç) |
+| Doğrulama şekli | `kind: "verify_present"` | `PlaceVerificationIn { field, confirmed_value }` — alan bazlı; tek bildirim yetmez, `verification_consensus` (vars. 2) farklı katılımcı ister |
+| Moderasyon | `PATCH /api/admin/contributions/{id}` `{action}` (paylaşılan-sır admin token'ı) | `GET /reports?status=` + `PATCH /reports/{id}` `{"action": "accept"\|"reject"}` (JWT'li moderatör hesabı, `POST /auth/login`) |
+| Kimlik modeli | `x-admin-token` başlığı (tek paylaşılan sır) | `POST /auth/login` → Bearer JWT; hesaplar yalnız bootstrap ile açılır |
 
 Uyarlama katmanı yaklaşımı (bkz. §5) bu farkı da route içinde eritebilir.
 
 ## 7. Bilinen ve ayrıca duran işler
 
 - `conftest.py`'nin DB erişilebilirlik denetimi düzeltildi (2 sn zaman aşımı);
-  `uv run pytest` artık DB'siz ortamda asılı kalmıyor: 28 geçti, 20 skip.
-- Gerçek Alembic migration'ı hâlâ yok; şema `create_all` ile kuruluyor.
-- Backend hâlâ canlı veritabanına karşı yerelde hiç çalıştırılmadı (bu
-  ortamda Docker yok); CI'da PostGIS servisiyle koşuyor.
+  `uv run pytest` artık DB'siz ortamda asılı kalmıyor (2026-09-05: 32 geçti,
+  49 skip — skip edenler DB isteyenler, CI'da koşuyorlar).
+- ✅ Baseline Alembic migration'ı depoda; upgrade→downgrade→upgrade döngüsü ve
+  model↔migration eşitliği CI'da test ediliyor (`tests/test_migrations.py`).
+- Backend bu geliştirme makinesinde canlı veritabanına karşı koşturulamıyor
+  (Docker yok); CI'daki gerçek PostGIS servisi bu boşluğu kapatıyor.
 
 ---
 
@@ -119,8 +123,8 @@ Uyarlama katmanı yaklaşımı (bkz. §5) bu farkı da route içinde eritebilir.
 1. **Zarf** (§1) + **liste alanları** (§4) — backend şemasına `access`,
    `district`, `province`, `amenities` objesi, `source`, sayaçlar; yanıtı
    `{places, total, applied, facets}` zarfına al. Migration gerektirir
-   (access + district/province sütunları) → önce ilk gerçek Alembic
-   migration'ı yazılmalı.
+   (access + district/province sütunları) — baseline migration artık depoda,
+   bu iş onun üstüne yeni bir revizyon olarak gelir.
 2. **id kararı** (§2) — `osm_ref` ikincil anahtar önerilir; UUID iç kimlik
    kalır, API dışa OSM ref konuşur.
 3. **Parametreler** (§5) — `open_now`, `sort` backend'e; `q` çözümlemesi

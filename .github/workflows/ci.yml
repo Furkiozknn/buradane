@@ -44,7 +44,9 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: uv sync --all-extras
+        # Plain sync: pyproject defines dependency-groups (dev), not extras,
+        # and uv installs groups by default - --all-extras was a no-op here.
+        run: uv sync
 
       - name: Run tests
         run: uv run pytest tests/ -v

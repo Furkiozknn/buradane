@@ -95,7 +95,7 @@ buradane/
 │   │   │       └── admin/          # Moderasyon + mekan düzenleme
 │   │   ├── components/             # İstemci bileşenleri
 │   │   └── lib/                    # Saf mantık — TESTLERİN ODAĞI
-│   ├── tests/                      # Vitest, 111 test
+│   ├── tests/                      # Vitest, 143 test
 │   ├── vitest.config.mts
 │   └── package.json
 ├── backend/
@@ -131,6 +131,11 @@ buradane/
 | `frontend/src/lib/admin-auth.ts` | Admin token denetimi | **Fail-closed**: token tanımsızsa uçlar kapalı. Bunu "dev kolaylığı" için açığa çevirme |
 | `frontend/src/lib/rate-limit.ts` | Katkı hız sınırı | Bellek içi; neyi vaat etmediği dosyanın başında yazılı |
 | `frontend/src/app/globals.css` | Tasarım token'ları | Renkler yalnızca buradan gelir |
+| `frontend/src/lib/admin-divisions.ts` | Resmî il/ilçe listesi (server-only) | `fs` kullanır — client bundle'a import etme; dosya yoksa null döner, heuristik devralır |
+| `backend/app/api/reports.py` | Rapor moderasyonu | Satır kilidi (`with_for_update`) çift-karar yarışını engeller — kaldırma |
+| `backend/app/core/ratelimit.py` | Yazma + doğrulama hız sınırları | `_verification_limiter` konsensüsün altında boyutlandırılır (`consensus-1`); gevşetmek token-rotasyon saldırısını geri açar |
+| `backend/app/services/bootstrap.py` | Admin bootstrap kapısı | Varsayılan JWT secret ile admin oluşturmayı **reddeder**; `main.py`'deki uyarı ikinci katmandır — ikisini de yumuşatma |
+| `backend/alembic/versions/` | Migration zinciri | Baseline'ı düzenleme; yeni revizyon ekle, `downgrade` doldur |
 
 ---
 
@@ -159,8 +164,8 @@ altına kopyalar. **Bu adımı atlama** — atlanırsa harita sessizce boş aç�
 ```bash
 cd backend
 docker compose up -d db          # Postgres + PostGIS
-uv sync --all-extras
-uv run alembic upgrade head      # (henüz gerçek migration yok — bkz. §7)
+uv sync
+uv run alembic upgrade head      # baseline migration şemayı kurar (bkz. §7)
 uv run uvicorn app.main:app --reload
 uv run pytest tests/ -v
 ```
@@ -269,8 +274,8 @@ Bu kurallar estetik değil. İhlali, kullanıcının boşuna yürümesi demektir
    kullanıcı önerisi) söylenmemiş her alan `null` kalır.
 3. **Kaynak dürüstlüğü.** OSM verisi ODbL'dir; kullanıcı katkısı değildir.
    `source.slug` her kaydın gerçekte nereden geldiğini söyler.
-4. **Sessizlik kapalı demek değil.** Mekanların yalnızca %5,5'inde çalışma
-   saati var. "Kapalıları gizle" filtresi yalnızca *kapalı olduğu bilinenleri*
+4. **Sessizlik kapalı demek değil.** Mekanların yalnızca küçük bir
+   azınlığında (ulusal veri büyüdükçe ~%3) çalışma saati var. "Kapalıları gizle" filtresi yalnızca *kapalı olduğu bilinenleri*
    eler.
 5. **Girilemeyen yer listelenmez.** `access=private`/`no` olan kayıtlar sonuç
    döndürmez. `customers`/`permit` döner **ama etiketlenir**.
@@ -305,9 +310,12 @@ Bu kurallar estetik değil. İhlali, kullanıcının boşuna yürümesi demektir
 
 - Şema değişikliği **her zaman** Alembic migration'ı ile yapılır.
   `create_all` ile üretilen şemaya güvenip migration atlama.
-- **Bilinen durum:** depoda henüz gerçek bir Alembic migration'ı yok; şema
-  `create_all` ile kuruluyor (README "Bilinen Sınırlamalar" bunu söylüyor).
-  İlk migration'ı yazmak yüksek riskli bir iştir ve maintainer onayı ister.
+- **Mevcut durum:** baseline migration depoda
+  (`backend/alembic/versions/a237a92362fc_baseline_full_v1_schema.py`) ve
+  `upgrade → downgrade → upgrade` döngüsü CI'da gerçek Postgres+PostGIS'e
+  karşı test edilir (`backend/tests/test_migrations.py`). Yeni şema
+  değişikliği bu zincirin üstüne yeni bir revizyon ekler; baseline'ı
+  düzenlemek yasaktır.
 - PostGIS'e özgü tipleri (geometri, GiST indeks) SQLite'a uydurmaya çalışma.
   Coğrafi indeksleme bilinçli bir mimari karardır.
 - Migration'lar geri alınabilir olmalı (`downgrade` doldurulmuş).
@@ -317,7 +325,7 @@ Bu kurallar estetik değil. İhlali, kullanıcının boşuna yürümesi demektir
 ## 8. Test kuralları
 
 ```bash
-cd frontend && npm test          # 111 test geçmeli
+cd frontend && npm test          # 143 test geçmeli
 cd frontend && npx tsc --noEmit  # 0 hata
 cd frontend && npm run lint      # 0 hata
 cd frontend && npm run build     # başarılı
@@ -463,7 +471,8 @@ Bunları issue açıp tartışmadan PR'a dönüştürme:
 - Commit mesajları **neyi neden** değiştirdiğini anlatır. Bu depodaki mevcut
   commit'ler bu standarttadır; `git log` ile bak.
 - Claude Code'un ürettiği commit'lerin sonunda:
-  `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>`
+  `Co-Authored-By: Claude <model adı> <noreply@anthropic.com>` (o an hangi
+  model çalışıyorsa)
 
 ---
 
@@ -475,10 +484,12 @@ Bunlar README'de de yazılıdır ve bilinçli kabul edilmiş durumlardır:
 - Admin API'leri `BURADANE_ADMIN_TOKEN` ile korunur ama yönetim panelinin
   **görüntülenmesi** token istemez (kuyruk sunucuda render edilir); yalnızca
   yazma işlemleri kapalıdır.
-- Depoda gerçek bir Alembic migration'ı yoktur.
-- Backend hiç canlı veritabanına karşı çalıştırılmamıştır (bu geliştirme
-  ortamında Docker/Postgres yoktu).
-- 81 ilin 9'u kapsanmaktadır.
+- Backend bu geliştirme makinesinde canlı veritabanına karşı çalıştırılamaz
+  (Docker/Postgres yok); DB'ye ihtiyaç duyan testler yerelde skip eder ve
+  **CI'daki gerçek Postgres+PostGIS servisinde koşar** (`.github/workflows/ci.yml`).
+- İl kapsamı hâlâ kısmi: ulusal çekim il il ilerliyor (güncel liste şehir
+  seçicisinde); hedef 81 il / 973 ilçe ve ilçe referans listesi
+  (`frontend/data/admin-divisions.json`) tamamlandı.
 - Fotoğraf desteği yoktur (OSM'de ölçülen kapsam %2,3 olduğu için ertelendi).
 - `backend/app/core/config.py`, var olmayan bir `docs/ARCHITECTURE.md`
   dosyasına atıf yapar.

@@ -96,7 +96,7 @@ ve arayüz doğrudan çalışır.
 ```bash
 cd backend
 docker compose up -d db      # PostgreSQL + PostGIS
-uv sync --all-extras
+uv sync
 uv run uvicorn app.main:app --reload
 ```
 
@@ -108,6 +108,14 @@ Değişkenlerin tam listesi:
 > Docker yoksa backend testlerinin veritabanı gerektiren kısmı **atlanır
 > (skip)**, başarısız olmaz. Yerelde "geçti" görmen, o testlerin çalıştığı
 > anlamına gelmez. CI'da gerçek bir PostGIS servisiyle koşarlar.
+
+> **Bilinen tuzak:** `BURADANE_ADMIN_EMAIL`/`BURADANE_ADMIN_PASSWORD`
+> ayarlarsan ama `BURADANE_JWT_SECRET`'i varsayılan değerinde bırakırsan,
+> uygulama açılışta bilerek `RuntimeError` ile durur — herkese açık depoda
+> yazılı bir secret ile admin hesabı oluşturmayı reddeder. Çözüm: önce
+> `python -c "import secrets; print(secrets.token_urlsafe(48))"` ile bir
+> secret üretip `BURADANE_JWT_SECRET`'e koy. Admin değişkenlerini hiç
+> ayarlamazsan bu kapı devreye girmez.
 
 ---
 
