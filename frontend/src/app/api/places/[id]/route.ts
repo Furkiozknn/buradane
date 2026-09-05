@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { applyOverride, getPlaceById } from "@/lib/places-repository";
-import { getPlaceOverrides } from "@/lib/contributions-store";
+import { getPlaceOverrides, listCommunityPlaces } from "@/lib/contributions-store";
 
 /** GET /api/places/:id - mirrors the backend's `GET /places/{place_id}`.
  * OSM ids contain a slash (`node/123`), so the route receives them
@@ -10,7 +10,10 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
   const { id } = await context.params;
   const decodedId = decodeURIComponent(id);
 
-  const place = getPlaceById(decodedId);
+  // A shared link to a community-added place has to open, or approving a
+  // suggestion produces a record nobody can reach.
+  const communityPlaces = await listCommunityPlaces();
+  const place = getPlaceById(decodedId, communityPlaces);
   if (!place) {
     return NextResponse.json({ error: "Mekan bulunamadı" }, { status: 404 });
   }

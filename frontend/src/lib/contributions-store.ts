@@ -20,39 +20,115 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import type { Contribution, ContributionKind, Place } from "./types";
+import type {
+  Amenities,
+  CategorySlug,
+  Contribution,
+  ContributionKind,
+  Place,
+  PriceType,
+} from "./types";
+import { AMENITIES } from "./categories";
+import { parseLocality } from "./administrative";
 
-const STORE_PATH = path.join(process.cwd(), "data", "contributions.json");
+const AMENITY_KEYS = AMENITIES.map((a) => a.key);
+
+/**
+ * Resolved per call rather than once at import, and overridable with
+ * BURADANE_DATA_DIR. Two consumers need that: tests, which must never write
+ * into the real data/ directory, and deployments that mount a writable
+ * volume somewhere other than the working directory. Reading an env var per
+ * operation costs nothing next to the file IO beside it.
+ */
+function storePath(): string {
+  const dir = process.env.BURADANE_DATA_DIR ?? path.join(process.cwd(), "data");
+  return path.join(dir, "contributions.json");
+}
 
 interface StoreShape {
   contributions: Contribution[];
   /** placeId -> partial Place, applied on read by the detail endpoint. */
   overrides: Record<string, Partial<Place>>;
+  /**
+   * Places the community added and a moderator approved.
+   *
+   * Kept beside the OSM snapshot rather than written into it, for the same
+   * reason overrides are: the snapshot has to stay re-importable, and a
+   * re-pull from Overpass must never silently erase what people contributed.
+   */
+  places: Place[];
 }
 
-const EMPTY: StoreShape = { contributions: [], overrides: {} };
+/**
+ * A FUNCTION, not a shared constant, and that distinction was a real bug:
+ * the previous `{ ...EMPTY }` spread copied the top level but shared the
+ * nested array and objects, so every "file missing" read handed out the
+ * SAME contributions array - and each store-creating write pushed into it.
+ * State then leaked across what should have been independent empty stores:
+ * the concurrency suite caught earlier tests' first entries reappearing
+ * inside brand-new temp directories, one per store creation, exactly the
+ * signature of a shared mutable default.
+ */
+function emptyStore(): StoreShape {
+  return { contributions: [], overrides: {}, places: [] };
+}
 
 async function readStore(): Promise<StoreShape> {
   try {
-    const raw = await fs.readFile(STORE_PATH, "utf-8");
+    const raw = await fs.readFile(storePath(), "utf-8");
     const parsed = JSON.parse(raw) as Partial<StoreShape>;
     return {
       contributions: parsed.contributions ?? [],
       overrides: parsed.overrides ?? {},
+      places: parsed.places ?? [],
     };
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
-    if (code === "ENOENT") return { ...EMPTY };
+    if (code === "ENOENT") return emptyStore();
     // A corrupt store must not take down the whole app - the demo degrades
     // to "no contributions yet" and logs, rather than 500ing every request.
     console.error("contributions store okunamadı, boş kabul ediliyor:", error);
-    return { ...EMPTY };
+    return emptyStore();
   }
 }
 
 async function writeStore(store: StoreShape): Promise<void> {
-  await fs.mkdir(path.dirname(STORE_PATH), { recursive: true });
-  await fs.writeFile(STORE_PATH, JSON.stringify(store, null, 2), "utf-8");
+  const target = storePath();
+  await fs.mkdir(path.dirname(target), { recursive: true });
+  // Write-then-rename, never write-in-place: the whole file is rewritten on
+  // every mutation, so a process dying mid-write used to leave it truncated
+  // and unparseable - and readStore treats a corrupt file as "no
+  // contributions yet", which silently discards everyone's work. A rename is
+  // atomic at the filesystem level (Node maps it to MOVEFILE_REPLACE_EXISTING
+  // on Windows), so readers only ever see the old complete file or the new
+  // complete file.
+  const tmp = `${target}.tmp-${process.pid}-${Math.random().toString(36).slice(2, 8)}`;
+  await fs.writeFile(tmp, JSON.stringify(store, null, 2), "utf-8");
+  await fs.rename(tmp, target);
+}
+
+/**
+ * Serialises every read-modify-write against the store.
+ *
+ * Each mutator does readStore -> mutate -> writeStore, and two of those
+ * interleaving silently drop one side's changes: both read the same file,
+ * both write the whole file back, last writer wins. Two people tapping
+ * "Evet, burada" at the same moment is not a hypothetical - it is the
+ * app's single most common write. A promise chain is enough because this
+ * store is one Node process's JSON file by design (see the module
+ * docstring); cross-process locking is the database's job, and the real
+ * backend has one.
+ *
+ * The chain swallows the previous operation's error on purpose: one failed
+ * write must not poison the queue for every write after it - the failure
+ * still reaches its own caller through the returned promise.
+ */
+let storeQueue: Promise<unknown> = Promise.resolve();
+
+function withStoreLock<T>(operation: () => Promise<T>): Promise<T> {
+  const run = storeQueue.then(operation, operation);
+  storeQueue = run.catch(() => undefined);
+  return run;
 }
 
 export async function listContributions(): Promise<Contribution[]> {
@@ -61,6 +137,16 @@ export async function listContributions(): Promise<Contribution[]> {
 }
 
 export async function addContribution(input: {
+  kind: ContributionKind;
+  placeId?: string | null;
+  placeName?: string | null;
+  payload?: Record<string, unknown>;
+  note?: string | null;
+}): Promise<Contribution> {
+  return withStoreLock(() => addContributionUnlocked(input));
+}
+
+async function addContributionUnlocked(input: {
   kind: ContributionKind;
   placeId?: string | null;
   placeName?: string | null;
@@ -114,15 +200,59 @@ export async function addContribution(input: {
   return contribution;
 }
 
+export type ModerationResult =
+  | { ok: true; contribution: Contribution }
+  | { ok: false; reason: "not_found" | "unusable_suggestion" };
+
 export async function moderateContribution(
   id: string,
   action: "approve" | "reject",
-): Promise<Contribution | null> {
+): Promise<ModerationResult> {
+  return withStoreLock(() => moderateContributionUnlocked(id, action));
+}
+
+async function moderateContributionUnlocked(
+  id: string,
+  action: "approve" | "reject",
+): Promise<ModerationResult> {
   const store = await readStore();
   const contribution = store.contributions.find((c) => c.id === id);
-  if (!contribution) return null;
+  if (!contribution) return { ok: false, reason: "not_found" };
+
+  // A suggestion that cannot become a place must not be recorded as
+  // approved. Marking it done and creating nothing is the failure this whole
+  // change exists to remove; repeating it for bad payloads would just move
+  // the lie somewhere quieter.
+  if (action === "approve" && contribution.kind === "suggestion" && !contribution.placeId) {
+    if (!placeFromSuggestion(contribution)) {
+      return { ok: false, reason: "unusable_suggestion" };
+    }
+  }
 
   contribution.status = action === "approve" ? "approved" : "rejected";
+
+  // Rejecting after approving is an undo, and has to actually undo. Without
+  // this the place stayed on the map while the queue said "Reddedildi".
+  if (action === "reject" && contribution.kind === "suggestion" && contribution.placeId) {
+    store.places = store.places.filter((p) => p.id !== contribution.placeId);
+    contribution.placeId = null;
+  }
+
+  // Approving a suggestion is what makes contributing mean anything: before
+  // this, the place was marked "Onaylandı" in the queue and then never
+  // appeared anywhere, so the moderator was told the work had landed when
+  // nothing had. The place joins the community layer, never the snapshot.
+  if (action === "approve" && contribution.kind === "suggestion" && !contribution.placeId) {
+    const place = placeFromSuggestion(contribution);
+    if (place) {
+      const existing = store.places.findIndex((p) => p.id === place.id);
+      if (existing === -1) store.places.push(place);
+      else store.places[existing] = place;
+      // Recorded on the contribution so the queue can link to what it created
+      // and a second approval cannot mint a duplicate.
+      contribution.placeId = place.id;
+    }
+  }
 
   // Approving a "closed" report is the only path that changes what the
   // public sees - and even then it sets a status, it doesn't delete data.
@@ -144,7 +274,95 @@ export async function moderateContribution(
   }
 
   await writeStore(store);
-  return contribution;
+  return { ok: true, contribution };
+}
+
+/**
+ * Turns an approved suggestion into a real place.
+ *
+ * Everything the submitter did not tell us stays `null`, exactly as it would
+ * for a sparse OSM node - inventing "no" for an amenity nobody mentioned is
+ * the one thing this codebase refuses to do anywhere else, and a
+ * community-added place is not a licence to start.
+ *
+ * The source is stated as community rather than OSM. Attribution accuracy is
+ * not a formality here: the OSM snapshot is ODbL, and labelling a
+ * user-submitted place as OSM data would misattribute it in both directions.
+ */
+export function placeFromSuggestion(contribution: Contribution): Place | null {
+  const payload = contribution.payload as {
+    name?: string;
+    lat?: number;
+    lon?: number;
+    categories?: CategorySlug[];
+    price_type?: PriceType;
+    address_line?: string;
+    amenities?: Partial<Amenities>;
+  };
+
+  const lat = Number(payload.lat);
+  const lon = Number(payload.lon);
+  // Türkiye's mainland envelope. A suggestion outside it is a bad submission
+  // or a bad geocode, and admitting it would put a pin in the sea.
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  if (lat < 35.5 || lat > 42.5 || lon < 25.5 || lon > 45) return null;
+
+  const categories = (payload.categories ?? []).filter(Boolean);
+  if (categories.length === 0) return null;
+
+  const name = (payload.name ?? contribution.placeName ?? "").trim();
+  if (!name) return null;
+
+  const locality = parseLocality(payload.address_line ?? null);
+
+  const amenities = Object.fromEntries(
+    AMENITY_KEYS.map((key) => [key, payload.amenities?.[key] ?? null]),
+  ) as Amenities;
+
+  return {
+    id: `community/${contribution.id}`,
+    name,
+    lat,
+    lon,
+    categories,
+    status: "active",
+    price_type: payload.price_type ?? "unknown",
+    access: "public",
+    address_line: payload.address_line?.trim() || null,
+    // Resolved from what the submitter typed, through the same table the
+    // OSM records go through - so a contributed place is findable by district
+    // exactly like every other one.
+    district: locality.district?.name ?? null,
+    province: locality.province?.name ?? null,
+    opening_hours_raw: null,
+    is_24h: null,
+    website: null,
+    phone: null,
+    description: contribution.note,
+    operator: null,
+    amenities,
+    source: {
+      slug: "community",
+      name: "Topluluk katkısı",
+      license: "Kullanıcı katkısı",
+      url: "",
+    },
+    // One moderator approval and no independent confirmation yet. Starting
+    // level with a well-tagged OSM node would overstate it; starting at zero
+    // would bury a place somebody stood in front of. It rises the normal way,
+    // through verifications.
+    reliability_score: 0.5,
+    freshness_label: "Topluluk tarafından eklendi",
+    last_verified_at: contribution.createdAt,
+    verification_count: 0,
+    report_count: 0,
+  };
+}
+
+/** Places the community added and a moderator approved. */
+export async function listCommunityPlaces(): Promise<Place[]> {
+  const store = await readStore();
+  return store.places;
 }
 
 export async function getPlaceOverrides(placeId: string): Promise<Partial<Place>> {
@@ -153,15 +371,19 @@ export async function getPlaceOverrides(placeId: string): Promise<Partial<Place>
 }
 
 export async function setPlaceOverride(placeId: string, patch: Partial<Place>): Promise<void> {
-  const store = await readStore();
-  store.overrides[placeId] = { ...(store.overrides[placeId] ?? {}), ...patch };
-  await writeStore(store);
+  return withStoreLock(async () => {
+    const store = await readStore();
+    store.overrides[placeId] = { ...(store.overrides[placeId] ?? {}), ...patch };
+    await writeStore(store);
+  });
 }
 
 export async function clearPlaceOverride(placeId: string): Promise<void> {
-  const store = await readStore();
-  delete store.overrides[placeId];
-  await writeStore(store);
+  return withStoreLock(async () => {
+    const store = await readStore();
+    delete store.overrides[placeId];
+    await writeStore(store);
+  });
 }
 
 export async function listOverrides(): Promise<Record<string, Partial<Place>>> {

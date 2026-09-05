@@ -107,6 +107,13 @@ export function PlaceCard({
             <Badge tone="warning">Şu an kapalı</Badge>
           ) : null}
 
+          {/* Conditional access is worth more room than a feature badge:
+              walking to a place and being turned away is the failure this
+              app exists to prevent, and "buy something first" is a condition
+              people can plan around if they are told. */}
+          {place.access === "customers" && <Badge tone="warning">Müşterilere açık</Badge>}
+          {place.access === "permit" && <Badge tone="warning">İzinle girilir</Badge>}
+
           {features.map((key) => (
             <Badge key={key} tone="neutral">
               {AMENITY_BY_KEY[key].filterLabel}

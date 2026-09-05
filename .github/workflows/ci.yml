@@ -44,7 +44,26 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: uv sync --all-extras
+        # Plain sync: pyproject defines dependency-groups (dev), not extras,
+        # and uv installs groups by default - --all-extras was a no-op here.
+        run: uv sync
 
       - name: Run tests
-        run: uv run pytest tests/ -v
+        # pipefail matters: GitHub's default bash does not set it, so
+        # without it a pytest failure would be masked by tee's exit 0.
+        run: |
+          set -o pipefail
+          uv run pytest tests/ -v -ra | tee pytest-output.txt
+
+      - name: Fail on skipped tests
+        # The trap this closes actually happened: the DB-availability probe
+        # broke, every database test skipped, and CI stayed green while the
+        # suite it exists to run never ran. In CI the Postgres service is
+        # always there, so ANY skip means the harness is lying - fail loudly
+        # instead. (A future legitimately-skipping test must make this
+        # allowlist explicit, not delete the check.)
+        run: |
+          if grep -E "^SKIPPED|[0-9]+ skipped" pytest-output.txt; then
+            echo "::error::Backend tests were SKIPPED in CI - the database suite did not actually run."
+            exit 1
+          fi

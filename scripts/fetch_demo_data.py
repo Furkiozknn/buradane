@@ -60,9 +60,159 @@ CITIES: dict[str, dict] = {
         "bbox": (38.32, 26.98, 38.53, 27.25),
         "cap_scale": 0.45,
     },
+    # Beyond the three pilot cities the caps drop again: the goal is that a
+    # user in Bursa or Gaziantep opens the app and finds their own street,
+    # not that the committed snapshot grows another 30 MB. Each of these is
+    # the metropolitan core, not the whole province - a province bbox would
+    # pull in hundreds of km of farmland for a handful of nodes.
+    "bursa": {
+        "label": "Bursa",
+        "bbox": (40.15, 28.85, 40.28, 29.20),
+        "cap_scale": 0.3,
+    },
+    "antalya": {
+        "label": "Antalya",
+        "bbox": (36.82, 30.60, 36.95, 30.83),
+        "cap_scale": 0.3,
+    },
+    "adana": {
+        "label": "Adana",
+        "bbox": (36.94, 35.20, 37.07, 35.42),
+        "cap_scale": 0.3,
+    },
+    "konya": {
+        "label": "Konya",
+        "bbox": (37.82, 32.40, 37.95, 32.60),
+        "cap_scale": 0.3,
+    },
+    "gaziantep": {
+        "label": "Gaziantep",
+        "bbox": (36.98, 37.28, 37.13, 37.45),
+        "cap_scale": 0.3,
+    },
+    "trabzon": {
+        "label": "Trabzon",
+        "bbox": (40.96, 39.63, 41.03, 39.83),
+        "cap_scale": 0.3,
+    },
+    # Batch three: the remaining largest metropolitan cores, still tightest-box
+    # first. Every bbox is the contiguous urban core, not the province - the
+    # test suite asserts each city's derived centre lands among its own
+    # places, so a box drawn too wide (farmland dragging the median off the
+    # city) fails loudly instead of shipping a map that opens on empty fields.
+    "kayseri": {
+        "label": "Kayseri",
+        "bbox": (38.66, 35.40, 38.78, 35.58),
+        "cap_scale": 0.3,
+    },
+    "mersin": {
+        "label": "Mersin",
+        "bbox": (36.75, 34.50, 36.85, 34.70),
+        "cap_scale": 0.3,
+    },
+    "eskisehir": {
+        "label": "Eskişehir",
+        "bbox": (39.72, 30.42, 39.82, 30.62),
+        "cap_scale": 0.3,
+    },
+    "samsun": {
+        "label": "Samsun",
+        "bbox": (41.24, 36.25, 41.34, 36.42),
+        "cap_scale": 0.3,
+    },
+    "denizli": {
+        "label": "Denizli",
+        "bbox": (37.72, 29.02, 37.82, 29.16),
+        "cap_scale": 0.3,
+    },
+    "kocaeli": {
+        "label": "Kocaeli",
+        # The İzmit core. Gebze is a second, separate urban area in the same
+        # province; it can come later as its own box rather than one giant
+        # rectangle full of the bay and industrial void between them.
+        "bbox": (40.70, 29.80, 40.82, 30.05),
+        "cap_scale": 0.3,
+    },
+    "diyarbakir": {
+        "label": "Diyarbakır",
+        "bbox": (37.86, 40.16, 37.98, 40.32),
+        "cap_scale": 0.3,
+    },
+    "sanliurfa": {
+        "label": "Şanlıurfa",
+        "bbox": (37.10, 38.72, 37.22, 38.87),
+        "cap_scale": 0.3,
+    },
+    "malatya": {
+        "label": "Malatya",
+        "bbox": (38.30, 38.24, 38.40, 38.40),
+        "cap_scale": 0.3,
+    },
+    "van": {
+        "label": "Van",
+        "bbox": (38.44, 43.30, 38.56, 43.45),
+        "cap_scale": 0.3,
+    },
 }
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "frontend" / "data"
+
+ADMIN_DIVISIONS_PATH = DATA_DIR / "admin-divisions.json"
+
+
+def _slugify_tr(name: str) -> str:
+    """ASCII slug in the exact style the hand-written entries use:
+    Sanliurfa-style folding (Şanlıurfa -> sanliurfa, Eskişehir -> eskisehir).
+    The slug is an identifier (file names, city picker keys), so it must be
+    stable and diacritic-free; the label keeps the real spelling."""
+    table = str.maketrans("çğıöşüâîûÇĞİÖŞÜ", "cgiosuaiucgiosu")
+    folded = name.translate(table).lower()
+    return "".join(ch for ch in folded if ch.isalnum())
+
+
+def synthesized_cities() -> dict[str, dict]:
+    """Fetch configs for every province NOT hand-configured above, generated
+    from OSM's own admin boundaries (scripts/fetch_admin_divisions.py).
+
+    Generated rather than hand-written on purpose: 62 hand-typed bounding
+    boxes are 62 chances to drop a city in a field, and the test suite would
+    only catch it after a long fetch had already burned the API budget. The
+    anchor is the province's admin_centre node - the capital city - NOT the
+    polygon centroid, which for oddly shaped provinces lands in empty
+    terrain. A province whose anchor fell back to the centroid is skipped
+    loudly instead of fetched wrongly.
+
+    Box size: half-height 0.055 deg lat, half-width 0.07 deg lon (~12x12 km)
+    covers a mid-size Turkish city's contiguous core. The buyuksehir with
+    wider sprawl are all in the hand-written set already.
+    """
+    if not ADMIN_DIVISIONS_PATH.exists():
+        return {}
+    data = json.loads(ADMIN_DIVISIONS_PATH.read_text(encoding="utf-8"))
+    out: dict[str, dict] = {}
+    for province in data.get("provinces", []):
+        slug = _slugify_tr(province["name"])
+        if slug in CITIES or slug in out:
+            continue
+        if not province.get("center_is_capital", False):
+            print(f"  ! {province['name']}: merkez şehre çapalanamadı (centroid) - atlanıyor, elle bbox gerekli")
+            continue
+        center = province["center"]
+        out[slug] = {
+            "label": province["name"],
+            "bbox": (
+                round(center["lat"] - 0.055, 4),
+                round(center["lon"] - 0.07, 4),
+                round(center["lat"] + 0.055, 4),
+                round(center["lon"] + 0.07, 4),
+            ),
+            "cap_scale": 0.2,
+        }
+    return out
+
+
+def all_city_configs() -> dict[str, dict]:
+    return {**CITIES, **synthesized_cities()}
 
 # category slug -> (OSM selectors, per-category cap)
 # The cap exists because some categories (parking, benches) would otherwise
@@ -162,6 +312,33 @@ def run_query(query: str, *, max_rounds: int = 4) -> list[dict]:
     raise RuntimeError(f"Overpass'ın tüm endpoint'leri {max_rounds} turda da başarısız: {last_error}")
 
 
+def _access_from_tags(tags: dict[str, str]) -> str:
+    """Who can actually walk in.
+
+    This is not decoration. A toilet tagged ``access=private`` is a toilet
+    inside someone's property; listing it as a public toilet sends a person
+    in a hurry to a door that will not open, which is the single worst thing
+    this app can do. 146 places in the current snapshot carry a restricting
+    value - 17 of them toilets - and every one of them was being served as
+    freely usable.
+
+    ``customers`` and ``permit`` are kept, because they *are* usable under a
+    condition a person can meet ("buy a tea, use the toilet" is how most of
+    Istanbul's usable toilets actually work). They are labelled rather than
+    hidden. ``private``/``no`` are not public facilities at all.
+    """
+    value = (tags.get("access") or "").strip().lower()
+    if value in {"private", "no"}:
+        return "private"
+    if value == "customers":
+        return "customers"
+    if value in {"permit", "permissive"}:
+        return "permit"
+    # Missing means unrestricted for civic features in OSM practice, and
+    # "yes"/"designated"/"public" say so explicitly.
+    return "public"
+
+
 def _tri_state(value: str | None, true_values: set[str], false_values: set[str]) -> bool | None:
     """OSM tag -> True/False/None. `None` means genuinely unknown and must
     never be rendered as "no" in the UI - the whole reason the schema uses
@@ -219,7 +396,15 @@ def normalize(element: dict, category: str) -> dict | None:
         "categories": [category],
         "status": "active",
         "price_type": price_type,
+        "access": _access_from_tags(tags),
         "address_line": _address_from_tags(tags),
+        # Raw values only. Canonicalisation (Turkish folding, the 2018 Eyüp
+        # rename, neighbourhoods mislabelled as districts, "İlçe/İl" crammed
+        # into one field) happens in frontend/src/lib/administrative.ts,
+        # which is where it can be tested and where a snapshot taken before
+        # any of it existed still benefits.
+        "district_raw": tags.get("addr:district") or tags.get("addr:suburb"),
+        "province_raw": tags.get("addr:province") or tags.get("addr:city"),
         "opening_hours_raw": opening_hours,
         "is_24h": True if opening_hours == "24/7" else None,
         "website": tags.get("website") or tags.get("contact:website"),
@@ -227,7 +412,13 @@ def normalize(element: dict, category: str) -> dict | None:
         "description": tags.get("description"),
         "operator": tags.get("operator"),
         "amenities": {
-            "wheelchair_accessible": _tri_state(tags.get("wheelchair"), {"yes"}, {"no"}),
+            # `designated` is OSM's strongest accessibility claim - purpose-built
+            # for wheelchair users - and treating it as unknown understated
+            # exactly the places that took the trouble to say so.
+            # `limited` stays unknown: it means partially accessible, which is
+            # neither a yes nor a no, and it is surfaced verbatim on the
+            # detail page instead of being flattened into a boolean.
+            "wheelchair_accessible": _tri_state(tags.get("wheelchair"), {"yes", "designated"}, {"no"}),
             "has_ramp": _tri_state(tags.get("ramp"), {"yes"}, {"no"}),
             "baby_changing": _tri_state(tags.get("changing_table"), {"yes"}, {"no"}),
             "child_friendly": True if category == "cocuk-alani" else _tri_state(tags.get("playground"), {"yes"}, {"no"}),
@@ -358,19 +549,32 @@ def fetch_city(city: str, city_config: dict) -> int:
 
 
 def main() -> None:
+    cities = all_city_configs()
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--city",
-        choices=sorted(CITIES),
+        choices=sorted(cities),
         action="append",
         help="Sadece bu şehri çek (birden fazla kez verilebilir). Varsayılan: hepsi.",
     )
+    parser.add_argument(
+        "--only-missing",
+        action="store_true",
+        help="Yalnızca henüz places.<il>.json dosyası olmayan illeri çek - "
+        "81 ilin kalanını tamamlarken tek doğru mod: bitenler atlanır, "
+        "yarıda kesilen koşu kaldığı yerden sürer.",
+    )
     args = parser.parse_args()
 
-    selected = args.city or list(CITIES)
+    selected = args.city or sorted(cities)
+    if args.only_missing:
+        selected = [c for c in selected if not (DATA_DIR / f"places.{c}.json").exists()]
+        print(f"--only-missing: {len(selected)} il eksik: {', '.join(selected) or '(hiç)'}")
+
     total = 0
     for city in selected:
-        total += fetch_city(city, CITIES[city])
+        total += fetch_city(city, cities[city])
 
     print(f"\n✓ Toplam {total} mekan, {len(selected)} şehir: {', '.join(selected)}")
 

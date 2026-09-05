@@ -1,0 +1,112 @@
+name: 🐛 Hata bildirimi
+description: Beklenmeyen bir davranış, hata veya çökme bildir
+title: "[Hata]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Hata bildirdiğin için teşekkürler.
+
+        **Veri hatası mı bildiriyorsun?** (yanlış konum, kapanmış mekan, eksik
+        bilgi) Bu genellikle uygulama hatası değil, kaynak veri hatasıdır ve
+        doğru yer [OpenStreetMap](https://www.openstreetmap.org)'tir. Orada
+        düzelttiğin kayıt bir sonraki çekimde buraya gelir ve OSM'i kullanan
+        herkese yarar. Emin değilsen yine de buraya yaz, birlikte bakarız.
+
+  - type: textarea
+    id: ne-oldu
+    attributes:
+      label: Ne oldu?
+      description: Gözlemlediğin davranışı anlat.
+      placeholder: Filtre panelini açıp "Bebek bakım" seçtiğimde liste boşalıyor ama sayaç 12 yazıyor.
+    validations:
+      required: true
+
+  - type: textarea
+    id: ne-bekliyordun
+    attributes:
+      label: Ne olmasını bekliyordun?
+    validations:
+      required: true
+
+  - type: textarea
+    id: adimlar
+    attributes:
+      label: Yeniden üretme adımları
+      description: |
+        Numaralı, tek tek izlenebilir adımlar. Bu bölüm bir hatanın
+        düzeltilebilir olup olmadığını belirleyen en önemli kısımdır.
+      placeholder: |
+        1. http://localhost:3000 adresini aç
+        2. Konum izni verme (yaklaşık konum modunda kal)
+        3. Sağ üstteki filtre düğmesine bas
+        4. "Bebek bakım" çipine dokun
+        5. Liste boşalıyor ama çipteki sayı 12
+    validations:
+      required: true
+
+  - type: dropdown
+    id: bolum
+    attributes:
+      label: Hangi bölümde?
+      multiple: true
+      options:
+        - Harita
+        - Arama
+        - Filtreler
+        - Mekan detayı
+        - Katkı gönderme (öneri / bildirim)
+        - Yönetim paneli
+        - Çevrimdışı çalışma
+        - Veri (mekan bilgisi yanlış/eksik)
+        - Backend / API
+        - Bilmiyorum
+    validations:
+      required: true
+
+  - type: input
+    id: url
+    attributes:
+      label: Bağlantı
+      description: |
+        Uygulama URL'i durumu taşır (`?k=tuvalet&y=41.00&x=28.97&z=14`).
+        Adres çubuğundaki bağlantıyı yapıştırırsan hatayı birebir görebiliriz.
+      placeholder: http://localhost:3000/?k=tuvalet&y=41.00820&x=28.97840&z=14
+
+  - type: textarea
+    id: ortam
+    attributes:
+      label: Ortam
+      description: Bildiğin kadarını yaz.
+      value: |
+        - İşletim sistemi:
+        - Tarayıcı ve sürümü:
+        - Cihaz: (masaüstü / mobil)
+        - Node sürümü (`node -v`):
+        - Depo sürümü (`git rev-parse --short HEAD`):
+    validations:
+      required: false
+
+  - type: textarea
+    id: konsol
+    attributes:
+      label: Konsol çıktısı / hata mesajı
+      description: Tarayıcı konsolunda veya terminalde hata varsa yapıştır.
+      render: text
+
+  - type: textarea
+    id: gorsel
+    attributes:
+      label: Ekran görüntüsü veya kayıt
+      description: Görsel bir hataysa çok yardımcı olur. Buraya sürükleyip bırakabilirsin.
+
+  - type: checkboxes
+    id: kontroller
+    attributes:
+      label: Kontroller
+      options:
+        - label: Aynı hata için açık bir issue olup olmadığına baktım
+          required: true
+        - label: Harita boş açılıyorsa `next dev` değil `npm run dev` kullandığımı doğruladım (CONTRIBUTING.md'deki "Sık karşılaşılan tuzaklar")
+          required: false

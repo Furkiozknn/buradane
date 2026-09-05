@@ -1,0 +1,108 @@
+name: 🌱 Katkıcı görevi (Good first issue)
+description: "Maintainer'lar için: yeni katkıcıların alabileceği bir görev tanımla"
+title: "[Görev]: "
+labels: ["good first issue", "help wanted"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Bu şablon **görevi tanımlayan kişi** içindir (genelde maintainer).
+
+        Amaç: bir katkıcının issue'yu okuyup, kimseye soru sormadan
+        başlayabilmesi. Eksik bırakılan her bilgi, katkıcının vazgeçme sebebidir.
+
+        **Görevi almak istiyorsan** aşağıya yorum yaz; issue sana atanır.
+
+  - type: textarea
+    id: gorev
+    attributes:
+      label: Görev
+      description: Ne yapılacak? Tek paragraf, net.
+      placeholder: |
+        `frontend/src/lib/categories.ts` içindeki `SEARCH_SYNONYMS` tablosuna
+        "bisiklet park yeri" için Türkçe arama kalıpları ekle. Şu an
+        "bisikletimi bırakacak yer" gibi bir sorgu hiçbir kategoriye çözülmüyor.
+    validations:
+      required: true
+
+  - type: textarea
+    id: neden
+    attributes:
+      label: Neden gerekli?
+      description: Katkıcının işin değerini görmesi için.
+    validations:
+      required: true
+
+  - type: textarea
+    id: dosyalar
+    attributes:
+      label: İlgili dosyalar
+      description: Katkıcının nereye bakacağını bilmesi için tam yollar yaz.
+      placeholder: |
+        - `frontend/src/lib/categories.ts` — SEARCH_SYNONYMS tablosu
+        - `frontend/tests/places-repository.test.ts` — "natural-language search" bloğu
+      render: markdown
+    validations:
+      required: true
+
+  - type: textarea
+    id: adimlar
+    attributes:
+      label: Önerilen adımlar
+      description: Katkıcının izleyebileceği sıra.
+      value: |
+        1.
+        2.
+        3. Testi ekle/güncelle
+        4. `cd frontend && npm test && npx tsc --noEmit && npm run lint`
+    validations:
+      required: true
+
+  - type: textarea
+    id: bitti-tanimi
+    attributes:
+      label: Bitti tanımı
+      description: Hangi koşullar sağlanınca bu iş tamamlanmış sayılır?
+      value: |
+        - [ ] Davranış değişikliği bir testle kilitlendi
+        - [ ] `npm test` geçiyor
+        - [ ] `npx tsc --noEmit` temiz
+        - [ ] `npm run lint` temiz
+        - [ ] `npm run build` başarılı
+    validations:
+      required: true
+
+  - type: dropdown
+    id: zorluk
+    attributes:
+      label: Zorluk
+      options:
+        - Kolay — bir iki dosya, mevcut kalıbı takip etmek yeterli
+        - Orta — birkaç dosya, bir miktar tasarım kararı var
+        - Zor — mimari anlayış gerektiriyor
+    validations:
+      required: true
+
+  - type: dropdown
+    id: alan
+    attributes:
+      label: Alan
+      multiple: true
+      options:
+        - frontend
+        - backend
+        - database
+        - data / openstreetmap
+        - documentation
+        - ui/ux
+        - test
+    validations:
+      required: true
+
+  - type: textarea
+    id: ipuclari
+    attributes:
+      label: İpuçları ve tuzaklar
+      description: |
+        Bu görevde takılınabilecek noktalar. Örneğin Türkçe harf katlaması,
+        `null` semantiği, MapLibre worker kopyalama adımı gibi.

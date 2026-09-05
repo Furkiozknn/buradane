@@ -11,9 +11,11 @@ import {
   RefreshCw,
   Search,
   SlidersHorizontal,
+  WifiOff,
   X,
 } from "lucide-react";
 
+import { AMENITY_BY_KEY, NOTICE_CONTENT } from "@/lib/categories";
 import { CategoryChips, CategoryGrid } from "./CategoryPicker";
 import { PlaceCard, PlaceCardSkeleton } from "./PlaceCard";
 import { PlaceDetail } from "./PlaceDetail";
@@ -22,7 +24,9 @@ import { SuggestPlaceDialog } from "./SuggestPlaceDialog";
 import { CityPicker } from "./CityPicker";
 import { DESKTOP_QUERY, useMediaQuery } from "@/lib/use-media-query";
 import { buildUrlSearch, type UrlState } from "@/lib/url-state";
+import { haversineMeters } from "@/lib/geo";
 import { useFavorites } from "@/lib/use-favorites";
+import { useOnlineStatus } from "@/lib/use-online-status";
 import type { CategorySlug, Place, PlaceQueryResult, SortKey } from "@/lib/types";
 
 // The map is browser-only (WebGL + window). Loading it without SSR is
@@ -34,16 +38,12 @@ const MapCanvas = dynamic(() => import("./MapCanvas"), {
 
 const DEFAULT_RADIUS_M = 2000;
 
-/** Where each pilot city's map opens when we can't use the device location.
- * Keyed by the slug the data pipeline writes, so a new city file shows up in
- * the picker as soon as its centre is listed here. */
-const CITY_CENTERS: Record<string, { lat: number; lon: number }> = {
-  istanbul: { lat: 41.0082, lon: 28.9784 },
-  ankara: { lat: 39.9208, lon: 32.8541 },
-  izmir: { lat: 38.4237, lon: 27.1428 },
-};
-
-const FALLBACK_CENTER = CITY_CENTERS.istanbul;
+/** Only used before any city data has loaded. Every real city's centre is
+ * derived from that city's own places (see `medianCenter` in
+ * places-repository) - a hand-maintained table meant a city whose centre
+ * nobody remembered to add silently opened on İstanbul, which made "adding a
+ * city is a config row plus a fetch run" not quite true. */
+const FALLBACK_CENTER = { lat: 41.0082, lon: 28.9784 };
 
 type LocationState =
   | { status: "idle" }
@@ -65,6 +65,17 @@ const SNAP_HEIGHT: Record<SheetSnap, string> = {
   full: "calc(100dvh - 136px)",
 };
 
+/** Turns the query engine's relaxation report into one short Turkish phrase. */
+function relaxationDetail(relaxedBy: PlaceQueryResult["applied"]["relaxedBy"]): string {
+  const dropped = relaxedBy?.amenities ?? [];
+  if (dropped.length > 0) {
+    const labels = dropped.map((key) => AMENITY_BY_KEY[key]?.filterLabel ?? key);
+    return `${labels.join(", ").toLocaleLowerCase("tr-TR")} filtresi kaldırıldı`;
+  }
+  if (relaxedBy?.needle) return `“${relaxedBy.needle}” aranmadı`;
+  return "arama genişletildi";
+}
+
 export function AppShell({
   datasetMeta,
   initialState,
@@ -73,7 +84,7 @@ export function AppShell({
     attribution: string;
     generatedAt: string;
     count: number;
-    cities: { slug: string; label: string; count: number }[];
+    cities: { slug: string; label: string; count: number; center: { lat: number; lon: number } }[];
   };
   /** Parsed from the request URL on the server (see app/page.tsx), so the
    * server and client agree on the first paint - reading `window` here
@@ -124,6 +135,32 @@ export function AppShell({
     return [...cities].sort((a, b) => b.count - a.count)[0]?.slug ?? "istanbul";
   });
   const [cityPickerOpen, setCityPickerOpen] = useState(false);
+  /**
+   * Whether the map follows the device or a chosen city.
+   *
+   * Before this existed, granting location permission removed the city
+   * switcher entirely - the chip that opens it only appeared when we had
+   * *failed* to locate someone. So the moment the app worked as intended,
+   * looking at another city became impossible short of panning there, which
+   * across nine cities is not a real option. Planning a trip is an ordinary
+   * reason to open a civic map.
+   */
+  const [followUser, setFollowUser] = useState(true);
+
+  // An explicit "take me here". The nonce is what makes re-picking the city
+  // you already have selected work after you have panned away from it.
+  const [mapFocus, setMapFocus] = useState<{
+    center: { lat: number; lon: number };
+    zoom: number;
+    nonce: number;
+  } | null>(null);
+  const deviceOnline = useOnlineStatus();
+  // Set from the response itself: the service worker labels an answer it had
+  // to serve from cache because the network was gone. That is the only
+  // trustworthy offline signal - `navigator.onLine` stays true on a captive
+  // portal, and cleared as soon as a request gets through again.
+  const [servedFromCache, setServedFromCache] = useState(false);
+  const online = deviceOnline && !servedFromCache;
 
   // Keep the address bar in step with what's on screen. replaceState, not
   // push: panning the map or toggling a filter shouldn't bury the user's
@@ -142,15 +179,10 @@ export function AppShell({
     window.history.replaceState(null, "", `${window.location.pathname}${search}`);
   }, [category, filters, query, detailPlace, viewport]);
 
-  const cityCenter = CITY_CENTERS[activeCity] ?? FALLBACK_CENTER;
-  const center = location.status === "granted" ? { lat: location.lat, lon: location.lon } : cityCenter;
-  // Deliberately excludes "locating": while the request is in flight we have
-  // not fallen back to anything yet, and claiming we did would be both wrong
-  // and (on desktop, where this drives the sidebar offset) a layout jump the
-  // moment the real fix arrives.
-  const usingApproximateLocation =
-    location.status === "denied" || location.status === "unavailable" || location.status === "idle";
-
+  const cityCenter =
+    datasetMeta.cities.find((c) => c.slug === activeCity)?.center ?? FALLBACK_CENTER;
+  const followingUser = followUser && location.status === "granted";
+  const center = followingUser ? { lat: location.lat, lon: location.lon } : cityCenter;
   /** Debounced free-text search: typing shouldn't fire a request per keystroke. */
   useEffect(() => {
     const timer = setTimeout(() => setQuery(searchInput), 320);
@@ -183,14 +215,28 @@ export function AppShell({
 
       try {
         const response = await fetch(`/api/places?${params.toString()}`);
+        // The service worker answers with 503 + this header when it has
+        // neither a cached copy nor a network. Treating it as a normal
+        // server error would tell the user something is broken, when what
+        // actually happened is that they walked out of coverage.
+        const wasOffline = response.headers.get("x-buradane-offline") !== null;
+        if (response.status === 503 && wasOffline) {
+          if (requestId !== requestIdRef.current) return;
+          setServedFromCache(true);
+          setError("Çevrimdışısınız ve bu arama daha önce yüklenmemiş");
+          return;
+        }
         if (!response.ok) throw new Error(`Sunucu ${response.status} döndü`);
         const data = (await response.json()) as PlaceQueryResult;
         // A slower earlier request must never overwrite a newer result.
         if (requestId !== requestIdRef.current) return;
+        setServedFromCache(wasOffline);
         setResult(data);
         setStaleViewport(false);
       } catch (err) {
         if (requestId !== requestIdRef.current) return;
+        // A hard failure means nothing answered at all - not even the cache.
+        setServedFromCache(true);
         setError(err instanceof Error ? err.message : "Sonuçlar getirilemedi");
       } finally {
         if (requestId === requestIdRef.current) setLoading(false);
@@ -217,6 +263,27 @@ export function AppShell({
     void fetchPlaces(bbox ? { bbox } : {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [category, filters, query, sort, location.status]);
+
+  // Coming back into coverage refreshes on its own. Making someone who just
+  // walked out of a metro station notice a stale list and hunt for a refresh
+  // button is the kind of small friction that decides whether a tool gets
+  // used twice. Only fires on the offline -> online edge, and only when the
+  // last attempt actually failed, so a normal session never re-queries here.
+  // Keyed to the device flag, not to `online`: `online` only turns true once
+  // a request has succeeded, so waiting on it would mean waiting for the
+  // refresh this effect is supposed to trigger.
+  const wasDegradedRef = useRef(false);
+  useEffect(() => {
+    wasDegradedRef.current = error !== null || servedFromCache;
+  }, [error, servedFromCache]);
+
+  useEffect(() => {
+    if (!deviceOnline) return;
+    if (!wasDegradedRef.current) return;
+    const bbox = viewport?.bbox;
+    void fetchPlaces(bbox ? { bbox } : {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deviceOnline]);
 
   // A link that names a place opens straight on that place's detail, rather
   // than dropping the recipient on a map and making them hunt for it.
@@ -279,13 +346,22 @@ export function AppShell({
   // device, so the server has no way to filter by it (and shouldn't).
   const allPlaces = result?.places ?? [];
   const places = showFavoritesOnly ? allPlaces.filter((p) => favoriteIds.includes(p.id)) : allPlaces;
+  // Counts come from the server's facets, which are computed over the whole
+  // match set. Counting the loaded page here under-reported every category
+  // by whatever the 200-item cap cut off - on a 480-result query that was
+  // more than half the map.
+  //
+  // The exception is the favourites view, which is a client-side filter over
+  // a list the server never sees (the saved ids never leave the device), so
+  // there its counts have to be derived here.
   const counts = useMemo(() => {
+    if (!showFavoritesOnly) return (result?.facets.categories ?? {}) as Record<string, number>;
     const map: Record<string, number> = {};
     for (const place of places) {
       for (const slug of place.categories) map[slug] = (map[slug] ?? 0) + 1;
     }
     return map;
-  }, [places]);
+  }, [result, places, showFavoritesOnly]);
 
   const selectedPlace = useMemo(
     () => places.find((p) => p.id === selectedId) ?? null,
@@ -368,14 +444,19 @@ export function AppShell({
     [places, selectedId, openDetail],
   );
 
-  const cityOptions = useMemo(
-    () =>
-      datasetMeta.cities.map((city) => ({
-        ...city,
-        center: CITY_CENTERS[city.slug] ?? FALLBACK_CENTER,
-      })),
-    [datasetMeta.cities],
-  );
+  const cityOptions = datasetMeta.cities;
+
+  /** The city closest to the device, when we have a fix. With nine cities
+   * and counting, "which one am I in?" stops being obvious from a list. */
+  const nearestCity = useMemo(() => {
+    if (location.status !== "granted") return null;
+    let best: { slug: string; d: number } | null = null;
+    for (const city of datasetMeta.cities) {
+      const d = haversineMeters({ lat: location.lat, lon: location.lon }, city.center);
+      if (!best || d < best.d) best = { slug: city.slug, d };
+    }
+    return best?.slug ?? null;
+  }, [location, datasetMeta.cities]);
   const activeCityLabel =
     datasetMeta.cities.find((c) => c.slug === activeCity)?.label ?? "İstanbul";
 
@@ -407,6 +488,7 @@ export function AppShell({
             ? { center: initial.center, zoom: initial.zoom }
             : null
         }
+        flyTo={mapFocus}
         onSelect={(place) => {
           if (!place) {
             setSelectedId(null);
@@ -473,27 +555,46 @@ export function AppShell({
             with no explanation is exactly the state users misread as "the
             app is broken". On desktop this sits in the sidebar column, so
             it doesn't need to compete with the map. */}
-        {usingApproximateLocation && (
-          // mt-3, not mt-2: at mt-2 this row clipped the bottom of the 48px
-          // filter button above it, leaving it only ~6px of free space and
-          // failing the touch-target spacing check.
-          <div className="pointer-events-auto mx-auto mt-3 flex max-w-2xl justify-center">
-            {/* pointer-events-none: this is a passive label sitting over the
-                map, and without it the strip silently eats drag-to-pan. */}
-            {/* Tappable: when we can't locate someone, "pick your city" is a
-                far better recovery than a blank map or a re-prompt the
-                browser will silently swallow. */}
-            <button
-              type="button"
-              onClick={() => setCityPickerOpen(true)}
-              className="flex min-h-11 items-center gap-1.5 rounded-full bg-surface/95 px-3 py-1 text-[12px] font-medium text-text-secondary shadow-sm transition-colors hover:bg-surface"
-            >
-              <MapPin size={12} aria-hidden />
-              {location.status === "denied" ? "Konum kapalı" : "Yaklaşık konum"} — {activeCityLabel}
-              <span className="text-brand">&middot; değiştir</span>
-            </button>
-          </div>
-        )}
+        {/* Always present, in every location state.
+            It used to appear only when locating had FAILED, which meant the
+            city switcher vanished the moment the app worked as intended -
+            and a control that comes and goes with permission state also
+            shifted everything below it. Its label states which of the two
+            things the map is actually centred on, since "near me" and
+            "showing Ankara" produce very different result lists. */}
+        {/* mt-3, not mt-2: at mt-2 this row clipped the bottom of the 48px
+            filter button above it, leaving it only ~6px of free space and
+            failing the touch-target spacing check. */}
+        <div className="pointer-events-auto mx-auto mt-3 flex max-w-2xl justify-center">
+          {/* Tappable: when we can't locate someone, "pick your city" is a
+              far better recovery than a blank map or a re-prompt the browser
+              will silently swallow - and when we can, it is how you go look
+              somewhere else. */}
+          <button
+            type="button"
+            onClick={() => setCityPickerOpen(true)}
+            className="flex min-h-11 items-center gap-1.5 rounded-full bg-surface/95 px-3 py-1 text-[12px] font-medium text-text-secondary shadow-sm transition-colors hover:bg-surface"
+          >
+            <MapPin size={12} aria-hidden />
+            {/* Three genuinely different situations, said differently.
+                "Yaklaşık konum" is a confession that we could not locate the
+                user, so it must not appear when we know exactly where they
+                are and they simply chose to look at another city. That case
+                gets the bare city name - the pin icon already says what it
+                means, and naming it any harder would drag in Turkish case
+                suffixes that differ per city (Ankara'ya, İzmir'e, Bursa'ya). */}
+            {followingUser ? (
+              <>Konumundasın</>
+            ) : location.status === "granted" ? (
+              <>{activeCityLabel}</>
+            ) : (
+              <>
+                {location.status === "denied" ? "Konum kapalı" : "Yaklaşık konum"} — {activeCityLabel}
+              </>
+            )}
+            <span className="text-brand">&middot; {followingUser ? "şehir seç" : "değiştir"}</span>
+          </button>
+        </div>
       </div>
 
       {/* "Search this area" - the map moved, so results may not match what's
@@ -512,7 +613,9 @@ export function AppShell({
           style={{
             background: "var(--text)",
             color: "var(--bg)",
-            top: isDesktop ? "1.25rem" : usingApproximateLocation ? "8rem" : "5rem",
+            // The location chip is always present now, so this no longer
+            // has to branch on whether it is showing.
+            top: isDesktop ? "1.25rem" : "8rem",
             left: isDesktop ? "calc(416px + (100% - 416px) / 2)" : "50%",
           }}
         >
@@ -525,19 +628,31 @@ export function AppShell({
 
       <button
         type="button"
-        onClick={requestLocation}
+        onClick={() => {
+          // Doubles as "back to me" once the user has gone off to browse
+          // another city, which is why it re-centres even when we already
+          // have a fix.
+          setFollowUser(true);
+          if (location.status === "granted") {
+            setViewport(null);
+            setStaleViewport(false);
+            setMapFocus({ center: { lat: location.lat, lon: location.lon }, zoom: 15, nonce: Date.now() });
+          } else {
+            requestLocation();
+          }
+        }}
         className="absolute right-3 z-20 flex h-12 w-12 items-center justify-center rounded-full border border-border bg-surface shadow transition-transform"
         style={{
           bottom: isDesktop
             ? "calc(1.5rem + env(safe-area-inset-bottom))"
             : `calc(${SNAP_HEIGHT[snap]} + 12px)`,
         }}
-        aria-label="Konumumu göster"
+        aria-label={followingUser ? "Konumumu yeniden ortala" : "Konumuma dön"}
       >
         <LocateFixed
           size={20}
           className={location.status === "locating" ? "animate-spin" : ""}
-          style={{ color: location.status === "granted" ? "var(--location)" : "var(--text-secondary)" }}
+          style={{ color: followingUser ? "var(--location)" : "var(--text-secondary)" }}
         />
       </button>
 
@@ -555,7 +670,7 @@ export function AppShell({
         // approximate-location chip is showing above it.
         style={
           isDesktop
-            ? { top: usingApproximateLocation ? 118 : 76 }
+            ? { top: 118 }
             : { height: SNAP_HEIGHT[snap] }
         }
       >
@@ -581,6 +696,51 @@ export function AppShell({
         ) : (
           <>
             <div className="shrink-0">
+              {/* Placed inside the sheet rather than floating over the map:
+                  the map itself keeps working offline from cached tiles, so
+                  a full-width alarm across it would overstate the problem.
+                  What is actually at stake is whether the *list* is current,
+                  and this sits directly above the list. */}
+              {!online && (
+                <div
+                  role="status"
+                  className="mx-4 mb-1 mt-2 flex items-center gap-2 rounded-lg bg-surface-sunken px-3 py-2 text-[12.5px] text-text-secondary"
+                >
+                  <WifiOff size={14} className="shrink-0" aria-hidden />
+                  <span>
+                    Çevrimdışısınız
+                    {result ? " — daha önce yüklenen sonuçlar gösteriliyor." : " — bağlantı gelince yenilenecek."}
+                  </span>
+                </div>
+              )}
+              {/* Some questions have a correct answer that open geodata
+                  structurally does not hold. Returning every pharmacy in the
+                  city for "nöbetçi eczane" is not a partial answer, it is a
+                  wrong one - so the app says so and points at the roster
+                  that is actually authoritative. */}
+              {result?.applied.notices?.map((notice) => {
+                const content = NOTICE_CONTENT[notice];
+                if (!content) return null;
+                return (
+                  <div
+                    key={notice}
+                    className="mx-4 mb-1 mt-2 rounded-lg px-3 py-2 text-[12.5px] leading-relaxed"
+                    style={{ background: "var(--warning-soft)", color: "var(--text)" }}
+                  >
+                    {content.text}{" "}
+                    <a
+                      href={content.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-semibold underline underline-offset-2"
+                      style={{ color: "var(--text)" }}
+                    >
+                      {content.linkLabel}
+                    </a>
+                  </div>
+                );
+              })}
+
               {category === null && (isDesktop || snap !== "peek") ? (
                 <CategoryGrid selected={category} onSelect={setCategory} counts={counts} />
               ) : (
@@ -616,7 +776,14 @@ export function AppShell({
                         }`}
                 </p>
                 {result?.applied.relaxed && !loading && (
-                  <span className="shrink-0 text-[11.5px] text-text-muted">arama genişletildi</span>
+                  // Naming what was dropped matters more than admitting that
+                  // something was: "arama genişletildi" leaves the user
+                  // wondering whether these results still answer their
+                  // question. Saying "bebek bakım filtresi kaldırıldı" lets
+                  // them judge it themselves.
+                  <span className="shrink-0 text-[11.5px] text-text-muted" title={relaxationDetail(result.applied.relaxedBy)}>
+                    {relaxationDetail(result.applied.relaxedBy)}
+                  </span>
                 )}
                 {/* Sorting matters here in a way it wouldn't in a normal
                     directory: open civic data is uneven, so the nearest
@@ -750,6 +917,7 @@ export function AppShell({
         <FilterSheet
           filters={filters}
           resultCount={result?.total ?? 0}
+          facets={result?.facets ?? null}
           onChange={setFilters}
           onClose={() => setFiltersOpen(false)}
         />
@@ -763,13 +931,21 @@ export function AppShell({
         <CityPicker
           cities={cityOptions}
           activeCity={activeCity}
+          nearestCity={nearestCity}
           onSelect={(city) => {
             setActiveCity(city.slug);
             setCityPickerOpen(false);
+            // Choosing a city means "show me there", which outranks a device
+            // fix until the user taps the locate button again.
+            setFollowUser(false);
             // Selecting a city is an explicit "take me here", so the map
-            // jumps rather than waiting for the next viewport query.
+            // jumps rather than waiting for the next viewport query. This
+            // used to only clear the app's viewport state, which moved the
+            // list and the label while the map itself stayed on the old
+            // city - MapLibre reads `initialView` exactly once.
             setViewport(null);
             setStaleViewport(false);
+            setMapFocus({ center: city.center, zoom: 12.5, nonce: Date.now() });
           }}
           onClose={() => setCityPickerOpen(false)}
         />

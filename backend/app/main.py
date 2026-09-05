@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -7,6 +8,26 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import admin_regions, auth, categories, health, places, reports
 from app.core.config import settings
+
+logger = logging.getLogger("buradane")
+
+# Two layers, deliberately, and they are not redundant. The bootstrap gate
+# in services/bootstrap.py REFUSES to create an admin under the shipped
+# default secret - that is the control. But the gate only runs when
+# BURADANE_ADMIN_EMAIL/PASSWORD are set: a deployment whose admin row
+# already exists (bootstrapped once, env vars later removed - the rotation
+# path bootstrap.py itself suggests) starts silently with a secret anyone
+# can read in this public repository, and every one of that admin's tokens
+# is forgeable. This warning is the signal for exactly that quiet case. It
+# vanished once already, in a merge that judged the gate sufficient; the
+# regression test in tests/test_default_secret_warning.py is why it cannot
+# vanish quietly a second time.
+if settings.jwt_secret == "dev-secret-change-in-production":
+    logger.warning(
+        "BURADANE_JWT_SECRET varsayilan degerde - bu deger herkese acik depoda"
+        " yazili. Uretimde mutlaka degistirin:"
+        " python -c \"import secrets; print(secrets.token_urlsafe(48))\""
+    )
 
 
 @asynccontextmanager

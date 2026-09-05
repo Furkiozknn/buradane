@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { listContributions, listOverrides } from "@/lib/contributions-store";
 import { allPlaces, categoryCounts, datasetMeta } from "@/lib/places-repository";
 import { AdminQueue } from "@/components/AdminQueue";
+import { AdminTokenGate } from "@/components/AdminTokenGate";
 import { AdminPlaceEditor } from "@/components/AdminPlaceEditor";
 import { CATEGORIES } from "@/lib/categories";
 
@@ -80,22 +81,30 @@ export default async function AdminPage() {
         </div>
       </section>
 
-      <section className="mb-8">
-        <h2 className="mb-3 text-[15px] font-semibold text-text">Mekan düzenle</h2>
-        <AdminPlaceEditor />
-      </section>
+      {/* One gate around both tools, not one each: a single token entry,
+          and the mutation routes behind them re-verify every request anyway
+          (the gate is honest UI, not the security boundary). */}
+      <AdminTokenGate>
+        <section className="mb-8">
+          <h2 className="mb-3 text-[15px] font-semibold text-text">Mekan düzenle</h2>
+          <AdminPlaceEditor />
+        </section>
 
-      <section>
-        <h2 className="mb-3 text-[15px] font-semibold text-text">
-          Moderasyon kuyruğu
-          {pending.length > 0 && (
-            <span className="ml-2 rounded-full bg-warning-soft px-2 py-0.5 text-[12px] font-semibold text-warning">
-              {pending.length} bekliyor
-            </span>
-          )}
-        </h2>
-        <AdminQueue initialContributions={contributions} />
-      </section>
+        <section>
+          <h2 className="mb-3 text-[15px] font-semibold text-text">
+            Moderasyon kuyruğu
+            {pending.length > 0 && (
+              <span className="ml-2 rounded-full bg-warning-soft px-2 py-0.5 text-[12px] font-semibold text-warning">
+                {pending.length} bekliyor
+              </span>
+            )}
+          </h2>
+          {/* No server prop: the list itself is fetched client-side after
+              the gate accepts a token (see AdminQueue). Only the aggregate
+              counts above render from the server - numbers, not notes. */}
+          <AdminQueue />
+        </section>
+      </AdminTokenGate>
     </main>
   );
 }

@@ -1,0 +1,187 @@
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import { GET as adminAuthGET } from "@/app/api/admin/auth/route";
+import { PATCH as placePATCH, DELETE as placeDELETE } from "@/app/api/admin/places/[id]/route";
+import { PATCH as contributionPATCH } from "@/app/api/admin/contributions/[id]/route";
+import { GET as contributionsGET } from "@/app/api/contributions/route";
+
+/**
+ * Route-level auth tests: the handlers themselves, not the helper.
+ *
+ * security.test.ts proves checkAdminAuth works in isolation - and that
+ * proved nothing about the routes, which is exactly how DELETE
+ * /api/admin/places/:id shipped with NO guard at all while the commit
+ * message said the admin API was protected. Two independent reviewers
+ * found it; this file exists so the third time a handler forgets the two
+ * guard lines, a test goes red instead of a reviewer going looking.
+ *
+ * Next.js route handlers are plain functions taking (Request, context), so
+ * calling them directly needs no server - the same reason the gap was so
+ * cheap to close and so inexcusable to leave open.
+ */
+
+const TOKEN_VAR = "BURADANE_ADMIN_TOKEN";
+const TOKEN = "route-test-token";
+
+let tempDir: string;
+
+// Every failed auth now spends budget in a per-address failure brake that
+// lives for the whole module. Each test gets its own address so one test's
+// deliberate failures can never lock a later test out; the brake tests pick
+// their own fixed addresses on top.
+let ipCounter = 0;
+let testIp: string;
+
+beforeEach(async () => {
+  process.env[TOKEN_VAR] = TOKEN;
+  testIp = `10.20.30.${ipCounter++}`;
+  // The store must never touch real runtime data from tests.
+  tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "buradane-routes-"));
+  process.env.BURADANE_DATA_DIR = tempDir;
+});
+
+afterEach(async () => {
+  delete process.env[TOKEN_VAR];
+  delete process.env.BURADANE_DATA_DIR;
+  await fs.rm(tempDir, { recursive: true, force: true });
+});
+
+function req(headers: Record<string, string> = {}, body?: unknown): Request {
+  return new Request("http://localhost/api/test", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-forwarded-for": testIp, ...headers },
+    body: body === undefined ? null : JSON.stringify(body),
+  });
+}
+
+const ctx = (id: string) => ({ params: Promise.resolve({ id }) });
+
+describe("admin route guards", () => {
+  it("PATCH place: no token → 401, wrong token → 401", async () => {
+    expect((await placePATCH(req({}, { status: "active" }), ctx("node/1"))).status).toBe(401);
+    expect(
+      (await placePATCH(req({ "x-admin-token": "yanlis" }, { status: "active" }), ctx("node/1")))
+        .status,
+    ).toBe(401);
+  });
+
+  it("DELETE place: no token → 401 - the guard two reviews found missing", async () => {
+    const response = await placeDELETE(req(), ctx("node/1"));
+    expect(response.status).toBe(401);
+  });
+
+  it("DELETE place: wrong token → 401", async () => {
+    const response = await placeDELETE(req({ "x-admin-token": "yanlis" }), ctx("node/1"));
+    expect(response.status).toBe(401);
+  });
+
+  it("DELETE place: valid token reaches the handler (404 for a ghost id)", async () => {
+    // Auth must run BEFORE existence: a 404 on an unauthenticated request
+    // would leak which ids exist.
+    const response = await placeDELETE(req({ "x-admin-token": TOKEN }), ctx("node/boyle-yok"));
+    expect(response.status).toBe(404);
+  });
+
+  it("PATCH contribution: no token → 401, and auth precedes existence", async () => {
+    expect(
+      (await contributionPATCH(req({}, { action: "approve" }), ctx("hayalet"))).status,
+    ).toBe(401);
+    expect(
+      (
+        await contributionPATCH(
+          req({ "x-admin-token": TOKEN }, { action: "approve" }),
+          ctx("hayalet"),
+        )
+      ).status,
+    ).toBe(404);
+  });
+
+  it("auth probe: no token → 401 with a body, valid token → 204", async () => {
+    const denied = await adminAuthGET(req());
+    expect(denied.status).toBe(401);
+    const granted = await adminAuthGET(req({ "x-admin-token": TOKEN }));
+    expect(granted.status).toBe(204);
+  });
+
+  it("moderation queue read: no token → 401, valid token → 200", async () => {
+    // The queue's rows carry free-text notes written for moderators; the
+    // read side is an admin surface even though the path is not /api/admin.
+    expect((await contributionsGET(req())).status).toBe(401);
+    const granted = await contributionsGET(req({ "x-admin-token": TOKEN }));
+    expect(granted.status).toBe(200);
+    const body = (await granted.json()) as { contributions: unknown[] };
+    expect(Array.isArray(body.contributions)).toBe(true);
+  });
+
+  it("auth probe rate-limits an address after repeated tries", async () => {
+    // Distinct forwarded address per test run so parallel tests never share
+    // a bucket; eleven tries, the eleventh must hit the brake - and the 429
+    // must arrive regardless of whether the guess was right.
+    const ip = `10.9.9.${Math.floor(Math.random() * 250)}`;
+    let last: Response | null = null;
+    for (let i = 0; i < 11; i += 1) {
+      last = await adminAuthGET(req({ "x-forwarded-for": ip, "x-admin-token": "yanlis" }));
+    }
+    expect(last!.status).toBe(429);
+    expect(last!.headers.get("Retry-After")).toBeTruthy();
+    const rightTokenSameIp = await adminAuthGET(
+      req({ "x-forwarded-for": ip, "x-admin-token": TOKEN }),
+    );
+    expect(rightTokenSameIp.status).toBe(429);
+  });
+
+  it("wrong-token attempts against ANY admin surface lock the address out", async () => {
+    // The adversarial review's finding: the brake sat only on the probe
+    // endpoint, so a brute-force script aimed at the queue read or a
+    // mutation route instead and got unthrottled 401s. The brake now lives
+    // inside checkAdminAuth itself - prove it via a MUTATION route, and mix
+    // surfaces to prove the budget is shared across all of them.
+    const ip = "10.99.99.1";
+    for (let i = 0; i < 5; i += 1) {
+      const r = await placeDELETE(req({ "x-forwarded-for": ip, "x-admin-token": "yanlis" }), ctx("node/1"));
+      expect(r.status).toBe(401);
+    }
+    for (let i = 0; i < 5; i += 1) {
+      const r = await contributionsGET(req({ "x-forwarded-for": ip, "x-admin-token": "yanlis" }));
+      expect(r.status).toBe(401);
+    }
+    const eleventh = await placeDELETE(req({ "x-forwarded-for": ip, "x-admin-token": "yanlis" }), ctx("node/1"));
+    expect(eleventh.status).toBe(429);
+    expect(eleventh.headers.get("Retry-After")).toBeTruthy();
+    // While locked out, even the RIGHT token answers 429 - the lockout must
+    // not double as a confirmation oracle.
+    const rightWhileLocked = await placeDELETE(req({ "x-forwarded-for": ip, "x-admin-token": TOKEN }), ctx("node/1"));
+    expect(rightWhileLocked.status).toBe(429);
+    // A different address is unaffected.
+    const otherAddress = await placeDELETE(
+      req({ "x-forwarded-for": "10.99.99.2", "x-admin-token": TOKEN }),
+      ctx("node/boyle-yok"),
+    );
+    expect(otherAddress.status).toBe(404);
+  });
+
+  it("valid-token traffic never spends the failure budget", async () => {
+    // A real admin working the queue at full speed must not rate-limit
+    // themselves: only FAILURES count. Twelve valid reads (more than the
+    // 10-per-minute failure cap), then a wrong token still gets the plain
+    // 401 - the budget is untouched.
+    for (let i = 0; i < 12; i += 1) {
+      const r = await contributionsGET(req({ "x-admin-token": TOKEN }));
+      expect(r.status).toBe(200);
+    }
+    const wrongAfter = await contributionsGET(req({ "x-admin-token": "yanlis" }));
+    expect(wrongAfter.status).toBe(401);
+  });
+
+  it("fails CLOSED at the route when no token is configured", async () => {
+    delete process.env[TOKEN_VAR];
+    expect((await placeDELETE(req({ "x-admin-token": "her sey" }), ctx("node/1"))).status).toBe(401);
+    expect(
+      (await placePATCH(req({ "x-admin-token": "her sey" }, {}), ctx("node/1"))).status,
+    ).toBe(401);
+  });
+});

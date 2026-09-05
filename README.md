@@ -21,9 +21,10 @@ süresi) ve **"bu bilgi hâlâ doğru mu?"** (tek dokunuşla "Evet, burada"
 doğrulaması, tazelik etiketi, kaynak ve güvenilirlik skoru).
 
 > **Demo ekran görüntüsü:** Henüz eklenmedi. Aşağıdaki "Hızlı Başlangıç →
-> Frontend" adımlarıyla demoyu yerelde çalıştırıp **11.406 gerçek
-> OpenStreetMap mekanı** (İstanbul 6.481, Ankara 2.654, İzmir 2.271)
-> üzerinde harita ve liste arayüzünü görebilirsiniz.
+> Frontend" adımlarıyla demoyu yerelde çalıştırıp **25.000'i aşkın gerçek
+> OpenStreetMap mekanı** üzerinde harita ve liste arayüzünü görebilirsiniz.
+> Kapsam il il 81'e doğru genişliyor; güncel il listesi ve sayılar şehir
+> seçicide görünür (son doğrulanan taban 2026-09-05: 44 il / 36.637 mekan; ulusal çekim sürüyor).
 
 ## v1 Kapsamı
 
@@ -98,7 +99,8 @@ npm run dev
 ```
 
 `http://localhost:3000` adresinde açılır. Demo verisi
-(`frontend/data/places.*.json`, üç şehir / 11.406 gerçek OSM mekanı, ~9 MB)
+(`frontend/data/places.*.json`, il başına bir dosya; 81'e doğru il il
+büyüyor - güncel il listesi ve sayılar uygulamanın şehir seçicisinde)
 repoyla birlikte gelir - sadece demoyu denemek için "Veri Pipeline"
 adımlarını tekrar koşmanız gerekmez, onlar yalnızca anlık görüntüyü
 yenilemek ya da yeni bir şehir eklemek istediğinizde gerekli.
@@ -110,8 +112,20 @@ npm run build
 npm run start
 ```
 
-`npm run lint` (ESLint) dışında şu an otomatik bir frontend test suite'i
-yok.
+Testler:
+
+```bash
+npm test          # Vitest, tek koşu
+npm run test:watch
+npm run lint      # ESLint
+```
+
+Test kapsamı bilinçli olarak **saf mantık katmanına** odaklı: sorgu motoru,
+çalışma saati ayrıştırıcısı, geo hesapları, Türkçe metin normalizasyonu ve URL
+durumu. Bu projede şimdiye kadar çıkan gerçek regresyonların tamamı bu
+katmandaydı (bir doğrulamanın güvenilirlik puanını *düşürmesi*, "KADIKÖY"
+ile "Kadıköy"ün eşleşmemesi, artakalan sorgu kelimelerinin sonucu sıfırlaması,
+"çocuğumla" kelimesinin "çocuk" olarak tanınmaması), React ağacında değil.
 
 ## Mimari
 
@@ -262,9 +276,9 @@ gerekmez.
    Bu yüzden konteyner kategoriler (`park`, `spor`) 120 metre yarıçapındaki
    tesislerden amenity bayrağı devralır - **kategoriler asla
    birleştirilmez** (çeşme parka dönüşmez) ve OSM'in açıkça belirttiği bir
-   değer asla üzerine yazılmaz. Gerçek çalıştırmada üç şehirde toplam 815
-   konteyner mekan zenginleştirildi, 871 amenity bayrağı eklendi (her şehir
-   dosyasının kendi `enrichment` alanına bakın).
+   değer asla üzerine yazılmaz. İlk üç şehirlik anlık görüntüde 815
+   konteyner mekan zenginleştirildi, 871 amenity bayrağı eklendi; güncel
+   sayılar için her şehir dosyasının kendi `enrichment` alanına bakın.
 3. **`repair_demo_data.py`** - Overpass'a tekrar gitmeden, zaten çekilmiş
    anlık görüntüdeki veri kusurlarını onarır: erken bir sürümün eksik ev
    numarasını koşulsuz araya sıkıştırmasından kalma "Yerebatan Caddesi
@@ -285,9 +299,12 @@ FastAPI otomatik dokümantasyonu çalışırken `/docs` (Swagger) ve `/redoc`
 | `GET /places/{id}` | Yer detayı (tüm amenity'ler, kaynak/güncellik bilgisi) |
 | `POST /places/suggest` | Yeni yer öner (→ `pending_review`, moderasyon bekler) |
 | `POST /places/{id}/reports` | Bir yer hakkında sorun bildir (kapalı, bakımda, bilgi yanlış, ...) |
-| `POST /places/{id}/verifications` | Bir alanı doğrula (ör. "evet, tekerlekli sandalye erişimi var") - anında uygulanır, güvenilirlik skorunu yeniden hesaplar |
+| `POST /places/{id}/verifications` | Bir alanı doğrula (ör. "evet, tekerlekli sandalye erişimi var") - tek bildirim anında uygulanmaz: alan ancak en az `verification_consensus` (vars. 2) farklı katılımcı aynı değeri doğrularsa değişir; her bildirim güvenilirlik skorunu yeniden hesaplatır |
 | `GET /categories` | Aktif kategori listesi |
 | `GET /admin-regions?level=&parent_id=` | İdari hiyerarşi gezinme (il → ilçe → mahalle) |
+| `POST /auth/login` | `{email, password}` → `{access_token}`. Token almanın tek yolu; self-serve kayıt bilinçli olarak yok. |
+| `GET /reports?status=` | Moderasyon kuyruğu (admin token'ı gerektirir), en eski önce. |
+| `PATCH /reports/{id}` | `{"action": "accept"\|"reject"}` - raporu karara bağlar; kabul edilen tür mekana etkisini uygular, her iki karar da bekleyen-rapor baskısını kaldırır. Satır kilidiyle yarışsız. |
 | `GET /health` | Sağlık kontrolü |
 
 Tüm yazma uçları hesapsız kullanılabilir (`user_id` opsiyonel) - gizlilik-
@@ -303,7 +320,7 @@ Tüm yazma uçları hesapsız kullanılabilir (`user_id` opsiyonel) - gizlilik-
 | `POST /api/contributions` | "Mekan öner" / "yanlış bilgi bildir" / "kapalı bildir" - `kind` alanıyla ayrışan tek bir koleksiyon ucu (backend'de bunlar iki ayrı REST ucu: `POST /places/suggest` ve `POST /places/{id}/reports`; demo aynı `pending`-öncelikli moderasyon semantiğini tek bir uçta uyguluyor). Her zaman `pending` olarak başlar, herkese açık aramaya asla doğrudan düşmez. |
 | `PATCH /api/admin/places/:id` | Mekan düzenleme: ad, durum, ücret tipi, amenity'ler. `null` birinci sınıf bir değer - "bilinmiyor" ifade edilebilir kalır, yoksa moderatör yalnızca var/yok diyebilirdi. Düzenleme, OSM anlık görüntüsüne **katman** olarak yazılır: kaynak kayıt değişmez (yeniden içe aktarılabilir, lisanslı ve upstream id'si var), yani bir yazım düzeltmesi sonraki içe aktarımda sessizce kaybolmaz. |
 | `DELETE /api/admin/places/:id` | O mekandaki tüm düzeltmeleri geri alır, ham OSM kaydına döner. **Kalıcı silme yok**: artık var olmayan bir yer `permanently_closed` olur - aramadan kalkar ama kayıt (ve nedeni) denetim için durur. |
-| `PATCH /api/admin/contributions/:id` | `{ "action": "approve" \| "reject" }` - moderasyon onayı. Yalnızca `approve`, ve yalnızca rapor türü katkılar için bir override üretir (`report_closed` → `status: temporarily_closed`, `report_incorrect` → düşük güvenilirlik skoru). **Bu uçta kimlik doğrulama yok** - bilinçli, dokümante edilmiş bir demo sınırlaması (bkz. "Bilinen Sınırlamalar"); prod backend'de eşdeğer uçlar JWT arkasında olurdu. |
+| `PATCH /api/admin/contributions/:id` | `{ "action": "approve" \| "reject" }` - moderasyon onayı. Yalnızca `approve`, ve yalnızca rapor türü katkılar için bir override üretir (`report_closed` → `status: temporarily_closed`, `report_incorrect` → düşük güvenilirlik skoru). **`BURADANE_ADMIN_TOKEN` ile korunur** (`Authorization: Bearer <token>` ya da `x-admin-token` başlığı); token tanımlı değilse uç kapalıdır. |
 
 ## Kategoriler ve Filtreler
 
@@ -380,7 +397,6 @@ uv run pytest tests/ -v
 - **Saf mantık testleri** (`test_reliability.py`, `test_dedup_math.py`) - veritabanı gerektirmez, her ortamda çalışır.
 - **Veritabanı-bağımlı testler** (`test_search.py`, `test_dedup_integration.py`, `test_moderation.py`) - gerçek bir PostGIS bağlantısı gerektirir; `docker compose up -d` çalışıyorsa yerelde, yoksa CI'da (`.github/workflows/ci.yml`, `postgis/postgis` servis konteyneri ile) çalışır. Veritabanı yoksa bu testler **skip** edilir, başarısız olmaz - sahte bir "yeşil" göstermek yerine dürüst bir sinyal.
 
-Frontend'de şu an otomatik bir test suite'i yok - sadece `npm run lint`
 (ESLint) var.
 
 ## Güvenlik
@@ -390,7 +406,18 @@ Frontend'de şu an otomatik bir test suite'i yok - sadece `npm run lint`
 - JWT tabanlı opsiyonel kimlik doğrulama (`python-jose`), şifreler `bcrypt` ile hash'lenir. Token almanın tek yolu `POST /auth/login`; self-serve kayıt bilinçli olarak yok (hesaplar yalnızca moderasyon/atıf içindir).
 - Moderasyon çıkışı: `BURADANE_ADMIN_EMAIL`/`BURADANE_ADMIN_PASSWORD` ile açılışta tek bir bootstrap moderatör oluşturulur (varsa asla üzerine yazılmaz); bekleyen raporlar `GET /reports` ile listelenir, `PATCH /reports/{id}` (`{"action": "accept"|"reject"}`) ile karara bağlanır. Kabul edilen `closed`/`under_maintenance` raporu mekanı `temporarily_closed` yapar, `reopened` tekrar `active` yapar, `broken_amenity` ilgili amenity bayrağını temizler; bilgilendirme türleri (yanlış konum/bilgi vb.) yalnızca raporu kapatır - veri düzeltmesi bilinçli bir admin düzenlemesi olarak kalır. Her iki karar da raporun güvenilirlik skoru üzerindeki bekleyen-rapor baskısını kaldırır.
 - `BURADANE_JWT_SECRET` artık yalnızca bir tavsiye değil: bootstrap admin yapılandırılmışken secret hâlâ varsayılan dev değerindeyse sunucu açılışta **açıkça reddeder** (herkesin forge edebileceği bir admin token'ı, admin'in hiç olmamasından kötüdür). Keşif-amaçlı, admin'siz çalıştırmalar secret'sız çalışmaya devam eder.
-- Demo'nun moderasyon onay ucunda (`PATCH /api/admin/contributions/:id`) kimlik doğrulama yok - bilinçli, dokümante edilmiş bir demo sınırlaması, bkz. "Bilinen Sınırlamalar".
+- **Demo'nun admin uçları (`/api/admin/*`) paylaşılan-sır token'ı ile korunur.**
+  Sunucuda `BURADANE_ADMIN_TOKEN` tanımlanır (frontend için `frontend/.env.local`);
+  yönetim paneli token'ı bir kez ister ve sekme kapanana kadar `sessionStorage`'da
+  tutar. Karşılaştırma sabit zamanlıdır (`crypto.timingSafeEqual`) ve **token
+  tanımlı değilse uçlar kapalıdır** (fail-closed) - "env unutuldu, panel açık
+  kaldı" durumu tasarımca imkânsız.
+- Katkı gönderimi (`POST /api/contributions`) IP başına kayan-pencere hız
+  sınırına tabidir (10 istek / 10 dk): art arda 2-3 bildirim yapan gerçek
+  kullanıcı hiç fark etmez, script 429 + `Retry-After` alır. Bellek içi
+  olduğu için çok örnekli dağıtımda örnek başına uygulanır - sınırlar
+  `frontend/src/lib/rate-limit.ts` içinde dürüstçe belgelidir.
+
 
 ## Bilinen Tuhaflıklar
 
@@ -446,10 +473,10 @@ sorgunun anlamını sessizce değiştirmek yerine.
 
 ## Bilinen Sınırlamalar
 
-- Demo'nun admin uçlarında (`/api/admin/contributions/:id`,
-  `/api/admin/places/:id`) kimlik doğrulama yok - bilinçli, dokümante
-  edilmiş bir demo sınırlaması; prod backend'de eşdeğer uçlar JWT
-  arkasındadır.
+- Yönetim panelinin **görüntülenmesi** hâlâ token istemez: moderasyon
+  kuyruğu ve istatistikler sunucuda render edilir ve sayfayı açan herkes
+  okuyabilir. Token yalnızca **yazma** işlemlerini korur; sayfa okumasını da
+  kapatmak çerez tabanlı bir oturum gerektirir ve henüz yapılmadı.
 - Demo'daki güvenilirlik skoru / doğrulama sayısı / tazelik etiketleri
   gerçek bir topluluk geçmişinden değil, OSM kaydının doluluğundan
   **deterministik olarak üretiliyor** (demo'nun hiç topluluk geçmişi yok).
@@ -482,15 +509,108 @@ sorgunun anlamını sessizce değiştirmek yerine.
   `backend/docs/DATA_SOURCES.md`'de not düşüldü, lisans doğrulaması
   entegrasyon öncesi tek tek yapılmalı.
 
+### Katkı döngüsü
+
+"Mekan öner → moderatör onaylar → haritada görünür" zincirinin tamamı çalışıyor.
+Onaylanan öneri, OSM anlık görüntüsüne **yazılmaz** — tıpkı override'lar gibi
+yanında duran bir topluluk katmanına eklenir; böylece anlık görüntü yeniden
+içe aktarılabilir kalır ve Overpass'tan yeni bir çekim insanların katkısını
+sessizce silmez.
+
+Kurallar:
+
+- **Kaynak dürüstlüğü**: kaynağı "Topluluk katkısı", OSM değil. Anlık görüntü
+  ODbL; kullanıcı gönderisini OSM verisi diye etiketlemek her iki yöne de yanlış
+  atf olurdu.
+- **Uydurma yok**: gönderenin söylemediği her özellik `null` kalır. `false`
+  varsaymak, sorulmamış bir mekan için "engelli erişimi yok" iddiası demek olurdu.
+- **Başlangıç güveni 0.5**: bir moderatör onayı var, bağımsız doğrulama yok. Sıfır,
+  birinin önünde durduğu bir mekanı gömer; iyi etiketlenmiş bir OSM node'uyla
+  eşitlemek ise abartı olur. Normal yoldan, doğrulamalarla yükselir.
+- **Onaylanamayan öneri onaylanmış görünmez**: adı, kategorisi ya da Türkiye
+  içinde geçerli konumu olmayan bir öneri 422 döner ve `pending` kalır. "Onaylandı"
+  yazıp hiçbir şey yaratmamak, bu değişikliğin ortadan kaldırdığı hatanın ta kendisi.
+- **Reddetmek gerçekten geri alır**: onayladıktan sonra reddedilen bir önerinin
+  mekanı haritadan kalkar. İki kez onaylamak kopya üretmez.
+
+### Veriye karşı dürüstlük
+
+Açık coğrafi veri eşit dağılmıyor ve bir şeyin *bilinmemesi* ile *olmaması*
+arasındaki fark, bu uygulamada doğrudan birinin boşuna yürümesi demek. Ölçüp
+düzelttiğimiz üç nokta:
+
+| Bulgu | Veri | Karar |
+|---|---|---|
+| `access=private/no` | 146 mekan (17'si tuvalet) | Sonuçlara **hiç girmez**. Özel mülk içindeki bir tuvaleti umumi diye göstermek, acelesi olan birini açılmayacak bir kapıya göndermektir. |
+| `access=customers` / `permit` | 9 tuvalet + diğerleri | **Kalır ama etiketlenir.** "Bir çay al, tuvaleti kullan" İstanbul'da gerçekten işleyen bir çözüm; gizlemek gerçek bir cevabı çöpe atmak olurdu. |
+| `opening_hours` | Mekanların yalnızca **~%4**'ünde var. Üç şehirlik anlık görüntüde ölçülen dağılım: 514 açık, **17 kapalı**, 10.875 bilinmiyor | Filtre yalnızca **kapalı olduğu bilinenleri** eler; çipin adı da bu ("Kapalıları gizle"). 17 kapalıyı ayıklamak için 10.875 kaydı gizlemek, filtreyi işe yaramaz değil zararlı yapardı. |
+| `wheelchair=designated` | 3 mekan | Artık `true`. OSM'nin en güçlü erişilebilirlik iddiasıydı ve "bilinmiyor" sayılıyordu. |
+| `wheelchair=limited` | 70 mekan | Boolean'a **düşürülmüyor** (ne evet ne hayır), detay sayfasında olduğu gibi yazılıyor. |
+
+**Cevabı bizde olmayan sorular.** Bazı aramaların doğru cevabı açık
+haritalama verisinde yapısal olarak yok. En net örnek "nöbetçi eczane":
+nöbet listesi her gün değişir, il eczacı odalarınca belirlenir ve hiçbir OSM
+etiketinde geçmez. Kelimeyi eşleştirip şehirdeki 594 eczaneyi döndürmek eksik
+bir cevap değil, **yanlış** bir cevaptır. Bu yüzden sorgu bunu söylüyor ve
+gerçek kaynağa — TİTCK'nın e-Devlet üzerindeki resmî sorgusuna — yönlendiriyor
+(`QUERY_NOTICES`, `categories.ts`). UI'da özel bir durum olarak değil, tablo
+olarak duruyor; aynı şekle sahip ikinci soru geldiğinde hazır.
+
+Aynı ilke özellik (amenity) alanlarında da geçerli: `null` "bilinmiyor"
+demek, "yok" demek değil, ve bir özellik filtresi asla `null`'ı eşleştirmez.
+Filtre çiplerindeki sayılar bu yüzden önemli — `Gölgelik 1` yazan bir çip,
+takılmış bir filtre gibi değil, henüz kimsenin haritalamadığı bir boşluk gibi
+okunuyor.
+
+### Çevrimdışı çalışma
+
+Bu uygulama tam olarak ağın en kötü olduğu koşullarda kullanılıyor: dışarıda,
+yürürken, acelesi olan biri tarafından, bazen yabancı bir SIM ile. Sinyal
+kesilince bembeyaz olan bir uygulama, tam da önemli olduğu anda işe yaramaz
+hale gelir. `frontend/public/sw.js` bunu çözüyor:
+
+| İstek türü | Strateji | Neden |
+|---|---|---|
+| `/_next/static/*`, `/maplibre/*` | cache-first, süresiz | İçerik-hash'li dosya adları; bayat isabet yapısal olarak imkânsız |
+| Harita karoları (OpenFreeMap) | cache-first + LRU (1200 kayıt) | Bir aylık Kadıköy karosu hâlâ doğru bir Kadıköy haritası; kötü bağlantıda en pahalı iş bu |
+| `/api/places`, `/api/places/*` | network-first (2.5 sn zaman aşımı) + cache fallback | Bağlantı varken tazelik kazanır; yokken önbellekten servis edilir **ve etiketlenir** |
+| Sayfa gezinmesi | network-first + kabuk fallback | Çevrimdışı soğuk açılışta bile uygulama açılır |
+| POST/PATCH/DELETE, `/api/admin/*` | hiç önbelleklenmez | Bayat bir moderasyon kuyruğu üzerinden işlem yapmak kaydı bozar; bildirimin gönderildiğini yanlış söylemek sessiz kalmaktan kötüdür |
+
+**Neden stale-while-revalidate değil?** SWR önbellek kopyasını verip arkada
+sessizce tamir eder; sayfa canlı yanıtı bir haftalık yanıttan ayırt edemez.
+Bir tuvalet haritasında bu, "tadilat nedeniyle kapalı" bilgisinin haber olması
+ile hiç görünmemesi arasındaki fark demek. Artık her yanıt nereden geldiğini
+`x-buradane-offline` başlığıyla söylüyor; çevrimdışı uyarısı bir tahmin değil,
+bir olgu bildirimi.
+
+**İki tuzak** (ikisi de ölçülerek bulundu, ikisi de sessizdi):
+
+1. `navigator.onLine` güvenilmez — captive portal'da veya upstream'i olmayan
+   bir router arkasında "online" der, devtools ağ emülasyonunda hiç değişmez.
+   Gerçek sinyal, isteğin başına ne geldiği. (İlk çözüm service worker'ın
+   postMessage ile durum yayınlamasıydı; terk edildi — worker boşta kalınca
+   sonlandırılıyor, durum değişkeni tam da lazım olduğu anda kaybolmuş
+   oluyordu.)
+2. `/api/places` `Cache-Control: public, max-age=60` gönderiyor. Worker'ın
+   `fetch`'i tarayıcının HTTP önbelleğinden yanıt alıp **başarılı** sayıyordu —
+   sunucu erişilemezken bile. Dahası zamana bağlıydı: kayıt bir dakikayı
+   geçene kadar çalışıyordu, ki bu tamamen bozuk olmaktan kötü. Çözüm:
+   `fetch(request, { cache: "no-store" })` — tek önbellek katmanı var, o da bu.
+
+Service worker yalnızca production'da kayıt olur (`ServiceWorkerRegistrar`);
+dev sunucusunun önünde HMR'ı keser. Test etmek için: `npm run build && npm run start`.
+
 ## Yol Haritası
 
-**v1 (şu an, çalışıyor)**: Üç şehirde (İstanbul/Ankara/İzmir) 11.406 gerçek
-OSM mekanı üzerinde harita, konum, yakındakiler, 14 kategori, yer detayı,
+**v1 (şu an, çalışıyor)**: 20+ ilde (81'e doğru il il tamamlanıyor)
+25.000'i aşkın gerçek OSM mekanı üzerinde harita, konum, yakındakiler, 14 kategori, yer detayı,
 Türkçe doğal-dil araması, dinamik filtreler, sıralama (en yakın / en
 güvenilir), yön göstergesi, yol tarifi, tek dokunuşla yerinde doğrulama,
 kullanıcı önerisi ve sorun bildirimi, moderasyon + mekan düzenleme paneli,
-şehir seçici, paylaşılabilir derin bağlantılar, kayıtlı yerler, PWA,
-mobil sheet + masaüstü sidebar düzeni. Erişilebilirlik: Lighthouse 100.
+şehir seçici, paylaşılabilir derin bağlantılar, kayıtlı yerler, **çevrimdışı
+çalışma** (PWA + service worker), mobil sheet + masaüstü sidebar düzeni.
+Erişilebilirlik: Lighthouse 100.
 
 **Sıradaki adım (demo → prod)**: Demo'nun kendi Next.js API route'larını,
 statik JSON anlık görüntüsü yerine gerçek FastAPI+PostGIS backend'ine
@@ -503,7 +623,24 @@ offline bölge indirme (service worker), erişilebilirlik/ihtiyaç profiline
 göre kişiselleştirme, gerçek bir semantik/AI destekli arama katmanı
 (demo'daki lookup-tablosu tabanlı ayrıştırmanın ötesinde), gelişmiş
 öneriler, oyunlaştırma (katkı puanı/rozet), belediye açık verisi
-(İBB/ULAŞAV) entegrasyonu, kalan 78 il.
+(İBB/ULAŞAV) entegrasyonu, kalan 72 il.
+
+## Katkı
+
+Katkılara açığız. Nereden başlayacağını bilmiyorsan `good first issue`
+etiketli issue'lara bak; kendi ilinin verisini eklemek de en kolay ve en
+görünür katkılardan biri.
+
+| Belge | Ne için |
+|---|---|
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Ortam kurulumu, dal/commit kuralları, PR süreci, risk seviyeleri, sık karşılaşılan tuzaklar |
+| [ROADMAP.md](ROADMAP.md) | Ne tamamlandı, ne planlandı, hangi konular hâlâ tartışmaya açık |
+| [CLAUDE.md](CLAUDE.md) | Proje kuralları — Claude Code ve diğer AI kodlama araçları için, ama insan katkıcı için de okunur bir mimari özeti |
+| [docs/GITHUB_SETUP.md](docs/GITHUB_SETUP.md) | Maintainer'a: branch protection, label'lar, Actions izinleri |
+| [docs/backend-ortam-degiskenleri.md](docs/backend-ortam-degiskenleri.md) | Backend ortam değişkenleri |
+
+Akış: **issue → dal → PR → otomatik kontroller → review → merge**.
+`main` dalına doğrudan push kapalıdır.
 
 ## Lisans
 

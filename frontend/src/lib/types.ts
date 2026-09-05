@@ -12,6 +12,8 @@
  * wheelchair access.
  */
 
+import type { QueryNotice } from "./categories";
+
 export type CategorySlug =
   | "tuvalet"
   | "park"
@@ -33,6 +35,17 @@ export type CategorySlug =
 export type PlaceStatus = "active" | "temporarily_closed" | "permanently_closed" | "pending_review";
 
 export type PriceType = "free" | "paid" | "unknown";
+
+/**
+ * Who can actually use the place.
+ *
+ * `private` is not a public facility and never reaches a search result. The
+ * middle two are usable under a condition a person can meet, so they are
+ * labelled rather than hidden - "buy a tea, use the toilet" is how a large
+ * share of Istanbul's usable toilets actually work, and dropping them would
+ * throw away real answers.
+ */
+export type AccessType = "public" | "customers" | "permit" | "private";
 
 export type AmenityKey =
   | "wheelchair_accessible"
@@ -65,7 +78,18 @@ export interface Place {
   categories: CategorySlug[];
   status: PlaceStatus;
   price_type: PriceType;
+  access: AccessType;
   address_line: string | null;
+  /**
+   * Resolved administrative location, derived rather than taken raw.
+   *
+   * The raw tags cannot be trusted for grouping or search: İstanbul's 39
+   * districts arrive as 48 distinct `addr:district` spellings, and
+   * `addr:city` as often holds "Seyhan/Adana" as it holds a province. These
+   * two fields are what the app actually matches and displays.
+   */
+  district: string | null;
+  province: string | null;
   opening_hours_raw: string | null;
   is_24h: boolean | null;
   website: string | null;
@@ -120,10 +144,40 @@ export interface PlaceQueryResult {
     openNow: boolean;
     q: string | null;
     radius_m: number | null;
-    /** True when a free-text needle was dropped because it would have
-     * returned nothing on its own - the UI tells the user results were
-     * broadened rather than silently changing the meaning of their query. */
+    /** True when the query had to be widened to return anything - the UI
+     * tells the user results were broadened rather than silently changing
+     * the meaning of what they asked for. */
     relaxed?: boolean;
+    /** Questions the dataset structurally cannot answer, so the UI can say
+     * so and point at the real source instead of returning a confident
+     * wrong answer. See QUERY_NOTICES in categories.ts. */
+    notices?: QueryNotice[];
+    /** Exactly what was given up, so the UI can name it. Categories and the
+     * free-only flag never appear here: those are never relaxed. */
+    relaxedBy?: {
+      /** Free text that matched no place name and was dropped. */
+      needle?: string;
+      /** Amenity filters dropped because our data has no evidence either
+       * way - `null` means unknown and is excluded on purpose. */
+      amenities?: AmenityKey[];
+    };
+  };
+  /**
+   * How many of the *full* result set each further filter would keep.
+   *
+   * Computed over every match, not the returned page - the page is capped at
+   * 200 while a query routinely matches several hundred, so counting
+   * client-side quietly under-reported every category. And it is what makes
+   * a sparse filter honest: `baby_changing` is recorded for 57 places in the
+   * whole country-scale snapshot, and a chip that says so before it is
+   * tapped is a useful fact rather than a dead end discovered afterwards.
+   */
+  facets: {
+    categories: Partial<Record<CategorySlug, number>>;
+    amenities: Partial<Record<AmenityKey, number>>;
+    freeOnly: number;
+    /** Places NOT known to be closed - matches the filter's own semantics. */
+    notClosed: number;
   };
 }
 

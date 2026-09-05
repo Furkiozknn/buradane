@@ -234,9 +234,42 @@ export const AMENITY_BY_KEY: Record<AmenityKey, AmenityMeta> = Object.fromEntrie
 
 /** Non-amenity filters that live in the same chip row. */
 export const EXTRA_FILTERS = [
-  { key: "openNow" as const, label: "Şu an açık", icon: Clock },
+  // "Şu an açık" would be a promise the data cannot keep - 94.5% of places
+  // have no opening hours, so the honest job this filter does is hide the
+  // ones known to be closed. The label says that.
+  { key: "openNow" as const, label: "Kapalıları gizle", icon: Clock },
   { key: "freeOnly" as const, label: "Ücretsiz", icon: BadgeTurkishLira },
 ];
+
+/**
+ * Questions our data cannot answer, and where the answer actually lives.
+ *
+ * Some searches have a correct answer that open geodata structurally does
+ * not contain. "Nöbetçi eczane" is the clearest case and probably the most
+ * common civic query in Turkey after dark: the duty roster rotates daily,
+ * is set by the provincial chambers, and appears in no OSM tag. Matching the
+ * word and returning all 594 pharmacies in the city is not a partial answer,
+ * it is a wrong one - so the query says so and points at the real source.
+ *
+ * Kept as a table rather than a special case in the UI, because the same
+ * shape will be needed the moment another query has this property.
+ */
+export type QueryNotice = "pharmacy_duty_roster";
+
+export const QUERY_NOTICES: { pattern: RegExp; notice: QueryNotice }[] = [
+  { pattern: /nöbet|nobet/i, notice: "pharmacy_duty_roster" },
+];
+
+export const NOTICE_CONTENT: Record<QueryNotice, { text: string; linkLabel: string; href: string }> = {
+  pharmacy_duty_roster: {
+    text: "Nöbetçi eczane listesi her gün değişir ve açık haritalama verisinde yer almaz. Aşağıda bölgedeki tüm eczaneler var.",
+    linkLabel: "Bugünün resmî nöbetçi listesi (e-Devlet)",
+    // TİTCK's own service: the chambers report the roster and provincial
+    // health directorates approve it, so this is the authoritative list
+    // rather than one of the many scraped mirrors.
+    href: "https://www.turkiye.gov.tr/saglik-titck-nobetci-eczane-sorgulama",
+  },
+};
 
 export const ALL_CATEGORY_SLUGS = CATEGORIES.map((c) => c.slug);
 
@@ -245,27 +278,58 @@ export const ALL_CATEGORY_SLUGS = CATEGORIES.map((c) => c.slug);
  * lookup table, not an LLM call - the demo has to answer instantly and
  * offline, and the architecture stays open to a semantic layer later
  * (see README "Arama"). */
-export const SEARCH_SYNONYMS: { pattern: RegExp; categories?: CategorySlug[]; amenities?: AmenityKey[]; freeOnly?: boolean }[] = [
+export const SEARCH_SYNONYMS: {
+  pattern: RegExp;
+  categories?: CategorySlug[];
+  amenities?: AmenityKey[];
+  freeOnly?: boolean;
+  /**
+   * A weak trigger is real evidence only when nothing stronger fired. "araç"
+   * genuinely suggests a car park, but in "elektrikli araç şarj" it dragged
+   * 600 parking lots into a charging-station search. Weak rules still consume
+   * their token (so it never leaks into the name filter) - they just yield
+   * to a specific match.
+   */
+  weak?: boolean;
+}[] = [
   { pattern: /tuvalet|wc|lavabo|umumi/i, categories: ["tuvalet"] },
   { pattern: /park\b|yeşil|bahçe|koru/i, categories: ["park"] },
-  { pattern: /su|çeşme|cesme|içme/i, categories: ["su"], amenities: ["has_drinking_water"] },
+  { pattern: /su|çeşme|cesme|içme|susa/i, categories: ["su"], amenities: ["has_drinking_water"] },
   { pattern: /bank|otur|dinlen|mola/i, categories: ["dinlenme"] },
-  { pattern: /çocuk|cocuk|oyun|kaydırak|salıncak/i, categories: ["cocuk-alani"], amenities: ["child_friendly"] },
+  {
+    // Turkish consonant softening: a final k becomes ğ before a vowel-initial
+    // suffix, so "çocuk" turns into "çocuğ-umla" the moment anyone writes a
+    // natural sentence. Matching only the hard-k form left "çocuğumla" behind
+    // as a literal name filter and zeroed out one of the demo's flagship
+    // queries. Same shape for other softening stems below.
+    pattern: /çocu[kğ]|cocu[kğ]|oyun|kaydırak|salıncak/i,
+    categories: ["cocuk-alani"],
+    amenities: ["child_friendly"],
+  },
   { pattern: /spor|fitness|saha|basketbol|futbol|koşu/i, categories: ["spor"] },
-  { pattern: /otopark|park yeri|araba|araç/i, categories: ["otopark"] },
+  { pattern: /otopark|park yeri/i, categories: ["otopark"] },
+  // "araba"/"araç" on their own usually mean parking, but not next to "şarj".
+  { pattern: /araba|araç|arac\b/i, categories: ["otopark"], weak: true },
   { pattern: /duş|dus|yıkan/i, categories: ["dus"] },
   { pattern: /wifi|wi-fi|internet/i, categories: ["wifi"], amenities: ["has_wifi"] },
   { pattern: /cami|mescit|namaz|ibadet|abdest/i, categories: ["cami"] },
   { pattern: /eczane|ilaç|ilac|nöbetçi|nobetci/i, categories: ["eczane"] },
   {
-    pattern: /toplanma|deprem|acil|afet|tahliye/i,
+    pattern: /toplanma|deprem|afet|tahliye/i,
     categories: ["toplanma-alani"],
   },
-  { pattern: /kütüphane|kutuphane|kitap|çalışma|calisma/i, categories: ["kutuphane"] },
+  // "acil" alone is usually urgency ("acil tuvalet lazım"), not a request for
+  // an earthquake assembly point - so it only counts when nothing else fired.
+  { pattern: /acil/i, categories: ["toplanma-alani"], weak: true },
+  { pattern: /kütüphane|kutuphane|kitap|çalış|calis/i, categories: ["kutuphane"] },
   { pattern: /şarj|sarj|elektrikli|elektrik/i, categories: ["sarj"] },
-  { pattern: /engelli|tekerlekli|erişilebilir|erisilebilir/i, amenities: ["wheelchair_accessible"] },
-  { pattern: /bebek|bez değiştir/i, amenities: ["baby_changing"] },
-  { pattern: /köpek|kedi|evcil|pet/i, amenities: ["pet_friendly"] },
+  // "erişim" as well as "erişilebilir": people write "engelli erişimli".
+  { pattern: /engelli|tekerlekli|erişim|erisim|erişilebilir|erisilebilir/i, amenities: ["wheelchair_accessible"] },
+  // bebek → bebeğ- ("bebeğimin"); "bez" needs to stand alone because the
+  // phrase is rarely adjacent ("bezini değiştirebileceğim").
+  { pattern: /bebe[kğ]|bez\b|bezini|bezini değiştir/i, amenities: ["baby_changing"] },
+  // köpek → köpeğ- ("köpeğimle"), same softening rule as çocuk above.
+  { pattern: /köpe[kğ]|kope[kğ]|kedi|evcil|pet/i, amenities: ["pet_friendly"] },
   { pattern: /gölge|golge|serin/i, amenities: ["has_shade"] },
   { pattern: /sakin|sessiz|huzur/i, amenities: ["is_quiet"] },
   { pattern: /ücretsiz|ucretsiz|bedava|parasız/i, freeOnly: true },

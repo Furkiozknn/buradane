@@ -1,0 +1,572 @@
+import { describe, expect, it } from "vitest";
+
+import { allPlaces, applyOverride, datasetMeta, parseQueryText, queryPlaces } from "@/lib/places-repository";
+import { isOpenNow } from "@/lib/opening-hours";
+import type { Place } from "@/lib/types";
+
+const ISTANBUL = { lat: 41.0082, lon: 28.9784 };
+
+/**
+ * These lock the promises the code makes in comments and the README. Each
+ * one corresponds to a claim a user relies on: that an unknown amenity is
+ * not silently treated as a yes, that a report never changes the public
+ * record on its own, that confirming a place raises its score rather than
+ * resetting it.
+ */
+
+describe("dataset", () => {
+  it("loads every city file, not just one", () => {
+    const meta = datasetMeta();
+    expect(meta.cities.length).toBeGreaterThanOrEqual(2);
+    expect(meta.cities.map((c) => c.slug)).toContain("istanbul");
+    expect(meta.count).toBe(allPlaces().length);
+  });
+
+  it("derives a usable centre for every city, with no hand-maintained table", () => {
+    // A hardcoded centre table meant a city whose centre nobody remembered
+    // to add silently opened the map on İstanbul, which quietly broke the
+    // claim that adding a city is a config row plus a fetch run.
+    for (const city of datasetMeta().cities) {
+      expect(Number.isFinite(city.center.lat)).toBe(true);
+      expect(Number.isFinite(city.center.lon)).toBe(true);
+      // Türkiye's mainland bounding box - a centre outside it means the
+      // median was dragged off by bad data.
+      expect(city.center.lat).toBeGreaterThan(35.5);
+      expect(city.center.lat).toBeLessThan(42.5);
+      expect(city.center.lon).toBeGreaterThan(25.5);
+      expect(city.center.lon).toBeLessThan(45);
+    }
+  });
+
+  it("places each city centre inside that city's own places", () => {
+    // The centre has to actually land among the city's data, or the map
+    // opens somewhere with nothing on it.
+    for (const city of datasetMeta().cities) {
+      const near = queryPlaces({ ...city.center, radius_m: 5000, limit: 1 });
+      expect(near.total).toBeGreaterThan(0);
+    }
+  });
+
+  it("gives every place a category, coordinates and a source", () => {
+    for (const place of allPlaces().slice(0, 500)) {
+      expect(place.categories.length).toBeGreaterThan(0);
+      expect(Number.isFinite(place.lat)).toBe(true);
+      expect(Number.isFinite(place.lon)).toBe(true);
+      expect(place.source.license).toBeTruthy();
+    }
+  });
+});
+
+describe("radius search", () => {
+  it("returns only places within the radius, nearest first", () => {
+    const { places } = queryPlaces({ ...ISTANBUL, radius_m: 1500, limit: 100 });
+    expect(places.length).toBeGreaterThan(0);
+    for (const place of places) {
+      expect(place.distance_m).not.toBeNull();
+      expect(place.distance_m!).toBeLessThanOrEqual(1500);
+    }
+    const distances = places.map((p) => p.distance_m!);
+    expect([...distances].sort((a, b) => a - b)).toEqual(distances);
+  });
+
+  it("widening the radius never loses a result", () => {
+    const near = queryPlaces({ ...ISTANBUL, radius_m: 500, limit: 300 });
+    const far = queryPlaces({ ...ISTANBUL, radius_m: 2000, limit: 300 });
+    expect(far.total).toBeGreaterThanOrEqual(near.total);
+  });
+});
+
+describe("amenity filters", () => {
+  it("treats unknown (null) as NOT matching - never claims a facility we have no evidence for", () => {
+    const { places } = queryPlaces({
+      ...ISTANBUL,
+      radius_m: 20_000,
+      amenities: ["wheelchair_accessible"],
+      limit: 200,
+    });
+    expect(places.length).toBeGreaterThan(0);
+    for (const place of places) {
+      expect(place.amenities.wheelchair_accessible).toBe(true);
+    }
+  });
+
+  it("requires ALL requested amenities, not any of them", () => {
+    const both = queryPlaces({
+      ...ISTANBUL,
+      radius_m: 20_000,
+      amenities: ["wheelchair_accessible", "has_drinking_water"],
+      limit: 200,
+    });
+    for (const place of both.places) {
+      expect(place.amenities.wheelchair_accessible).toBe(true);
+      expect(place.amenities.has_drinking_water).toBe(true);
+    }
+  });
+});
+
+describe("category filters", () => {
+  it("matches any of the requested categories", () => {
+    const { places } = queryPlaces({
+      ...ISTANBUL,
+      radius_m: 20_000,
+      categories: ["tuvalet", "eczane"],
+      limit: 200,
+    });
+    expect(places.length).toBeGreaterThan(0);
+    for (const place of places) {
+      expect(place.categories.some((c) => c === "tuvalet" || c === "eczane")).toBe(true);
+    }
+  });
+});
+
+describe("Turkish text handling", () => {
+  it("matches regardless of dotted/dotless I casing", () => {
+    // JS toLowerCase maps "I" to "i", not "ı" - without locale-aware
+    // normalisation "KADIKÖY" would never match "Kadıköy".
+    const upper = queryPlaces({ q: "KADIKÖY", limit: 50 });
+    const lower = queryPlaces({ q: "kadıköy", limit: 50 });
+    expect(upper.total).toBeGreaterThan(0);
+    expect(upper.total).toBe(lower.total);
+  });
+});
+
+describe("administrative search", () => {
+  it("finds a district typed without Turkish diacritics", () => {
+    // Phone keyboards without a Turkish layout are the normal case, not an
+    // edge case. Before this, "kadikoy" returned the two places that happened
+    // to be spelled that way and missed the other 34.
+    for (const [withDiacritics, without] of [
+      ["Kadıköy", "kadikoy"],
+      ["Beyoğlu", "beyoglu"],
+      ["Şişli", "sisli"],
+      ["Üsküdar", "uskudar"],
+    ]) {
+      const a = queryPlaces({ q: withDiacritics, limit: 5000 }).total;
+      const b = queryPlaces({ q: without, limit: 5000 }).total;
+      expect(a).toBeGreaterThan(0);
+      expect(b).toBe(a);
+    }
+  });
+
+  it("matches the resolved district, not the raw tag spelling", () => {
+    // İstanbul's 39 districts arrive as 48 distinct `addr:district` values.
+    // Searching the raw string splits Kadıköy across four spellings.
+    //
+    // The assertion folds before comparing, because a hit is allowed to be a
+    // place whose *name* is spelled without diacritics ("İBB Kadiköy İskele
+    // Kütüphanesi") - matching that is the feature, not a leak.
+    const fold = (v: string) =>
+      v
+        .replace(/İ/g, "i")
+        .replace(/I/g, "ı")
+        .toLocaleLowerCase("tr-TR")
+        .replace(/ı/g, "i")
+        .replace(/ö/g, "o")
+        .replace(/ü/g, "u")
+        .replace(/ç/g, "c")
+        .replace(/ş/g, "s")
+        .replace(/ğ/g, "g");
+
+    const result = queryPlaces({ q: "Kadıköy", limit: 5000 });
+    expect(result.total).toBeGreaterThan(0);
+    for (const place of result.places.slice(0, 50)) {
+      const haystack = fold(
+        [place.name, place.address_line, place.district, place.province].filter(Boolean).join(" "),
+      );
+      expect(haystack).toContain("kadikoy");
+    }
+  });
+
+  it("displays one canonical spelling per district", () => {
+    // Folding grouped the variants, but each place kept whatever the tag
+    // said - so the same district still displayed three ways and any filter
+    // built on the label would fragment.
+    const spellings = new Set(
+      allPlaces()
+        .map((p) => p.district)
+        .filter((d): d is string => d !== null && /kadik|kadık/i.test(d)),
+    );
+    expect(spellings.size).toBe(1);
+    expect([...spellings][0]).toBe("Kadıköy");
+  });
+
+  it("gives places a canonical district and province where the tags allow", () => {
+    const withDistrict = allPlaces().filter((p) => p.district);
+    expect(withDistrict.length).toBeGreaterThan(500);
+    // No raw-tag artefacts survive into the resolved field.
+    const names = new Set(withDistrict.map((p) => p.district));
+    expect(names.has("Kadikoy")).toBe(false);
+    expect(names.has("kadıköy")).toBe(false);
+    expect(names.has("Eyüp")).toBe(false);
+    expect(names.has("Küçükçemece")).toBe(false);
+  });
+
+  it("resolves a province out of a compound 'İlçe/İl' tag", () => {
+    // `addr:city` holds "Seyhan/Adana" as often as it holds a province name.
+    const adana = allPlaces().filter((p) => p.province === "Adana");
+    expect(adana.length).toBeGreaterThan(0);
+    expect(adana.some((p) => p.district === "Seyhan")).toBe(true);
+  });
+});
+
+describe("natural-language search", () => {
+  it("extracts a category from free text", () => {
+    const parsed = parseQueryText("yakınımda bir tuvalet");
+    expect(parsed.categories).toContain("tuvalet");
+  });
+
+  it("extracts an amenity and the free flag together", () => {
+    const parsed = parseQueryText("ücretsiz engelli erişimli yer");
+    expect(parsed.freeOnly).toBe(true);
+    expect(parsed.amenities).toContain("wheelchair_accessible");
+  });
+
+  it("drops Turkish glue words so they cannot become a name filter", () => {
+    // "gidebileceğim" left behind as a needle is what once zeroed out this
+    // exact query.
+    const parsed = parseQueryText("çocuğumla gidebileceğim park");
+    expect(parsed.categories).toContain("park");
+    expect(parsed.leftover).toBe("");
+  });
+
+  it("keeps a genuine proper noun as a needle", () => {
+    const parsed = parseQueryText("Gülhane parkı");
+    expect(parsed.categories).toContain("park");
+    expect(parsed.leftover.toLowerCase()).toContain("gülhane");
+  });
+
+  it("understands Turkish-specific vocabulary", () => {
+    expect(parseQueryText("abdest alabileceğim yer").categories).toContain("cami");
+    expect(parseQueryText("deprem toplanma alanı").categories).toContain("toplanma-alani");
+    expect(parseQueryText("nöbetçi eczane").categories).toContain("eczane");
+  });
+
+  it("handles Turkish consonant softening (k → ğ) in inflected words", () => {
+    // "çocuk" becomes "çocuğ-" before a vowel-initial suffix, which is what
+    // anyone typing a natural sentence produces.
+    expect(parseQueryText("çocuğumla gidebileceğim park").amenities).toContain("child_friendly");
+    expect(parseQueryText("köpeğimle gidebileceğim yer").amenities).toContain("pet_friendly");
+  });
+
+  it("strips Turkish verb glue by suffix, not by an enumerated word list", () => {
+    // "-abileceğim" is productive: every verb yields one. Listing words
+    // one by one always leaves a hole, and each hole becomes a literal name
+    // filter that silently empties the results.
+    for (const q of [
+      "abdest alabileceğim yer",
+      "sessiz çalışabileceğim yer",
+      "bulabileceğim tuvalet",
+      "gidilecek park",
+    ]) {
+      expect(parseQueryText(q).leftover).toBe("");
+    }
+  });
+
+  it("reads İ and I correctly when deciding a token is glue", () => {
+    // normalizeTr must run before the stopword lookup, or "NEREDE" survives
+    // as a needle.
+    expect(parseQueryText("NEREDE TUVALET VAR").leftover).toBe("");
+  });
+
+  it("recognises softened stems beyond çocuk", () => {
+    expect(parseQueryText("bebeğimin bezini değiştirebileceğim yer").amenities).toContain(
+      "baby_changing",
+    );
+    expect(parseQueryText("engelli erişimli tuvalet").amenities).toContain("wheelchair_accessible");
+    expect(parseQueryText("engelli erişimli tuvalet").leftover).toBe("");
+  });
+
+  it("lets a specific match beat a weak one instead of stacking both", () => {
+    // "araç" alone means parking, but next to "şarj" it dragged 600
+    // car parks into a charging-station search.
+    const charging = parseQueryText("elektrikli araç şarj");
+    expect(charging.categories).toContain("sarj");
+    expect(charging.categories).not.toContain("otopark");
+    // On its own the weak rule still fires - it is real evidence, just
+    // lower-priority.
+    expect(parseQueryText("arabamı bırakacak yer").categories).toContain("otopark");
+  });
+
+  it("returns results for a structured query rather than a dead end", () => {
+    const result = queryPlaces({ ...ISTANBUL, radius_m: 20_000, q: "ücretsiz tuvalet", limit: 50 });
+    expect(result.total).toBeGreaterThan(0);
+    expect(result.applied.categories).toContain("tuvalet");
+    expect(result.applied.freeOnly).toBe(true);
+  });
+
+  it("relaxes an unmatchable needle instead of returning nothing, and says so", () => {
+    const result = queryPlaces({
+      ...ISTANBUL,
+      radius_m: 20_000,
+      q: "tuvalet zzzqqxyz",
+      limit: 50,
+    });
+    expect(result.total).toBeGreaterThan(0);
+    expect(result.applied.relaxed).toBe(true);
+  });
+
+  it("drops an unsatisfiable amenity rather than dead-ending, and names it", () => {
+    // Amenity data is the sparsest field we have and `null` is excluded on
+    // purpose, so an empty result here is usually a gap in the map rather
+    // than a gap in the city.
+    const result = queryPlaces({
+      ...ISTANBUL,
+      radius_m: 20_000,
+      categories: ["eczane"],
+      amenities: ["has_shower", "has_wifi", "baby_changing"],
+      limit: 20,
+    });
+    expect(result.total).toBeGreaterThan(0);
+    expect(result.applied.relaxed).toBe(true);
+    expect(result.applied.relaxedBy?.amenities?.length).toBeGreaterThan(0);
+    // The chips must keep reflecting what the user asked for.
+    expect(result.applied.amenities).toEqual(["has_shower", "has_wifi", "baby_changing"]);
+  });
+
+  it("never relaxes a category or the free-only flag - those ARE the question", () => {
+    const result = queryPlaces({
+      ...ISTANBUL,
+      radius_m: 20_000,
+      categories: ["tuvalet"],
+      freeOnly: true,
+      amenities: ["has_shower"],
+      limit: 50,
+    });
+    expect(result.applied.freeOnly).toBe(true);
+    expect(result.applied.categories).toEqual(["tuvalet"]);
+    expect(result.applied.relaxedBy?.amenities ?? []).not.toContain("free");
+    for (const place of result.places) {
+      expect(place.price_type).toBe("free");
+      expect(place.categories).toContain("tuvalet");
+    }
+  });
+
+  it("keeps the last amenity when there is no category to hold the query together", () => {
+    // Dropping it would leave an unconstrained query returning the whole
+    // dataset, which answers nothing.
+    const result = queryPlaces({ ...ISTANBUL, radius_m: 20_000, amenities: ["is_quiet"], limit: 20 });
+    for (const place of result.places) {
+      expect(place.amenities.is_quiet).toBe(true);
+    }
+  });
+
+  it("does NOT relax when there is nothing structured to fall back to", () => {
+    const result = queryPlaces({ ...ISTANBUL, radius_m: 20_000, q: "zzzqqxyz", limit: 50 });
+    expect(result.total).toBe(0);
+    expect(result.applied.relaxed).toBeFalsy();
+  });
+});
+
+describe("open-now filter", () => {
+  it("hides places KNOWN to be closed, not places with no hours", () => {
+    // 94.5% of the dataset has no opening_hours. Requiring "open" discarded
+    // ~10,875 places to exclude 17, and hid 544 of 569 toilets while not one
+    // of them was known to be closed. Silence is not a closed sign.
+    const strict = queryPlaces({ ...ISTANBUL, radius_m: 20_000, categories: ["tuvalet"], limit: 400 });
+    const filtered = queryPlaces({
+      ...ISTANBUL,
+      radius_m: 20_000,
+      categories: ["tuvalet"],
+      openNow: true,
+      limit: 400,
+    });
+    expect(filtered.total).toBeGreaterThan(strict.total * 0.5);
+    for (const place of filtered.places) {
+      expect(isOpenNow(place.opening_hours_raw)).not.toBe("closed");
+    }
+  });
+
+  it("still excludes something - the filter is not a no-op", () => {
+    const all = queryPlaces({ ...ISTANBUL, radius_m: 40_000, limit: 20_000 });
+    const filtered = queryPlaces({ ...ISTANBUL, radius_m: 40_000, openNow: true, limit: 20_000 });
+    const closed = all.places.filter((p) => isOpenNow(p.opening_hours_raw) === "closed").length;
+    expect(all.total - filtered.total).toBe(closed);
+  });
+});
+
+describe("data-gap notices", () => {
+  it("admits it cannot answer 'nöbetçi eczane' instead of returning every pharmacy", () => {
+    // The duty roster rotates daily, is set by the provincial chambers, and
+    // appears in no OSM tag. Returning all 594 pharmacies is a wrong answer,
+    // not a partial one.
+    const result = queryPlaces({ ...ISTANBUL, radius_m: 20_000, q: "nöbetçi eczane", limit: 20 });
+    expect(result.applied.categories).toContain("eczane");
+    expect(result.applied.notices).toContain("pharmacy_duty_roster");
+  });
+
+  it("stays quiet on a plain pharmacy search", () => {
+    const result = queryPlaces({ ...ISTANBUL, radius_m: 20_000, q: "eczane", limit: 20 });
+    expect(result.applied.notices).toBeUndefined();
+  });
+});
+
+describe("sorting", () => {
+  it("orders by reliability when asked, with distance breaking ties", () => {
+    const { places } = queryPlaces({
+      ...ISTANBUL,
+      radius_m: 5000,
+      sort: "reliability",
+      limit: 50,
+    });
+    const scores = places.map((p) => p.reliability_score);
+    for (let i = 1; i < scores.length; i += 1) {
+      expect(scores[i]).toBeLessThanOrEqual(scores[i - 1] + 0.0011);
+    }
+  });
+});
+
+describe("status visibility", () => {
+  it("never returns pending or permanently-closed places to the public", () => {
+    const { places } = queryPlaces({ ...ISTANBUL, radius_m: 20_000, limit: 300 });
+    for (const place of places) {
+      expect(place.status).not.toBe("pending_review");
+      expect(place.status).not.toBe("permanently_closed");
+    }
+  });
+});
+
+describe("facets", () => {
+  it("counts the whole match set, not the returned page", () => {
+    // Counting client-side from the page silently under-reported every
+    // category by whatever the limit cut off.
+    const result = queryPlaces({ ...ISTANBUL, radius_m: 20_000, limit: 10 });
+    expect(result.places.length).toBe(10);
+    expect(result.total).toBeGreaterThan(10);
+    const summed = Object.values(result.facets.categories).reduce((a, b) => a + (b ?? 0), 0);
+    // A place can hold several categories, so the sum is >= total, never below.
+    expect(summed).toBeGreaterThanOrEqual(result.total);
+  });
+
+  it("counts only confirmed amenities - never `null`", () => {
+    const result = queryPlaces({ ...ISTANBUL, radius_m: 20_000, limit: 50 });
+    const shade = result.facets.amenities.has_shade ?? 0;
+    const actual = queryPlaces({
+      ...ISTANBUL,
+      radius_m: 20_000,
+      amenities: ["has_shade"],
+      limit: 5000,
+    });
+    // The chip's number has to be the number the filter actually returns, or
+    // it is worse than showing nothing.
+    expect(shade).toBe(actual.total);
+  });
+
+  it("counts notClosed with the same rule the filter uses", () => {
+    const result = queryPlaces({ ...ISTANBUL, radius_m: 20_000, limit: 5 });
+    const filtered = queryPlaces({ ...ISTANBUL, radius_m: 20_000, openNow: true, limit: 5 });
+    expect(result.facets.notClosed).toBe(filtered.total);
+  });
+
+  it("counts freeOnly with the same rule the filter uses", () => {
+    const result = queryPlaces({ ...ISTANBUL, radius_m: 20_000, categories: ["tuvalet"], limit: 5 });
+    const filtered = queryPlaces({
+      ...ISTANBUL,
+      radius_m: 20_000,
+      categories: ["tuvalet"],
+      freeOnly: true,
+      limit: 5,
+    });
+    expect(result.facets.freeOnly).toBe(filtered.total);
+  });
+});
+
+describe("access restrictions", () => {
+  it("never returns a place the public cannot enter", () => {
+    // 146 places in the snapshot carry a restricting `access` tag, 17 of
+    // them toilets, and all of them used to be served as freely usable.
+    // Sending someone in a hurry to a door that will not open is the worst
+    // thing this app can do.
+    const { places } = queryPlaces({ ...ISTANBUL, radius_m: 40_000, limit: 20_000 });
+    expect(places.length).toBeGreaterThan(0);
+    for (const place of places) {
+      expect(place.access).not.toBe("private");
+      expect(place.raw_tags?.access).not.toBe("private");
+    }
+  });
+
+  it("keeps conditionally usable places, so they can be labelled instead of hidden", () => {
+    // "Buy a tea, use the toilet" is how a large share of Istanbul's usable
+    // toilets actually work; dropping them would throw away real answers.
+    const { places } = queryPlaces({ ...ISTANBUL, radius_m: 40_000, limit: 20_000 });
+    expect(places.some((p) => p.access === "customers" || p.access === "permit")).toBe(true);
+  });
+
+  it("gives every place an access value, defaulting to public", () => {
+    for (const place of allPlaces().slice(0, 1000)) {
+      expect(["public", "customers", "permit", "private"]).toContain(place.access);
+    }
+  });
+
+  it("counts facets over the visible set only", () => {
+    // A private place must not inflate a filter count either.
+    const result = queryPlaces({ ...ISTANBUL, radius_m: 40_000, categories: ["tuvalet"], limit: 5 });
+    const filtered = queryPlaces({
+      ...ISTANBUL,
+      radius_m: 40_000,
+      categories: ["tuvalet"],
+      freeOnly: true,
+      limit: 5,
+    });
+    expect(result.facets.freeOnly).toBe(filtered.total);
+  });
+});
+
+describe("payload shape", () => {
+  it("strips raw_tags from list results", () => {
+    const { places } = queryPlaces({ ...ISTANBUL, radius_m: 2000, limit: 20 });
+    for (const place of places) {
+      expect(place.raw_tags).toBeUndefined();
+    }
+  });
+});
+
+describe("applyOverride", () => {
+  const base = (): Place => ({
+    ...allPlaces()[0],
+    reliability_score: 0.7,
+    verification_count: 0,
+    report_count: 0,
+  });
+
+  it("returns the place untouched when there is no override", () => {
+    const place = base();
+    expect(applyOverride(place, undefined)).toEqual(place);
+  });
+
+  it("RAISES the score on verification - never resets it to a default", () => {
+    // The first implementation stored an absolute score in the override and,
+    // not knowing the base, dropped a 0.713 place to 0.54 when someone
+    // confirmed it was still there.
+    const place = base();
+    const once = applyOverride(place, { verification_count: 1 });
+    const thrice = applyOverride(place, { verification_count: 3 });
+    expect(once.reliability_score).toBeGreaterThan(place.reliability_score);
+    expect(thrice.reliability_score).toBeGreaterThan(once.reliability_score);
+  });
+
+  it("caps the verification bonus so confirmations alone cannot reach a perfect score", () => {
+    const place = base();
+    const many = applyOverride(place, { verification_count: 100 });
+    expect(many.reliability_score).toBeLessThanOrEqual(place.reliability_score + 0.15);
+    expect(many.reliability_score).toBeLessThanOrEqual(1);
+  });
+
+  it("lets an unresolved report outweigh the verification bonus", () => {
+    const place = base();
+    const disputed = applyOverride(place, { verification_count: 1, report_count: 1 });
+    expect(disputed.reliability_score).toBeLessThan(place.reliability_score);
+  });
+
+  it("never lets an undefined override field erase a real value", () => {
+    const place = base();
+    const merged = applyOverride(place, { reliability_score: undefined, status: "temporarily_closed" });
+    expect(merged.reliability_score).toBe(place.reliability_score);
+    expect(merged.status).toBe("temporarily_closed");
+  });
+
+  it("keeps the score inside 0..1", () => {
+    const place = { ...base(), reliability_score: 0.05 };
+    const crushed = applyOverride(place, { report_count: 5 });
+    expect(crushed.reliability_score).toBeGreaterThanOrEqual(0);
+  });
+});

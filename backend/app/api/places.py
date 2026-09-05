@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 
 from app.api.deps import DbSession, DeviceTokenHash, OptionalUser
-from app.core.ratelimit import limit_writes
+from app.core.ratelimit import limit_verifications, limit_writes
 from app.services.dedup import find_duplicate
 from app.models.category import Category, PlaceCategory
 from app.models.place import Place, PlaceStatus
@@ -158,7 +158,12 @@ def report_place(
 
 
 @router.post(
-    "/{place_id}/verifications", status_code=status.HTTP_201_CREATED, dependencies=[Depends(limit_writes)]
+    "/{place_id}/verifications",
+    status_code=status.HTTP_201_CREATED,
+    # Both limiters on purpose: limit_writes is the general anti-spam
+    # budget; limit_verifications holds one address under the consensus
+    # threshold per place, closing the device-token-rotation hole.
+    dependencies=[Depends(limit_writes), Depends(limit_verifications)],
 )
 def verify_place(
     place_id: uuid.UUID, payload: PlaceVerificationIn, db: DbSession, user: OptionalUser, device: DeviceTokenHash
