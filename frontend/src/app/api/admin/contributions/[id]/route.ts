@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { adminAuthErrorResponse, checkAdminAuth } from "@/lib/admin-auth";
+
 import { moderateContribution } from "@/lib/contributions-store";
 
 /**
@@ -12,6 +14,12 @@ import { moderateContribution } from "@/lib/contributions-store";
  * publicly, and the route is confined to a local snapshot.
  */
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
+  // Fail-closed: no token configured means no admin mutations at all -
+  // these routes were open "by design" once, and that is the bug this
+  // guard exists to close. See src/lib/admin-auth.ts for the reasoning.
+  const auth = checkAdminAuth(request);
+  if (!auth.ok) return adminAuthErrorResponse(auth);
+
   const { id } = await context.params;
 
   let body: { action?: string };

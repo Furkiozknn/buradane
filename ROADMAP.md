@@ -7,7 +7,7 @@ Kural: buradaki her "tamamlandı" maddesi depoda çalışan koda dayanır.
 Doğrulanmamış hiçbir şey tamamlanmış gibi yazılmamıştır. Bir madde
 belirsizse, belirsiz olduğu açıkça yazılıdır.
 
-**Son güncelleme:** 2026-09-03
+**Son güncelleme:** 2026-09-04
 
 ---
 
@@ -95,7 +95,7 @@ belirsizse, belirsiz olduğu açıkça yazılıdır.
 
 ### Kalite
 - ✅ Lighthouse: erişilebilirlik 100, best practices 100, SEO 100
-- ✅ 111 frontend testi (Vitest)
+- ✅ 123 frontend testi (Vitest)
 - ✅ 0 TypeScript hatası, 0 ESLint hatası
 
 ---
@@ -128,11 +128,13 @@ belirsizse, belirsiz olduğu açıkça yazılıdır.
 
 ### Yüksek öncelik: güvenlik
 
-- 📋 **`/api/admin/*` route'larına kimlik doğrulama.** Şu an kimlik
-  doğrulama **yok**; kodda demo sınırlaması olarak belgelenmiş durumda.
-  Herkese açık dağıtımdan önce **zorunlu**.
-- 📋 **Katkı gönderiminde hız sınırı.** Şu an `/api/contributions` POST'una
-  sınırsız istek atılabilir.
+- ✅ **`/api/admin/*` route'larına kimlik doğrulama** — paylaşılan-sır
+  token (`BURADANE_ADMIN_TOKEN`), sabit zamanlı karşılaştırma, fail-closed.
+  Panel token'ı sekme ömrü boyunca `sessionStorage`'da tutar.
+- ✅ **Katkı gönderiminde hız sınırı** — IP başına kayan pencere
+  (10 istek / 10 dk), 429 + `Retry-After`.
+- 🚧 Yönetim panelinin **görüntülenmesi** hâlâ açık (kuyruk sunucuda render
+  ediliyor); okuma tarafını da kapatmak çerez tabanlı oturum ister.
 - 📋 **Backend'de varsayılan JWT sırrının kaldırılması.**
   `backend/app/core/config.py` içinde çalışan bir varsayılan var
   (`dev-secret-change-in-production`).

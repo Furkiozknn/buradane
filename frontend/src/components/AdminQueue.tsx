@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Check, Clock, X } from "lucide-react";
+import { adminFetch } from "@/lib/admin-token";
 
 import type { Contribution } from "@/lib/types";
 
@@ -31,7 +32,7 @@ export function AdminQueue({ initialContributions }: { initialContributions: Con
     setBusyId(id);
     setError(null);
     try {
-      const response = await fetch(`/api/admin/contributions/${id}`, {
+      const response = await adminFetch(`/api/admin/contributions/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action }),

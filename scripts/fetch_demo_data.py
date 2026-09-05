@@ -95,6 +95,64 @@ CITIES: dict[str, dict] = {
         "bbox": (40.96, 39.63, 41.03, 39.83),
         "cap_scale": 0.3,
     },
+    # Batch three: the remaining largest metropolitan cores, still tightest-box
+    # first. Every bbox is the contiguous urban core, not the province - the
+    # test suite asserts each city's derived centre lands among its own
+    # places, so a box drawn too wide (farmland dragging the median off the
+    # city) fails loudly instead of shipping a map that opens on empty fields.
+    "kayseri": {
+        "label": "Kayseri",
+        "bbox": (38.66, 35.40, 38.78, 35.58),
+        "cap_scale": 0.3,
+    },
+    "mersin": {
+        "label": "Mersin",
+        "bbox": (36.75, 34.50, 36.85, 34.70),
+        "cap_scale": 0.3,
+    },
+    "eskisehir": {
+        "label": "Eskişehir",
+        "bbox": (39.72, 30.42, 39.82, 30.62),
+        "cap_scale": 0.3,
+    },
+    "samsun": {
+        "label": "Samsun",
+        "bbox": (41.24, 36.25, 41.34, 36.42),
+        "cap_scale": 0.3,
+    },
+    "denizli": {
+        "label": "Denizli",
+        "bbox": (37.72, 29.02, 37.82, 29.16),
+        "cap_scale": 0.3,
+    },
+    "kocaeli": {
+        "label": "Kocaeli",
+        # The İzmit core. Gebze is a second, separate urban area in the same
+        # province; it can come later as its own box rather than one giant
+        # rectangle full of the bay and industrial void between them.
+        "bbox": (40.70, 29.80, 40.82, 30.05),
+        "cap_scale": 0.3,
+    },
+    "diyarbakir": {
+        "label": "Diyarbakır",
+        "bbox": (37.86, 40.16, 37.98, 40.32),
+        "cap_scale": 0.3,
+    },
+    "sanliurfa": {
+        "label": "Şanlıurfa",
+        "bbox": (37.10, 38.72, 37.22, 38.87),
+        "cap_scale": 0.3,
+    },
+    "malatya": {
+        "label": "Malatya",
+        "bbox": (38.30, 38.24, 38.40, 38.40),
+        "cap_scale": 0.3,
+    },
+    "van": {
+        "label": "Van",
+        "bbox": (38.44, 43.30, 38.56, 43.45),
+        "cap_scale": 0.3,
+    },
 }
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "frontend" / "data"

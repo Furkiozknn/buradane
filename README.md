@@ -316,7 +316,7 @@ Tüm yazma uçları hesapsız kullanılabilir (`user_id` opsiyonel) - gizlilik-
 | `POST /api/contributions` | "Mekan öner" / "yanlış bilgi bildir" / "kapalı bildir" - `kind` alanıyla ayrışan tek bir koleksiyon ucu (backend'de bunlar iki ayrı REST ucu: `POST /places/suggest` ve `POST /places/{id}/reports`; demo aynı `pending`-öncelikli moderasyon semantiğini tek bir uçta uyguluyor). Her zaman `pending` olarak başlar, herkese açık aramaya asla doğrudan düşmez. |
 | `PATCH /api/admin/places/:id` | Mekan düzenleme: ad, durum, ücret tipi, amenity'ler. `null` birinci sınıf bir değer - "bilinmiyor" ifade edilebilir kalır, yoksa moderatör yalnızca var/yok diyebilirdi. Düzenleme, OSM anlık görüntüsüne **katman** olarak yazılır: kaynak kayıt değişmez (yeniden içe aktarılabilir, lisanslı ve upstream id'si var), yani bir yazım düzeltmesi sonraki içe aktarımda sessizce kaybolmaz. |
 | `DELETE /api/admin/places/:id` | O mekandaki tüm düzeltmeleri geri alır, ham OSM kaydına döner. **Kalıcı silme yok**: artık var olmayan bir yer `permanently_closed` olur - aramadan kalkar ama kayıt (ve nedeni) denetim için durur. |
-| `PATCH /api/admin/contributions/:id` | `{ "action": "approve" \| "reject" }` - moderasyon onayı. Yalnızca `approve`, ve yalnızca rapor türü katkılar için bir override üretir (`report_closed` → `status: temporarily_closed`, `report_incorrect` → düşük güvenilirlik skoru). **Bu uçta kimlik doğrulama yok** - bilinçli, dokümante edilmiş bir demo sınırlaması (bkz. "Bilinen Sınırlamalar"); prod backend'de eşdeğer uçlar JWT arkasında olurdu. |
+| `PATCH /api/admin/contributions/:id` | `{ "action": "approve" \| "reject" }` - moderasyon onayı. Yalnızca `approve`, ve yalnızca rapor türü katkılar için bir override üretir (`report_closed` → `status: temporarily_closed`, `report_incorrect` → düşük güvenilirlik skoru). **`BURADANE_ADMIN_TOKEN` ile korunur** (`Authorization: Bearer <token>` ya da `x-admin-token` başlığı); token tanımlı değilse uç kapalıdır. |
 
 ## Kategoriler ve Filtreler
 
@@ -402,7 +402,17 @@ Frontend'de şu an otomatik bir test suite'i yok - sadece `npm run lint`
 - Kullanıcı katkıları (öneri/rapor) moderasyon onayı olmadan asla herkese açık aramaya düşmez.
 - JWT tabanlı opsiyonel kimlik doğrulama (`python-jose`), şifreler `passlib[bcrypt]` ile hash'lenir.
 - `BURADANE_JWT_SECRET` prod'da mutlaka değiştirilmeli - varsayılan değer sadece yerel geliştirme içindir.
-- Demo'nun moderasyon onay ucunda (`PATCH /api/admin/contributions/:id`) kimlik doğrulama yok - bilinçli, dokümante edilmiş bir demo sınırlaması, bkz. "Bilinen Sınırlamalar".
+- **Demo'nun admin uçları (`/api/admin/*`) paylaşılan-sır token'ı ile korunur.**
+  Sunucuda `BURADANE_ADMIN_TOKEN` tanımlanır (frontend için `frontend/.env.local`);
+  yönetim paneli token'ı bir kez ister ve sekme kapanana kadar `sessionStorage`'da
+  tutar. Karşılaştırma sabit zamanlıdır (`crypto.timingSafeEqual`) ve **token
+  tanımlı değilse uçlar kapalıdır** (fail-closed) - "env unutuldu, panel açık
+  kaldı" durumu tasarımca imkânsız.
+- Katkı gönderimi (`POST /api/contributions`) IP başına kayan-pencere hız
+  sınırına tabidir (10 istek / 10 dk): art arda 2-3 bildirim yapan gerçek
+  kullanıcı hiç fark etmez, script 429 + `Retry-After` alır. Bellek içi
+  olduğu için çok örnekli dağıtımda örnek başına uygulanır - sınırlar
+  `frontend/src/lib/rate-limit.ts` içinde dürüstçe belgelidir.
 
 ## Bilinen Tuhaflıklar
 
@@ -458,10 +468,10 @@ sorgunun anlamını sessizce değiştirmek yerine.
 
 ## Bilinen Sınırlamalar
 
-- Demo'nun admin uçlarında (`/api/admin/contributions/:id`,
-  `/api/admin/places/:id`) kimlik doğrulama yok - bilinçli, dokümante
-  edilmiş bir demo sınırlaması; prod backend'de eşdeğer uçlar JWT
-  arkasındadır.
+- Yönetim panelinin **görüntülenmesi** hâlâ token istemez: moderasyon
+  kuyruğu ve istatistikler sunucuda render edilir ve sayfayı açan herkes
+  okuyabilir. Token yalnızca **yazma** işlemlerini korur; sayfa okumasını da
+  kapatmak çerez tabanlı bir oturum gerektirir ve henüz yapılmadı.
 - Demo'daki güvenilirlik skoru / doğrulama sayısı / tazelik etiketleri
   gerçek bir topluluk geçmişinden değil, OSM kaydının doluluğundan
   **deterministik olarak üretiliyor** (demo'nun hiç topluluk geçmişi yok).

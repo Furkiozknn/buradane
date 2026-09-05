@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { addContribution, listContributions } from "@/lib/contributions-store";
+import { checkRateLimit, getClientKey } from "@/lib/rate-limit";
 import type { ContributionKind } from "@/lib/types";
 
 const VALID_KINDS: ContributionKind[] = [
@@ -21,6 +22,22 @@ export async function GET() {
  * up in public search until a moderator approves it.
  */
 export async function POST(request: Request) {
+  // Rate-limited because this is the only unauthenticated write in the app
+  // and it lands in a JSON file with no other size guard. The window is
+  // generous on purpose - a person filing 2-3 reports back to back must
+  // never notice it - while a script hammering the endpoint gets a 429 and
+  // an honest Retry-After instead of a growing file. See rate-limit.ts for
+  // what an in-memory limiter can and cannot promise.
+  const limit = checkRateLimit(getClientKey(request));
+  if (!limit.allowed) {
+    return NextResponse.json(
+      {
+        error: `Kısa sürede çok fazla katkı gönderildi. Lütfen ${limit.retryAfterSeconds} saniye sonra tekrar deneyin.`,
+      },
+      { status: 429, headers: { "Retry-After": String(limit.retryAfterSeconds) } },
+    );
+  }
+
   let body: Record<string, unknown>;
   try {
     body = await request.json();

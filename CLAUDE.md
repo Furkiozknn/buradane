@@ -128,6 +128,8 @@ buradane/
 | `frontend/src/components/MapCanvas.tsx` | MapLibre sarmalayıcı | **Kırılgan** — bkz. §9 |
 | `frontend/src/components/AppShell.tsx` | Ana durum orkestratörü | Büyük; değiştirmeden önce tamamını oku |
 | `frontend/public/sw.js` | Çevrimdışı katman | Yanlış bir SW kalıcıdır ve siteyi bozabilir |
+| `frontend/src/lib/admin-auth.ts` | Admin token denetimi | **Fail-closed**: token tanımsızsa uçlar kapalı. Bunu "dev kolaylığı" için açığa çevirme |
+| `frontend/src/lib/rate-limit.ts` | Katkı hız sınırı | Bellek içi; neyi vaat etmediği dosyanın başında yazılı |
 | `frontend/src/app/globals.css` | Tasarım token'ları | Renkler yalnızca buradan gelir |
 
 ---
@@ -470,7 +472,9 @@ Bunları issue açıp tartışmadan PR'a dönüştürme:
 Bunlar README'de de yazılıdır ve bilinçli kabul edilmiş durumlardır:
 
 - Demo, gerçek backend yerine yerel JSON adaptörüyle çalışır.
-- `frontend/src/app/api/admin/*` route'larında **kimlik doğrulama yoktur.**
+- Admin API'leri `BURADANE_ADMIN_TOKEN` ile korunur ama yönetim panelinin
+  **görüntülenmesi** token istemez (kuyruk sunucuda render edilir); yalnızca
+  yazma işlemleri kapalıdır.
 - Depoda gerçek bir Alembic migration'ı yoktur.
 - Backend hiç canlı veritabanına karşı çalıştırılmamıştır (bu geliştirme
   ortamında Docker/Postgres yoktu).

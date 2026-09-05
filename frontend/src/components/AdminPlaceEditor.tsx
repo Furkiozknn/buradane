@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Check, RotateCcw, Search } from "lucide-react";
+import { adminFetch } from "@/lib/admin-token";
 
 import { AMENITIES, categoryMeta } from "@/lib/categories";
 import type { AmenityKey, Place, PlaceStatus, PriceType } from "@/lib/types";
@@ -69,7 +70,7 @@ export function AdminPlaceEditor() {
       setSaving(true);
       setMessage(null);
       try {
-        const response = await fetch(`/api/admin/places/${encodeURIComponent(selected.id)}`, {
+        const response = await adminFetch(`/api/admin/places/${encodeURIComponent(selected.id)}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
@@ -92,7 +93,7 @@ export function AdminPlaceEditor() {
     setSaving(true);
     setMessage(null);
     try {
-      const response = await fetch(`/api/admin/places/${encodeURIComponent(selected.id)}`, {
+      const response = await adminFetch(`/api/admin/places/${encodeURIComponent(selected.id)}`, {
         method: "DELETE",
       });
       const data = await response.json();

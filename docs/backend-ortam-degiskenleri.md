@@ -71,8 +71,19 @@ Bu, `ROADMAP.md`'de açık bir madde olarak izleniyor.
 
 ## Frontend ortam değişkenleri
 
-Frontend şu an `NODE_ENV` dışında **hiçbir ortam değişkeni okumuyor**.
-`frontend/.env` dosyasına ihtiyaç yok.
+| Değişken | Zorunlu mu | Ne işe yarar |
+|---|---|---|
+| `BURADANE_ADMIN_TOKEN` | Yönetim paneli kullanılacaksa evet | `/api/admin/*` uçlarını koruyan paylaşılan sır. **Tanımlı değilse admin yazma uçları kapalıdır** (fail-closed) — panel bunu açık bir mesajla söyler. `NEXT_PUBLIC_` öneki YOKTUR ve olmamalıdır: o önek değeri her ziyaretçinin JavaScript'ine gömer. |
 
-Bu değişirse (ör. gerçek backend'in taban URL'i için bir
-`NEXT_PUBLIC_API_URL` eklendiğinde) bu belge güncellenmelidir.
+Yerel geliştirme için `frontend/.env.local` dosyasına yaz (Next.js otomatik
+okur, dosya `.gitignore`'dadır):
+
+```ini
+BURADANE_ADMIN_TOKEN=uzun-ve-tahmin-edilemez-bir-deger
+```
+
+Üretim değeri için:
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+```
