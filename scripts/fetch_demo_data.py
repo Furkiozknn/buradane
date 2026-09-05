@@ -157,6 +157,63 @@ CITIES: dict[str, dict] = {
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "frontend" / "data"
 
+ADMIN_DIVISIONS_PATH = DATA_DIR / "admin-divisions.json"
+
+
+def _slugify_tr(name: str) -> str:
+    """ASCII slug in the exact style the hand-written entries use:
+    Sanliurfa-style folding (Şanlıurfa -> sanliurfa, Eskişehir -> eskisehir).
+    The slug is an identifier (file names, city picker keys), so it must be
+    stable and diacritic-free; the label keeps the real spelling."""
+    table = str.maketrans("çğıöşüâîûÇĞİÖŞÜ", "cgiosuaiucgiosu")
+    folded = name.translate(table).lower()
+    return "".join(ch for ch in folded if ch.isalnum())
+
+
+def synthesized_cities() -> dict[str, dict]:
+    """Fetch configs for every province NOT hand-configured above, generated
+    from OSM's own admin boundaries (scripts/fetch_admin_divisions.py).
+
+    Generated rather than hand-written on purpose: 62 hand-typed bounding
+    boxes are 62 chances to drop a city in a field, and the test suite would
+    only catch it after a long fetch had already burned the API budget. The
+    anchor is the province's admin_centre node - the capital city - NOT the
+    polygon centroid, which for oddly shaped provinces lands in empty
+    terrain. A province whose anchor fell back to the centroid is skipped
+    loudly instead of fetched wrongly.
+
+    Box size: half-height 0.055 deg lat, half-width 0.07 deg lon (~12x12 km)
+    covers a mid-size Turkish city's contiguous core. The buyuksehir with
+    wider sprawl are all in the hand-written set already.
+    """
+    if not ADMIN_DIVISIONS_PATH.exists():
+        return {}
+    data = json.loads(ADMIN_DIVISIONS_PATH.read_text(encoding="utf-8"))
+    out: dict[str, dict] = {}
+    for province in data.get("provinces", []):
+        slug = _slugify_tr(province["name"])
+        if slug in CITIES or slug in out:
+            continue
+        if not province.get("center_is_capital", False):
+            print(f"  ! {province['name']}: merkez şehre çapalanamadı (centroid) - atlanıyor, elle bbox gerekli")
+            continue
+        center = province["center"]
+        out[slug] = {
+            "label": province["name"],
+            "bbox": (
+                round(center["lat"] - 0.055, 4),
+                round(center["lon"] - 0.07, 4),
+                round(center["lat"] + 0.055, 4),
+                round(center["lon"] + 0.07, 4),
+            ),
+            "cap_scale": 0.2,
+        }
+    return out
+
+
+def all_city_configs() -> dict[str, dict]:
+    return {**CITIES, **synthesized_cities()}
+
 # category slug -> (OSM selectors, per-category cap)
 # The cap exists because some categories (parking, benches) would otherwise
 # dominate the file and the map. Sorted-by-nothing truncation is fine for a
@@ -492,19 +549,32 @@ def fetch_city(city: str, city_config: dict) -> int:
 
 
 def main() -> None:
+    cities = all_city_configs()
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--city",
-        choices=sorted(CITIES),
+        choices=sorted(cities),
         action="append",
         help="Sadece bu şehri çek (birden fazla kez verilebilir). Varsayılan: hepsi.",
     )
+    parser.add_argument(
+        "--only-missing",
+        action="store_true",
+        help="Yalnızca henüz places.<il>.json dosyası olmayan illeri çek - "
+        "81 ilin kalanını tamamlarken tek doğru mod: bitenler atlanır, "
+        "yarıda kesilen koşu kaldığı yerden sürer.",
+    )
     args = parser.parse_args()
 
-    selected = args.city or list(CITIES)
+    selected = args.city or sorted(cities)
+    if args.only_missing:
+        selected = [c for c in selected if not (DATA_DIR / f"places.{c}.json").exists()]
+        print(f"--only-missing: {len(selected)} il eksik: {', '.join(selected) or '(hiç)'}")
+
     total = 0
     for city in selected:
-        total += fetch_city(city, CITIES[city])
+        total += fetch_city(city, cities[city])
 
     print(f"\n✓ Toplam {total} mekan, {len(selected)} şehir: {', '.join(selected)}")
 

@@ -32,6 +32,7 @@ import { boundingBox, haversineMeters } from "./geo";
 import { isOpenNow } from "./opening-hours";
 import { QUERY_NOTICES, SEARCH_SYNONYMS, type QueryNotice } from "./categories";
 import { foldAscii, parseLocality, resolveDistrict } from "./administrative";
+import { officialDistrict } from "./admin-divisions";
 
 interface RawDataset {
   city?: string;
@@ -173,11 +174,23 @@ function localityFromTags(
   const fromCity = parseLocality(provinceRaw);
   const explicitDistrict = resolveDistrict(districtRaw);
 
+  const heuristicDistrict = explicitDistrict?.name ?? fromCity.district?.name ?? null;
+
+  // The official list (OSM admin boundaries, 973 districts) outranks the
+  // heuristic when it recognises the name: its spelling is the boundary
+  // relation's own, and it can supply the province for a bare district tag.
+  // When the list is absent or the name is not an official district, the
+  // heuristic result stands unchanged - which is exactly the behaviour the
+  // app shipped with before the list existed.
+  const official = heuristicDistrict ? officialDistrict(heuristicDistrict) : null;
+
   return {
-    district: explicitDistrict?.name ?? fromCity.district?.name ?? null,
+    district: official?.name ?? heuristicDistrict,
     // A district we recognised may name its own province (the fixes table
-    // knows which province a mislabelled neighbourhood belongs to).
-    province: fromCity.province?.name ?? explicitDistrict?.province ?? null,
+    // knows which province a mislabelled neighbourhood belongs to; the
+    // official list knows it for every unambiguous district in the country).
+    province:
+      fromCity.province?.name ?? explicitDistrict?.province ?? (official?.province || null),
   };
 }
 
