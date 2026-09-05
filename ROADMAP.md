@@ -215,8 +215,10 @@ belirsizse, belirsiz olduğu açıkça yazılıdır.
   başlık/açıklama, mekana özel OG görseli (kategori renginde, tipografik),
   `robots.ts` ve adlı mekanlarla sınırlı `sitemap.ts` (~9.800 kayıt; isimsiz
   binlerce "Umumi Tuvalet" sayfası bilinçli olarak listelenmiyor).
-- 📋 **Frontend CI** — lint, tip kontrolü, test ve build'in PR'da otomatik
-  koşması *(bu yol haritası yazılırken eklendi, bkz. `.github/workflows/`)*
+- ✅ **CI iki iş akışıyla koşuyor** — Frontend (lint, tip kontrolü, 145
+  test, build) ve CI (backend, gerçek Postgres+PostGIS servisiyle 82 test);
+  backend işinde herhangi bir testin skip olması artık build'i kırar —
+  "yeşil ama koşmadı" tuzağı bir kez gerçekten yaşandı ve kapatıldı.
 - ✅ **Mükerrer öneri tespiti** — öneri gönderilmeden önce 150 m içinde aynı
   türden kayıtlar aranır ve gösterilir; "Bu o" mevcut kaydı **doğrulamaya**
   çevirir (tazelik sinyali), "Hayır, yeni yer" öneriyi yine de gönderir.
