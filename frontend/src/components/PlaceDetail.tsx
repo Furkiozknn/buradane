@@ -51,10 +51,15 @@ export function PlaceDetail({
   // Split into what we know is true, and what we genuinely don't know. The
   // second list matters: hiding unknowns would let the UI imply "no".
   /** Native share sheet where it exists (mobile), clipboard fallback
-   * everywhere else. The URL already carries the open place, so the
-   * recipient lands on this exact record. */
+   * everywhere else.
+   *
+   * Shares /yer/<id>, not the current map URL: the map URL works but
+   * unfurls as the generic app title, while the place page carries real
+   * metadata and a per-place preview image - and in a messaging app the
+   * unfurl IS the message. The recipient still reaches the map in one tap
+   * from that page. */
   async function share() {
-    const url = window.location.href;
+    const url = `${window.location.origin}/yer/${encodeURIComponent(place.id)}`;
     const text = `${place.name} — ${primary.label}`;
     try {
       if (navigator.share) {

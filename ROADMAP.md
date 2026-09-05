@@ -164,8 +164,10 @@ belirsizse, belirsiz olduğu açıkça yazılıdır.
   binlerce "Umumi Tuvalet" sayfası bilinçli olarak listelenmiyor).
 - 📋 **Frontend CI** — lint, tip kontrolü, test ve build'in PR'da otomatik
   koşması *(bu yol haritası yazılırken eklendi, bkz. `.github/workflows/`)*
-- 📋 **Mükerrer öneri tespiti** — kullanıcı OSM'de zaten var olan bir mekanı
-  önerebiliyor
+- ✅ **Mükerrer öneri tespiti** — öneri gönderilmeden önce 150 m içinde aynı
+  türden kayıtlar aranır ve gösterilir; "Bu o" mevcut kaydı **doğrulamaya**
+  çevirir (tazelik sinyali), "Hayır, yeni yer" öneriyi yine de gönderir.
+  Kontrol bir kapı değil: başarısız olursa öneri normal yoldan geçer.
 - 📋 **Kalan 72 il** için veri çekimi
 - 📋 **Gerçek ilk Alembic migration'ı**
 
