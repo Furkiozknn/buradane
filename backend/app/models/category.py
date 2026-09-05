@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import ForeignKey, String, UniqueConstraint
+from sqlalchemy import ForeignKey, String
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -67,4 +67,7 @@ class PlaceCategory(Base):
     place: Mapped["Place"] = relationship(back_populates="place_categories")  # noqa: F821
     category: Mapped["Category"] = relationship()
 
-    __table_args__ = (UniqueConstraint("place_id", "category_id", name="uq_place_category"),)
+    # No separate UniqueConstraint: (place_id, category_id) is already the
+    # composite primary key, which is itself the uniqueness guarantee - a
+    # second identical constraint was redundant (and Postgres quietly
+    # collapsed it into the PK anyway; found writing the Alembic baseline).

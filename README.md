@@ -389,7 +389,7 @@ Frontend'de şu an otomatik bir test suite'i yok - sadece `npm run lint`
 - Kullanıcı katkıları (öneri/rapor) moderasyon onayı olmadan asla herkese açık aramaya düşmez.
 - JWT tabanlı opsiyonel kimlik doğrulama (`python-jose`), şifreler `bcrypt` ile hash'lenir. Token almanın tek yolu `POST /auth/login`; self-serve kayıt bilinçli olarak yok (hesaplar yalnızca moderasyon/atıf içindir).
 - Moderasyon çıkışı: `BURADANE_ADMIN_EMAIL`/`BURADANE_ADMIN_PASSWORD` ile açılışta tek bir bootstrap moderatör oluşturulur (varsa asla üzerine yazılmaz); bekleyen raporlar `GET /reports` ile listelenir, `PATCH /reports/{id}` (`{"action": "accept"|"reject"}`) ile karara bağlanır. Kabul edilen `closed`/`under_maintenance` raporu mekanı `temporarily_closed` yapar, `reopened` tekrar `active` yapar, `broken_amenity` ilgili amenity bayrağını temizler; bilgilendirme türleri (yanlış konum/bilgi vb.) yalnızca raporu kapatır - veri düzeltmesi bilinçli bir admin düzenlemesi olarak kalır. Her iki karar da raporun güvenilirlik skoru üzerindeki bekleyen-rapor baskısını kaldırır.
-- `BURADANE_JWT_SECRET` prod'da mutlaka değiştirilmeli - varsayılan değer sadece yerel geliştirme içindir.
+- `BURADANE_JWT_SECRET` artık yalnızca bir tavsiye değil: bootstrap admin yapılandırılmışken secret hâlâ varsayılan dev değerindeyse sunucu açılışta **açıkça reddeder** (herkesin forge edebileceği bir admin token'ı, admin'in hiç olmamasından kötüdür). Keşif-amaçlı, admin'siz çalıştırmalar secret'sız çalışmaya devam eder.
 - Demo'nun moderasyon onay ucunda (`PATCH /api/admin/contributions/:id`) kimlik doğrulama yok - bilinçli, dokümante edilmiş bir demo sınırlaması, bkz. "Bilinen Sınırlamalar".
 
 ## Bilinen Tuhaflıklar
@@ -461,8 +461,11 @@ sorgunun anlamını sessizce değiştirmek yerine.
 - ~~Henüz gerçek bir Alembic migration'ı yok.~~ **Çözüldü**: v1 şemasının
   tamamı tek bir baseline migration'da (`alembic/versions/`), gerçek bir
   PostGIS'e karşı üretilip doğrulandı (upgrade → autogenerate boş çıkıyor →
-  downgrade temiz). `tests/test_migrations.py` model-migration eşitliğini
-  CI'da denetler: migration'sız yeni bir model tablosu testi kırar.
+  downgrade temiz, **up→down→up döngüsü de** - ilk baseline'ın downgrade'i
+  altı Postgres enum tipini sızdırıyordu ve ikinci upgrade DuplicateObject
+  ile ölüyordu; düzeltildi ve döngü artık scratch-veritabanlı bir regresyon
+  testiyle korunuyor). `tests/test_migrations.py` ayrıca model-migration
+  eşitliğini CI'da denetler: migration'sız yeni bir model tablosu testi kırar.
 - Fotoğraflar ve yorumlar backend'de modellendi (`PlacePhoto`/
   `PlaceReview`) ama ne backend API'sinde ne demo'da bir arayüzü var.
   Fotoğraflar için OSM etiketleri ölçüldü ve **bilinçli olarak

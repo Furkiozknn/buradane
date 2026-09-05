@@ -176,7 +176,16 @@ class TestReportQueue:
 
 
 class TestBootstrap:
+    def test_bootstrap_refuses_the_default_jwt_secret(self, db_session, monkeypatch):
+        """An admin whose tokens anyone can forge is worse than no admin."""
+        monkeypatch.setattr(settings, "admin_email", ADMIN_EMAIL)
+        monkeypatch.setattr(settings, "admin_password", ADMIN_PASSWORD)
+        assert settings.jwt_secret == "dev-secret-change-in-production"
+        with pytest.raises(RuntimeError, match="BURADANE_JWT_SECRET"):
+            ensure_bootstrap_admin(db_session)
+
     def test_bootstrap_creates_one_admin_and_never_overwrites(self, db_session, monkeypatch):
+        monkeypatch.setattr(settings, "jwt_secret", "a-real-secret-for-this-test")
         monkeypatch.setattr(settings, "admin_email", ADMIN_EMAIL)
         monkeypatch.setattr(settings, "admin_password", ADMIN_PASSWORD)
         first = ensure_bootstrap_admin(db_session)
