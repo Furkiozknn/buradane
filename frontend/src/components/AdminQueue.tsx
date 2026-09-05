@@ -36,6 +36,12 @@ export function AdminQueue() {
   const [contributions, setContributions] = useState<Contribution[] | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // A failed initial load must never masquerade as an empty queue: "Kuyruk
+  // boş" on a 500 tells the moderator to walk away while contributions sit
+  // pending. The load failure is its own state, rendered as an error with a
+  // retry, and the retry re-runs the effect via this key.
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -44,10 +50,13 @@ export function AdminQueue() {
         const response = await adminFetch("/api/contributions");
         if (!response.ok) throw new Error(`Sunucu ${response.status} döndü`);
         const data = (await response.json()) as { contributions: Contribution[] };
-        if (!cancelled) setContributions(data.contributions);
+        if (!cancelled) {
+          setContributions(data.contributions);
+          setLoadFailed(false);
+        }
       } catch (err) {
         if (!cancelled) {
-          setContributions([]);
+          setLoadFailed(true);
           setError(err instanceof Error ? err.message : "Kuyruk yüklenemedi");
         }
       }
@@ -55,7 +64,31 @@ export function AdminQueue() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [reloadKey]);
+
+  if (loadFailed) {
+    return (
+      <div className="rounded-xl border border-border bg-surface p-8 text-center" role="alert">
+        <p className="text-[14px] font-medium" style={{ color: "var(--danger)" }}>
+          Kuyruk yüklenemedi
+        </p>
+        <p className="mt-1 text-[13px] text-text-secondary">{error}</p>
+        <button
+          type="button"
+          onClick={() => {
+            setLoadFailed(false);
+            setError(null);
+            setContributions(null);
+            setReloadKey((k) => k + 1);
+          }}
+          className="mt-3 h-10 rounded-lg px-4 text-[13px] font-semibold"
+          style={{ background: "var(--surface-sunken)", color: "var(--text)" }}
+        >
+          Tekrar dene
+        </button>
+      </div>
+    );
+  }
 
   if (contributions === null) {
     return (

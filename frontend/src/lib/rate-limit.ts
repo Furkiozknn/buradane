@@ -36,6 +36,11 @@ export interface RateLimitResult {
 
 export interface RateLimiter {
   check(key: string, now?: number): RateLimitResult;
+  /** Like `check` but WITHOUT consuming a slot: answers "would a hit be
+   * allowed right now?". Needed by the admin-auth brake, which must block
+   * before comparing but only spend budget on failures - a legitimate
+   * admin's successful requests must never count against it. */
+  peek(key: string, now?: number): RateLimitResult;
 }
 
 /**
@@ -73,6 +78,17 @@ export function createRateLimiter({ windowMs, maxRequests }: RateLimiterOptions)
 
       recent.push(now);
       hitsByKey.set(key, recent);
+      return { allowed: true, retryAfterSeconds: 0 };
+    },
+
+    peek(key: string, now: number = Date.now()): RateLimitResult {
+      const cutoff = now - windowMs;
+      const recent = (hitsByKey.get(key) ?? []).filter((hit) => hit > cutoff);
+      if (recent.length >= maxRequests) {
+        const oldest = recent[0];
+        const retryAfterMs = oldest + windowMs - now;
+        return { allowed: false, retryAfterSeconds: Math.max(1, Math.ceil(retryAfterMs / 1000)) };
+      }
       return { allowed: true, retryAfterSeconds: 0 };
     },
   };
@@ -124,6 +140,33 @@ const authProbeLimiter = createRateLimiter({
 /** Rate limit gate for GET /api/admin/auth. */
 export function checkAuthProbeLimit(key: string, now?: number): RateLimitResult {
   return authProbeLimiter.check(key, now);
+}
+
+// The probe endpoint's brake alone was security theater: every OTHER
+// admin-guarded route (queue read, place PATCH/DELETE, contribution PATCH)
+// answered wrong tokens with an unthrottled 401, so a brute-force script
+// simply switched targets - the adversarial review demonstrated exactly
+// that. This limiter counts FAILED auth attempts per client key across all
+// admin surfaces at once, inside checkAdminAuth itself, so a new admin
+// route can never ship un-braked again. Successful requests spend nothing:
+// a real admin working the queue at full speed never touches this.
+const AUTH_FAILURE_WINDOW_MS = 60 * 1000;
+const AUTH_FAILURE_MAX = 10;
+
+const adminAuthFailureLimiter = createRateLimiter({
+  windowMs: AUTH_FAILURE_WINDOW_MS,
+  maxRequests: AUTH_FAILURE_MAX,
+});
+
+/** Is this client currently locked out for too many failed admin auths?
+ * Non-consuming - call before the comparison. */
+export function peekAdminAuthFailures(key: string, now?: number): RateLimitResult {
+  return adminAuthFailureLimiter.peek(key, now);
+}
+
+/** Record one failed admin auth attempt (missing or wrong token). */
+export function recordAdminAuthFailure(key: string, now?: number): void {
+  adminAuthFailureLimiter.check(key, now);
 }
 
 /**

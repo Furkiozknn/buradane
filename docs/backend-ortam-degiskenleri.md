@@ -64,7 +64,7 @@ BURADANE_CORS_ORIGINS=["http://localhost:3000"]
 | `BURADANE_ADMIN_EMAIL` / `BURADANE_ADMIN_PASSWORD` | tanımsız | İkisi birden tanımlıysa açılışta tek bir bootstrap moderatör hesabı oluşturulur (`app/services/bootstrap.py`); mevcut hesabın üzerine asla yazılmaz. Varsayılan JWT sırrı ile birlikte ayarlanırsa açılış `RuntimeError` ile **reddedilir**. |
 | `BURADANE_VERIFICATION_CONSENSUS` | `2` | Bir alan doğrulamasının mekana uygulanması için gereken farklı katılımcı sayısı. `1` yapmak tek kişilik onayı açar — üretimde düşürme. |
 | `BURADANE_WRITE_RATE_LIMIT_PER_HOUR` | `30` | IP başına saatlik yazma bütçesi (öneri/bildirim/doğrulama/login). |
-| `BURADANE_WRITE_RATE_LIMIT_BURST` | `10` | Aynı bütçenin anlık patlama tavanı. Doğrulama ucunda ayrıca IP+mekan başına ikinci bir sınır vardır; ayrı bir değişkeni yoktur, bilinçli olarak `BURADANE_VERIFICATION_CONSENSUS - 1`'den türetilir. |
+| `BURADANE_WRITE_RATE_LIMIT_BURST` | `10` | Aynı bütçenin anlık patlama tavanı. Doğrulama ucunda ayrıca IP+mekan başına ikinci bir sınır vardır; ayrı değişkeni yoktur, bilinçli olarak türetilir: bütçe `BURADANE_VERIFICATION_CONSENSUS - 1`, dolum penceresi `BURADANE_STALE_AFTER_DAYS` (konsensüs penceresiyle aynı — kısa olsaydı sabırlı token rotasyonu konsensüsü doldururdu). |
 
 ---
 

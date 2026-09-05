@@ -19,9 +19,12 @@ import type { Place, PlaceStatus, PriceType } from "@/lib/types";
  * `permanently_closed` - which hides it from search while keeping the record
  * (and the reason) for anyone auditing the data later.
  *
- * Demo scope note: these routes are unauthenticated, the same documented
- * limitation the moderation route carries. In production the equivalent
- * endpoints sit behind the JWT dependency in backend/app/api/deps.py.
+ * Both handlers require the shared admin token (checkAdminAuth, fail-closed
+ * when the env var is unset) - auth runs before the existence check so an
+ * unauthenticated caller cannot even learn which ids exist. The route-level
+ * tests in tests/admin-routes.test.ts pin this. In production the
+ * equivalent endpoints sit behind the JWT dependency in
+ * backend/app/api/deps.py.
  */
 
 const EDITABLE_STATUSES: PlaceStatus[] = [

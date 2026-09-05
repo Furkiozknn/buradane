@@ -29,8 +29,16 @@ const TOKEN = "route-test-token";
 
 let tempDir: string;
 
+// Every failed auth now spends budget in a per-address failure brake that
+// lives for the whole module. Each test gets its own address so one test's
+// deliberate failures can never lock a later test out; the brake tests pick
+// their own fixed addresses on top.
+let ipCounter = 0;
+let testIp: string;
+
 beforeEach(async () => {
   process.env[TOKEN_VAR] = TOKEN;
+  testIp = `10.20.30.${ipCounter++}`;
   // The store must never touch real runtime data from tests.
   tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "buradane-routes-"));
   process.env.BURADANE_DATA_DIR = tempDir;
@@ -45,7 +53,7 @@ afterEach(async () => {
 function req(headers: Record<string, string> = {}, body?: unknown): Request {
   return new Request("http://localhost/api/test", {
     method: "POST",
-    headers: { "Content-Type": "application/json", ...headers },
+    headers: { "Content-Type": "application/json", "x-forwarded-for": testIp, ...headers },
     body: body === undefined ? null : JSON.stringify(body),
   });
 }
@@ -124,6 +132,49 @@ describe("admin route guards", () => {
       req({ "x-forwarded-for": ip, "x-admin-token": TOKEN }),
     );
     expect(rightTokenSameIp.status).toBe(429);
+  });
+
+  it("wrong-token attempts against ANY admin surface lock the address out", async () => {
+    // The adversarial review's finding: the brake sat only on the probe
+    // endpoint, so a brute-force script aimed at the queue read or a
+    // mutation route instead and got unthrottled 401s. The brake now lives
+    // inside checkAdminAuth itself - prove it via a MUTATION route, and mix
+    // surfaces to prove the budget is shared across all of them.
+    const ip = "10.99.99.1";
+    for (let i = 0; i < 5; i += 1) {
+      const r = await placeDELETE(req({ "x-forwarded-for": ip, "x-admin-token": "yanlis" }), ctx("node/1"));
+      expect(r.status).toBe(401);
+    }
+    for (let i = 0; i < 5; i += 1) {
+      const r = await contributionsGET(req({ "x-forwarded-for": ip, "x-admin-token": "yanlis" }));
+      expect(r.status).toBe(401);
+    }
+    const eleventh = await placeDELETE(req({ "x-forwarded-for": ip, "x-admin-token": "yanlis" }), ctx("node/1"));
+    expect(eleventh.status).toBe(429);
+    expect(eleventh.headers.get("Retry-After")).toBeTruthy();
+    // While locked out, even the RIGHT token answers 429 - the lockout must
+    // not double as a confirmation oracle.
+    const rightWhileLocked = await placeDELETE(req({ "x-forwarded-for": ip, "x-admin-token": TOKEN }), ctx("node/1"));
+    expect(rightWhileLocked.status).toBe(429);
+    // A different address is unaffected.
+    const otherAddress = await placeDELETE(
+      req({ "x-forwarded-for": "10.99.99.2", "x-admin-token": TOKEN }),
+      ctx("node/boyle-yok"),
+    );
+    expect(otherAddress.status).toBe(404);
+  });
+
+  it("valid-token traffic never spends the failure budget", async () => {
+    // A real admin working the queue at full speed must not rate-limit
+    // themselves: only FAILURES count. Twelve valid reads (more than the
+    // 10-per-minute failure cap), then a wrong token still gets the plain
+    // 401 - the budget is untouched.
+    for (let i = 0; i < 12; i += 1) {
+      const r = await contributionsGET(req({ "x-admin-token": TOKEN }));
+      expect(r.status).toBe(200);
+    }
+    const wrongAfter = await contributionsGET(req({ "x-admin-token": "yanlis" }));
+    expect(wrongAfter.status).toBe(401);
   });
 
   it("fails CLOSED at the route when no token is configured", async () => {

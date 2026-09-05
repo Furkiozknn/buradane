@@ -155,11 +155,19 @@ belirsizse, belirsiz olduğu açıkça yazılıdır.
 - ✅ **Moderasyon kuyruğunun okunması da token'lı** — kuyruk artık sunucuda
   render edilmiyor; panel token doğrulandıktan sonra `GET /api/contributions`
   üzerinden çeker ve o uç da admin token'ı ister. `/admin` sayfası token
-  girilmeden yalnızca giriş kapısını (`AdminTokenGate`) gösterir; veri
-  taşıyan hiçbir şey sunucu yanıtında yer almaz.
-- ✅ **Admin token probe'una hız freni** — `GET /api/admin/auth` IP başına
-  10 deneme/dk ile sınırlı (429 + `Retry-After`); kaba kuvvet token tahmini
-  pratikte kapalı.
+  girilmeden yalnızca giriş kapısını (`AdminTokenGate`) gösterir; katkı
+  içerikleri (notlar, adlar) sunucu yanıtında yer almaz — yalnızca sayısal
+  agregalar (bekleyen/toplam sayısı) token'sız görünür kalır, bilinçli.
+- ✅ **Başarısız admin yetkilendirmelerine paylaşılan fren** — fren tek tek
+  route'larda değil `checkAdminAuth`'un içinde yaşar: HERHANGİ bir admin
+  yüzeyine (probe, kuyruk okuma, mutasyonlar) dakikada 10'dan fazla
+  başarısız deneme yapan adres 429 + `Retry-After` alır; kilitliyken doğru
+  tahmin bile 429 döner (kilit, isabet onayına dönüşemez). Geçerli token'lı
+  trafik bütçe harcamaz. Dürüst sınır: istemci anahtarı proxy
+  başlıklarından gelir (`x-forwarded-for`), yani bu fren ancak başlıkları
+  ezen bir proxy'nin arkasında gerçek kimliğe dayanır; çıplak `next start`
+  önünde "ucuz taramayı pahalılaştırır", kriptografik güvence vermez
+  (`rate-limit.ts` bunu açıkça söyler).
 - 🚧 **Backend'de varsayılan JWT sırrı** — iki katman: bootstrap admin
   varsayılan sır altında **oluşturulmayı reddediyor** (`services/bootstrap.py`,
   asıl kontrol) ve her başlangıçta uyarı basılıyor (`app/main.py`, mevcut-admin
@@ -182,8 +190,17 @@ belirsizse, belirsiz olduğu açıkça yazılıdır.
   (iki gerçek bağlantıyla kanıtlayan test: `test_report_resolution_race.py`).
 - ✅ **Doğrulama konsensüsü token rotasyonuna dayanıklı** — cihaz token'ı
   istemci ürettiği için "farklı katılımcı" kanıtı değildir; IP+mekan başına
-  doğrulama bütçesi konsensüs eşiğinin altında tutulur (`consensus-1`), tek
-  adres token değiştirerek eşiğe ulaşamaz.
+  doğrulama bütçesi konsensüs eşiğinin altında tutulur (`consensus-1`) ve
+  kovanın dolum penceresi konsensüsün kendi penceresine
+  (`stale_after_days`) eşitlenmiştir — saatte bir token değiştiren sabırlı
+  rotasyon da eşiğe ulaşamaz (bunu ilk sürüm kaçırmıştı; adversarial
+  inceleme yakaladı, test artık saatlik sabrı da deniyor). Bilinçli bedel:
+  aynı CGNAT adresi arkasındaki iki gerçek hane aynı mekanı aynı pencerede
+  doğrulayamaz — konsensüs farklı ağdan gelmek zorunda.
+- 📋 **Konsensüste kimliği IP'ye de bağlamak** — doğrulama kayıtlarına
+  sunucu-türevi bir adres hash'i ekleyip (migration gerektirir) distinct
+  sayımı ona da bakar yapmak, yukarıdaki CGNAT bedelini kaldırmanın doğru
+  yolu; hız sınırı o zaman gevşeyebilir.
 
 ### Yüksek öncelik: erişilebilirlik
 

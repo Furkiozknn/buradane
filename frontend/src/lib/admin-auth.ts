@@ -2,6 +2,8 @@ import { timingSafeEqual } from "node:crypto";
 
 import { NextResponse } from "next/server";
 
+import { getClientKey, peekAdminAuthFailures, recordAdminAuthFailure } from "./rate-limit";
+
 /**
  * Shared-secret gate for the admin mutation routes (place overrides,
  * contribution moderation). There is no user/session system in this
@@ -55,9 +57,15 @@ export function constantTimeEqual(a: string, b: string): boolean {
   return timingSafeEqual(bufA, bufB);
 }
 
-export type AdminAuthFailureReason = "not_configured" | "missing_token" | "invalid_token";
+export type AdminAuthFailureReason =
+  | "not_configured"
+  | "missing_token"
+  | "invalid_token"
+  | "rate_limited";
 
-export type AdminAuthResult = { ok: true } | { ok: false; reason: AdminAuthFailureReason };
+export type AdminAuthResult =
+  | { ok: true }
+  | { ok: false; reason: AdminAuthFailureReason; retryAfterSeconds?: number };
 
 /**
  * What happens when `BURADANE_ADMIN_TOKEN` isn't set in the environment:
@@ -74,10 +82,31 @@ export function checkAdminAuth(request: Request): AdminAuthResult {
   const expected = process.env.BURADANE_ADMIN_TOKEN;
   if (!expected) return { ok: false, reason: "not_configured" };
 
-  const provided = extractToken(request);
-  if (!provided) return { ok: false, reason: "missing_token" };
+  // The brake lives HERE, not in individual routes, on purpose: when it sat
+  // only on the probe endpoint, every other admin route was an unthrottled
+  // 401 oracle and a brute-force script just aimed there instead. Placed in
+  // the shared check, a future admin route is braked the moment it calls
+  // checkAdminAuth. Only FAILURES spend budget - a legitimate admin's
+  // valid-token traffic is never throttled by this - but while a client is
+  // locked out even a correct guess answers 429, so the lockout cannot be
+  // used to confirm a hit.
+  const clientKey = getClientKey(request);
+  const gate = peekAdminAuthFailures(clientKey);
+  if (!gate.allowed) {
+    return { ok: false, reason: "rate_limited", retryAfterSeconds: gate.retryAfterSeconds };
+  }
 
-  return constantTimeEqual(provided, expected) ? { ok: true } : { ok: false, reason: "invalid_token" };
+  const provided = extractToken(request);
+  if (!provided) {
+    recordAdminAuthFailure(clientKey);
+    return { ok: false, reason: "missing_token" };
+  }
+
+  if (!constantTimeEqual(provided, expected)) {
+    recordAdminAuthFailure(clientKey);
+    return { ok: false, reason: "invalid_token" };
+  }
+  return { ok: true };
 }
 
 const REASON_MESSAGES: Record<AdminAuthFailureReason, string> = {
@@ -86,12 +115,24 @@ const REASON_MESSAGES: Record<AdminAuthFailureReason, string> = {
   missing_token:
     "Bu işlem için yönetici yetkisi gerekli. 'Authorization: Bearer <token>' ya da 'x-admin-token' başlığı gönderin.",
   invalid_token: "Geçersiz admin token.",
+  rate_limited: "Çok fazla başarısız yetkilendirme denemesi. Biraz bekleyip tekrar deneyin.",
 };
 
-/** Turns a failed `checkAdminAuth` result into the 401 a route handler
- * returns as-is. Kept separate from `checkAdminAuth` so the auth decision
- * itself stays a plain Request -> result function, easy to unit test
- * without constructing a NextResponse. */
-export function adminAuthErrorResponse(result: { ok: false; reason: AdminAuthFailureReason }): NextResponse {
+/** Turns a failed `checkAdminAuth` result into the 401 (or 429, for the
+ * failure brake) a route handler returns as-is. Kept separate from
+ * `checkAdminAuth` so the auth decision itself stays a plain
+ * Request -> result function, easy to unit test without constructing a
+ * NextResponse. */
+export function adminAuthErrorResponse(result: {
+  ok: false;
+  reason: AdminAuthFailureReason;
+  retryAfterSeconds?: number;
+}): NextResponse {
+  if (result.reason === "rate_limited") {
+    return NextResponse.json(
+      { error: REASON_MESSAGES.rate_limited },
+      { status: 429, headers: { "Retry-After": String(result.retryAfterSeconds ?? 60) } },
+    );
+  }
   return NextResponse.json({ error: REASON_MESSAGES[result.reason] }, { status: 401 });
 }

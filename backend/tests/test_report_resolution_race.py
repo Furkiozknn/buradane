@@ -1,23 +1,35 @@
-"""Interleaved-transaction proof for the report-resolution row lock.
+"""Interleaved-transaction proof for the report-resolution row lock,
+driven through the ENDPOINT itself.
 
 The sequential double-resolve test always passed and never covered the
 race: two moderators in two transactions could both read `pending`, both
 apply opposite decisions, and the later commit silently overwrote the
-earlier one. This file drives two REAL database connections through the
-interleaving itself - which is why it cannot use the shared per-test
-session the other suites share, and why it is database-gated like them.
+earlier one.
+
+The first version of this file proved only that Postgres row locks work:
+it took every with_for_update itself and never imported the endpoint - so
+deleting the lock from reports.py left it green (the adversarial review's
+finding). This version drives `resolve_report_endpoint` from two threads
+on two REAL connections. The first resolver is held inside its
+check-then-act window by a wrapped resolve_report; with the endpoint's
+lock, the second blocks at the row read and re-reads `accepted` into a
+409. Remove with_for_update from the endpoint and the second walks through
+the window during the hold, both "win", and the exactly-one-409 assertion
+goes red.
 """
 
 from __future__ import annotations
 
+import threading
+import time
+
 import pytest
+from fastapi import HTTPException
 from sqlalchemy import text
-from sqlalchemy.exc import OperationalError
 
 from app.core.db import SessionLocal
 from app.models.place import Place, PlaceStatus
 from app.models.signal import PlaceReport, ReportStatus, ReportType
-from app.services.moderation import resolve_report
 from tests.conftest import DB_AVAILABLE
 
 pytestmark = pytest.mark.skipif(
@@ -55,39 +67,77 @@ def committed_report():
         cleanup.close()
 
 
-def test_second_resolver_waits_on_the_lock_instead_of_racing(committed_report):
+def test_concurrent_resolutions_through_the_endpoint_yield_exactly_one_409(
+    committed_report, monkeypatch
+):
+    from app.api import reports as reports_api
+    from app.api.reports import ReportResolutionIn, resolve_report_endpoint
+
     report_id, place_id = committed_report
 
-    session_a = SessionLocal()
-    session_b = SessionLocal()
+    real_resolve = reports_api.resolve_report
+    first_inside = threading.Event()
+    hold = threading.Event()
+
+    def held_resolve(db, *, report, place, accept):
+        # The first thread to get past the status check announces itself and
+        # is held INSIDE the check-then-act window. If the endpoint's row
+        # lock is doing its job, the second thread never reaches this point
+        # while the hold lasts - it is parked at db.get. Without the lock it
+        # sails in here during the hold, which is exactly the race.
+        if not first_inside.is_set():
+            first_inside.set()
+            hold.wait(timeout=10)
+        return real_resolve(db, report=report, place=place, accept=accept)
+
+    monkeypatch.setattr(reports_api, "resolve_report", held_resolve)
+
+    results: dict[str, tuple[str, object]] = {}
+
+    def moderator(name: str, action: str) -> None:
+        db = SessionLocal()
+        try:
+            out = resolve_report_endpoint(
+                report_id, ReportResolutionIn(action=action), db, admin=None
+            )
+            results[name] = ("resolved", out.status)
+        except HTTPException as exc:
+            db.rollback()
+            results[name] = ("http", exc.status_code)
+        except Exception as exc:  # pragma: no cover - diagnostics on failure
+            db.rollback()
+            results[name] = ("error", repr(exc))
+        finally:
+            db.close()
+
+    accepter = threading.Thread(target=moderator, args=("accept", "accept"))
+    accepter.start()
+    assert first_inside.wait(timeout=10), "first resolver never reached resolve_report"
+
+    rejecter = threading.Thread(target=moderator, args=("reject", "reject"))
+    rejecter.start()
+    # Give the second thread time to issue its SELECT ... FOR UPDATE and
+    # block on the first one's uncommitted lock, then release the hold.
+    time.sleep(0.6)
+    hold.set()
+    accepter.join(timeout=15)
+    rejecter.join(timeout=15)
+    assert not accepter.is_alive() and not rejecter.is_alive(), f"deadlocked: {results}"
+
+    outcomes = sorted(kind for kind, _ in results.values())
+    assert outcomes == ["http", "resolved"], (
+        f"exactly one resolution and one 409 expected, got {results} - "
+        "two 'resolved' means both moderators won: the endpoint lost its row lock"
+    )
+    http_result = next(v for v in results.values() if v[0] == "http")
+    assert http_result[1] == 409
+
+    # The winner's decision - and only theirs - is what the database holds.
+    check = SessionLocal()
     try:
-        # A takes the row lock the endpoint now takes, and holds it
-        # uncommitted - the exact window the race lived in.
-        locked = session_a.get(PlaceReport, report_id, with_for_update=True)
-        assert locked is not None and locked.status == ReportStatus.pending
-
-        # B cannot even reach its check-then-act while A holds the lock:
-        # with a short lock_timeout the attempt errors instead of reading a
-        # stale `pending`. Without with_for_update in the endpoint, this
-        # read would have succeeded instantly - that is the regression this
-        # assertion pins.
-        session_b.execute(text("SET LOCAL lock_timeout = '400ms'"))
-        with pytest.raises(OperationalError):
-            session_b.get(PlaceReport, report_id, with_for_update=True, populate_existing=True)
-        session_b.rollback()
-
-        # A completes its resolution and commits.
-        place = session_a.get(Place, place_id, with_for_update=True)
-        resolve_report(session_a, report=locked, place=place, accept=True)
-        session_a.commit()
-
-        # B retries the way the endpoint does after the wait: fresh read
-        # under the lock. It must see the resolved state and take the 409
-        # branch - never a second, overwriting resolution.
-        after = session_b.get(PlaceReport, report_id, with_for_update=True, populate_existing=True)
-        assert after is not None
-        assert after.status == ReportStatus.accepted
-        session_b.rollback()
+        final = check.get(PlaceReport, report_id)
+        winner = next(k for k, v in results.items() if v[0] == "resolved")
+        expected_status = ReportStatus.accepted if winner == "accept" else ReportStatus.rejected
+        assert final is not None and final.status == expected_status
     finally:
-        session_a.close()
-        session_b.close()
+        check.close()

@@ -23,7 +23,7 @@ from app.core.config import settings
 
 
 class TokenBucketLimiter:
-    def __init__(self, *, per_hour: int, burst: int, clock=time.monotonic):
+    def __init__(self, *, per_hour: float, burst: int, clock=time.monotonic):
         self._rate_per_second = per_hour / 3600.0
         self._burst = float(burst)
         self._clock = clock
@@ -69,17 +69,31 @@ _write_limiter = TokenBucketLimiter(
 # Why the general limiter is not enough: consensus counts DISTINCT submitter
 # identities, and the identity is the client-minted X-Device-Token - so one
 # IP rotating random tokens in a shell loop supplies `verification_consensus`
-# (2) identities well inside the general burst (10). That is the audit's
-# falsification demo with one extra line of script. Keying this bucket by
-# IP+place and holding its burst UNDER the consensus threshold makes the
-# arithmetic safe again: a single address cannot mint enough "distinct"
-# confirmations for any one place inside the window, while a real person
-# verifying several different places on a walk is untouched (each place is
-# its own key), and two genuinely different households still reach
-# consensus exactly as designed.
+# (2) identities well inside the general burst (10). Keying this bucket by
+# IP+place and holding its burst UNDER the consensus threshold closes that.
+#
+# The WINDOW must match too, and the first version of this bucket got it
+# wrong: it refilled `consensus-1` tokens per HOUR, while consensus counts
+# distinct identities over `stale_after_days` (90 days) - so a patient
+# attacker rotated one token per hour and still filled the threshold. The
+# adversarial review demonstrated it with a clock simulation. The refill
+# horizon is therefore derived from the SAME setting the consensus window
+# reads: one address gets at most `consensus-1` same-place verifications
+# per consensus window, so it can never supply the deciding "identity" -
+# by construction this time, at any patience level.
+#
+# The honest cost, stated rather than hidden: two real households behind
+# one CGNAT address (common on Turkish mobile carriers) verifying the SAME
+# place within the window - the second one is turned away, and consensus
+# for that place must come from a different network. That is the price of
+# an identity signal the client cannot mint; counting distinct addresses
+# inside consensus itself (a schema change) is the eventual better answer
+# and is noted in ROADMAP.
+_consensus_budget = max(1, settings.verification_consensus - 1)
+_consensus_window_hours = max(1, settings.stale_after_days) * 24
 _verification_limiter = TokenBucketLimiter(
-    per_hour=max(1, settings.verification_consensus - 1),
-    burst=max(1, settings.verification_consensus - 1),
+    per_hour=_consensus_budget / _consensus_window_hours,
+    burst=_consensus_budget,
 )
 
 

@@ -72,11 +72,23 @@ class TestRateLimiting:
         BELOW the threshold: the second same-place verification from the
         same address 429s, so a lone script can never flip a field, while a
         different place (fresh key) sails through untouched.
+
+        The limiter here is sized EXACTLY like production (same formula,
+        same settings), with an injectable clock - because the first version
+        of this test installed a hand-picked per_hour=1 bucket and happily
+        stayed green while production refilled hourly against a 90-day
+        consensus window. The clock jump below is that found attack: wait
+        just over an hour, rotate the token, try again.
         """
+        fake_clock = {"t": 0.0}
+        budget = max(1, ratelimit.settings.verification_consensus - 1)
+        window_hours = max(1, ratelimit.settings.stale_after_days) * 24
         monkeypatch.setattr(
             ratelimit,
             "_verification_limiter",
-            ratelimit.TokenBucketLimiter(per_hour=1, burst=1),
+            ratelimit.TokenBucketLimiter(
+                per_hour=budget / window_hours, burst=budget, clock=lambda: fake_clock["t"]
+            ),
         )
         place = Place(
             name="Rotasyon Testi", location="SRID=4326;POINT(29.05 41.01)",
@@ -104,6 +116,19 @@ class TestRateLimiting:
             "token rotasyonu ikinci 'kimliği' geçirdi - konsensüs tek IP'den doldurulabilir"
         )
 
+        # The patient variant: 61 minutes later, fresh token. Under the old
+        # hourly refill this went through and the 90-day consensus window
+        # counted two "identities" from one address. The bucket now refills
+        # on the consensus window's own timescale, so patience does not pay.
+        fake_clock["t"] += 61 * 60.0
+        patient = client.post(
+            f"/places/{place.id}/verifications", json=body,
+            headers={"X-Device-Token": "attacker-token-0061"},
+        )
+        assert patient.status_code == 429, (
+            "saatlik sabırlı rotasyon geçti - kova penceresi konsensüs penceresinden kısa"
+        )
+
         db_session.refresh(place)
         assert place.wheelchair_accessible is True, "tek adres alanı çevirebildi"
 
@@ -116,13 +141,29 @@ class TestRateLimiting:
         )
 
     def test_the_bucket_refills_with_time(self):
+        from fastapi import HTTPException
+
         clock = {"t": 0.0}
         limiter = ratelimit.TokenBucketLimiter(per_hour=3600, burst=1, clock=lambda: clock["t"])
         limiter.check("1.2.3.4")
-        with pytest.raises(Exception):
+        # HTTPException with 429 specifically - a bare `Exception` here once
+        # accepted any crash in check() as "the limiter works".
+        with pytest.raises(HTTPException) as denied:
             limiter.check("1.2.3.4")
+        assert denied.value.status_code == 429
         clock["t"] += 1.0  # 1/sec refill rate
         limiter.check("1.2.3.4")  # does not raise
+
+    def test_production_verification_limiter_is_sized_to_the_consensus_window(self):
+        """Pins the module-level limiter's actual construction, so loosening
+        ratelimit.py (say burst=10 "to be friendlier") goes red even though
+        every other test installs its own limiter. Reads private attributes
+        deliberately: the sizing IS the security property."""
+        budget = max(1, ratelimit.settings.verification_consensus - 1)
+        window_seconds = max(1, ratelimit.settings.stale_after_days) * 24 * 3600.0
+        limiter = ratelimit._verification_limiter
+        assert limiter._burst == float(budget)
+        assert limiter._rate_per_second == pytest.approx(budget / window_seconds)
 
     def test_addresses_do_not_share_a_bucket(self):
         limiter = ratelimit.TokenBucketLimiter(per_hour=60, burst=1)
