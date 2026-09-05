@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { MapPin, X } from "lucide-react";
 
-import { TOTALS, findProvince } from "@/lib/administrative";
+import { TOTALS, findProvince, foldAscii } from "@/lib/administrative";
 
 export interface CityOption {
   slug: string;
@@ -40,6 +40,17 @@ export function CityPicker({
   // dotted İ that ASCII ordering puts in the wrong place entirely, which in
   // a Turkish city list reads as a bug.
   const sorted = [...cities].sort((a, b) => a.label.localeCompare(b.label, "tr"));
+
+  // A scrollable list works at nine entries and stops working at eighty-one:
+  // finding Yozgat by scrolling past seventy rows is not finding, it is
+  // searching the slow way. Folded matching so "igdir" finds "Iğdır" - the
+  // same rule the main search follows, because a filter that demands the
+  // correct keyboard would lock out exactly the people typing on one that
+  // lacks it.
+  const [filter, setFilter] = useState("");
+  const visible = filter.trim()
+    ? sorted.filter((city) => foldAscii(city.label).includes(foldAscii(filter)))
+    : sorted;
 
   // Resolved through the province table rather than counted as city files:
   // the two are the same today, but a city slug is a fetch unit and a
@@ -84,11 +95,30 @@ export function CityPicker({
           </button>
         </div>
 
+        {/* Shown from ten entries up: below that the list fits on screen and
+            a search box would just push it down. */}
+        {cities.length >= 10 && (
+          <input
+            type="search"
+            value={filter}
+            onChange={(event) => setFilter(event.target.value)}
+            placeholder="İl ara…"
+            aria-label="İl ara"
+            className="mb-2 h-11 w-full rounded-xl border border-border bg-transparent px-3 text-[16px] outline-none focus:border-brand"
+          />
+        )}
+
+        {visible.length === 0 && (
+          <p className="py-6 text-center text-[13.5px] text-text-secondary" role="status">
+            &ldquo;{filter}&rdquo; ile eşleşen il yok.
+          </p>
+        )}
+
         {/* Scrolls: at nine cities the list already outgrew a small phone,
             and without this the ones at the bottom simply could not be
             reached. Sized in vh so it keeps working as provinces are added. */}
         <ul className="max-h-[55vh] space-y-1.5 overflow-y-auto">
-          {sorted.map((city) => {
+          {visible.map((city) => {
             const isActive = city.slug === activeCity;
             return (
               <li key={city.slug}>
