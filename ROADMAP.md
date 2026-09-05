@@ -158,8 +158,10 @@ belirsizse, belirsiz olduğu açıkça yazılıdır.
 
 ### Orta öncelik
 
-- 📋 **Sunucuda render edilen mekan sayfaları** (`/yer/[id]`) + Open Graph
-  metadata. Şu an paylaşılan her bağlantı aynı jenerik başlığı gösteriyor.
+- ✅ **Sunucuda render edilen mekan sayfaları** (`/yer/[id]`) — gerçek
+  başlık/açıklama, mekana özel OG görseli (kategori renginde, tipografik),
+  `robots.ts` ve adlı mekanlarla sınırlı `sitemap.ts` (~9.800 kayıt; isimsiz
+  binlerce "Umumi Tuvalet" sayfası bilinçli olarak listelenmiyor).
 - 📋 **Frontend CI** — lint, tip kontrolü, test ve build'in PR'da otomatik
   koşması *(bu yol haritası yazılırken eklendi, bkz. `.github/workflows/`)*
 - 📋 **Mükerrer öneri tespiti** — kullanıcı OSM'de zaten var olan bir mekanı

@@ -73,6 +73,7 @@ Bu, `ROADMAP.md`'de açık bir madde olarak izleniyor.
 
 | Değişken | Zorunlu mu | Ne işe yarar |
 |---|---|---|
+| `BURADANE_SITE_URL` | Hayır | Sitemap'te kullanılan mutlak taban URL (ör. `https://buradane.app`). Tanımlı değilse bariz-sahte bir yer tutucu kullanılır — dağıtımda mutlaka ayarla. |
 | `BURADANE_ADMIN_TOKEN` | Yönetim paneli kullanılacaksa evet | `/api/admin/*` uçlarını koruyan paylaşılan sır. **Tanımlı değilse admin yazma uçları kapalıdır** (fail-closed) — panel bunu açık bir mesajla söyler. `NEXT_PUBLIC_` öneki YOKTUR ve olmamalıdır: o önek değeri her ziyaretçinin JavaScript'ine gömer. |
 
 Yerel geliştirme için `frontend/.env.local` dosyasına yaz (Next.js otomatik
