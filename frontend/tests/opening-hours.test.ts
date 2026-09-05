@@ -2,10 +2,20 @@ import { describe, expect, it } from "vitest";
 
 import { humanizeOpeningHours, isOpenNow, openStateLabel } from "@/lib/opening-hours";
 
-/** Wednesday 2026-09-02, 14:00 local. */
-const WED_14 = new Date(2026, 8, 2, 14, 0);
-/** Sunday 2026-09-06, 03:00 local. */
-const SUN_03 = new Date(2026, 8, 6, 3, 0);
+/**
+ * Test instants are pinned to Istanbul wall time with an explicit +03:00
+ * offset, never built with the local-zone Date constructor. isOpenNow reads
+ * the clock in Europe/Istanbul regardless of runtime zone - the fix for a
+ * 3-hour error on UTC servers - so a test built from the runtime zone
+ * asserts different wall times on different machines: green on a +03
+ * laptop, red on UTC CI. That is the exact trap this file exists to close.
+ */
+const wall = (iso: string) => new Date(`${iso}+03:00`);
+
+/** Wednesday 2026-09-02, 14:00 Istanbul. */
+const WED_14 = wall("2026-09-02T14:00:00");
+/** Sunday 2026-09-06, 03:00 Istanbul. */
+const SUN_03 = wall("2026-09-06T03:00:00");
 
 describe("isOpenNow", () => {
   it("returns unknown, never a guess, when there is no data", () => {
@@ -30,7 +40,7 @@ describe("isOpenNow", () => {
   });
 
   it("handles a wrapping day range (Sa-Su)", () => {
-    const sunday13 = new Date(2026, 8, 6, 13, 0);
+    const sunday13 = wall("2026-09-06T13:00:00");
     expect(isOpenNow("Sa-Su 09:00-18:00", sunday13)).toBe("open");
   });
 
@@ -40,13 +50,13 @@ describe("isOpenNow", () => {
   });
 
   it("handles multiple comma-separated spans in one rule", () => {
-    const wed13 = new Date(2026, 8, 2, 13, 0);
+    const wed13 = wall("2026-09-02T13:00:00");
     expect(isOpenNow("Mo-Fr 09:00-12:00,14:00-18:00", WED_14)).toBe("open");
     expect(isOpenNow("Mo-Fr 09:00-12:00,14:00-18:00", wed13)).toBe("closed");
   });
 
   it("handles multiple semicolon-separated rules", () => {
-    const sat11 = new Date(2026, 8, 5, 11, 0);
+    const sat11 = wall("2026-09-05T11:00:00");
     expect(isOpenNow("Mo-Fr 09:00-18:00; Sa 10:00-14:00", sat11)).toBe("open");
   });
 
