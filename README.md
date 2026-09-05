@@ -24,7 +24,7 @@ doğrulaması, tazelik etiketi, kaynak ve güvenilirlik skoru).
 > Frontend" adımlarıyla demoyu yerelde çalıştırıp **25.000'i aşkın gerçek
 > OpenStreetMap mekanı** üzerinde harita ve liste arayüzünü görebilirsiniz.
 > Kapsam il il 81'e doğru genişliyor; güncel il listesi ve sayılar şehir
-> seçicide görünür (son doğrulanan taban 2026-09-05: 23 il / 29.664 mekan; ulusal çekim sürüyor).
+> seçicide görünür (son doğrulanan taban 2026-09-05: 44 il / 36.637 mekan; ulusal çekim sürüyor).
 
 ## v1 Kapsamı
 

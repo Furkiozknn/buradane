@@ -82,7 +82,7 @@ belirsizse, belirsiz olduğu açıkça yazılıdır.
   `admin-divisions.ts` ilçe adlarını kanonikleştiriyor.
 
 ### Veri
-- ✅ 23 il / **29.664** gerçek OpenStreetMap mekanı (2026-09-05 tabanı);
+- ✅ 44 il / **36.637** gerçek OpenStreetMap mekanı (2026-09-05 tabanı);
   kalan iller arka planda il il iniyor - bkz. aşağıdaki 🚧
 - ✅ Overpass veri boru hattı: il+kategori bazında checkpoint, üstel geri
   çekilme, çok aynalı
@@ -133,7 +133,7 @@ belirsizse, belirsiz olduğu açıkça yazılıdır.
   uyarlama katmanına dönüşmesi.
 
 ### Türkiye kapsamı
-- ✅ 23 il indi ve doğrulandı (2026-09-05 tabanı; güncel liste şehir
+- ✅ 44 il indi ve doğrulandı (2026-09-05 tabanı; güncel liste şehir
   seçicisinde)
 - 🚧 Kalan iller — bbox'lar OSM'in kendi il-merkezi çapalarından üretiliyor
   (`scripts/fetch_admin_divisions.py` + sentezlenmiş yapılandırma), ulusal
