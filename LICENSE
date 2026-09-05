@@ -19,10 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-This license covers buradane's source code only. Geographic data ingested
-from OpenStreetMap is licensed separately under the Open Database License
-(ODbL) 1.0 - see docs/DATA_SOURCES.md for per-source license terms and
-attribution requirements.
