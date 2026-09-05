@@ -7,11 +7,12 @@ import { moderateContribution } from "@/lib/contributions-store";
 /**
  * PATCH /api/admin/contributions/:id  { "action": "approve" | "reject" }
  *
- * Demo scope note: there is no auth on this route. That is a deliberate,
- * documented demo limitation (see README "Bilinen sınırlamalar"), not an
- * oversight - the production backend puts the equivalent endpoints behind
- * the JWT dependency in backend/app/api/deps.py. Nothing here is exposed
- * publicly, and the route is confined to a local snapshot.
+ * Protected by the shared admin token (checkAdminAuth below). An earlier
+ * comment here declared the missing auth "a deliberate, documented demo
+ * limitation" - and outlived the fix, which is exactly how the DELETE
+ * handler next door shipped guardless: a reader trusting this text had no
+ * reason to add the two lines. Comments about security posture rot faster
+ * than any others; when the posture changes, the words change with it.
  */
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   // Fail-closed: no token configured means no admin mutations at all -

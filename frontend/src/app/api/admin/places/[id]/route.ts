@@ -119,7 +119,16 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
 /** Reverts every admin/community override on this place, restoring the raw
  * OSM record. This is the "undo" that makes editing safe to do. */
-export async function DELETE(_request: Request, context: { params: Promise<{ id: string }> }) {
+export async function DELETE(request: Request, context: { params: Promise<{ id: string }> }) {
+  // The guard PATCH always had and DELETE shipped without - the parameter
+  // was even named `_request`, unused. Two independent reviews found that
+  // anyone could wipe every moderation override on any place, tokenless,
+  // while the commit adding auth declared the admin API protected. Auth
+  // runs BEFORE the existence check on purpose: a 404 to an
+  // unauthenticated caller would leak which ids exist.
+  const auth = checkAdminAuth(request);
+  if (!auth.ok) return adminAuthErrorResponse(auth);
+
   const { id } = await context.params;
   const placeId = decodeURIComponent(id);
 
