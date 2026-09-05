@@ -141,9 +141,10 @@ belirsizse, belirsiz olduğu açıkça yazılıdır.
   (10 istek / 10 dk), 429 + `Retry-After`.
 - 🚧 Yönetim panelinin **görüntülenmesi** hâlâ açık (kuyruk sunucuda render
   ediliyor); okuma tarafını da kapatmak çerez tabanlı oturum ister.
-- 📋 **Backend'de varsayılan JWT sırrının kaldırılması.**
-  `backend/app/core/config.py` içinde çalışan bir varsayılan var
-  (`dev-secret-change-in-production`).
+- 🚧 **Backend'de varsayılan JWT sırrı** — artık her sunucu başlangıcında ve
+  test koşusunda yüksek sesle uyarıyor (`app/main.py`); geliştirme törensiz
+  çalışmaya devam ediyor. Tam kaldırma (üretim modunda başlatmayı reddetme)
+  bir "ortam" kavramı gerektiriyor ve dağıtım kararıyla birlikte verilecek.
 
 ### Yüksek öncelik: dayanıklılık
 
