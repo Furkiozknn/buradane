@@ -60,7 +60,14 @@ class Place(Base):
     # Geography (not Geometry) so distance math is in real meters on a
     # sphere, not degrees - correct nearby-radius results without a manual
     # SRID transform at query time. See docs/ARCHITECTURE.md "Geospatial".
-    location: Mapped[str] = mapped_column(Geography(geometry_type="POINT", srid=4326), nullable=False)
+    # spatial_index=False: GeoAlchemy2 would otherwise auto-create its own
+    # GiST index (idx_places_location) on top of the explicit
+    # ix_places_location in __table_args__ - two identical indexes on the
+    # same column, found while writing the Alembic baseline. One named
+    # index, declared where every other index of this table lives.
+    location: Mapped[str] = mapped_column(
+        Geography(geometry_type="POINT", srid=4326, spatial_index=False), nullable=False
+    )
 
     address_line: Mapped[str | None] = mapped_column(String(400), nullable=True)
     country_code: Mapped[str] = mapped_column(String(2), nullable=False)  # not hardcoded "TR" - see core/config.py

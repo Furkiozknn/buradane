@@ -29,9 +29,16 @@ def ensure_bootstrap_admin(db: Session) -> User | None:
     if not settings.admin_email or not settings.admin_password:
         return None
     if settings.jwt_secret == "dev-secret-change-in-production":
-        logger.warning(
-            "bootstrap admin configured while BURADANE_JWT_SECRET is still the dev default - "
-            "anyone who reads the source can forge an admin token; set a real secret"
+        # Refuse, don't warn: with the shipped default secret anyone who has
+        # read this repository can mint an admin JWT, and the admin surface
+        # is exactly the moderation power the consensus work exists to
+        # protect. A warning in a log nobody reads is not a control. Local
+        # dev sets BURADANE_JWT_SECRET right next to the two admin vars it
+        # is already setting.
+        raise RuntimeError(
+            "refusing to create the bootstrap admin while BURADANE_JWT_SECRET "
+            "is still the built-in dev default - anyone could forge an admin "
+            "token. Set a real BURADANE_JWT_SECRET and restart."
         )
     user = db.execute(select(User).where(User.email == settings.admin_email)).scalar_one_or_none()
     if user is not None:
