@@ -145,9 +145,11 @@ belirsizse, belirsiz olduğu açıkça yazılıdır.
   (10 istek / 10 dk), 429 + `Retry-After`.
 - 🚧 Yönetim panelinin **görüntülenmesi** hâlâ açık (kuyruk sunucuda render
   ediliyor); okuma tarafını da kapatmak çerez tabanlı oturum ister.
-- 🚧 **Backend'de varsayılan JWT sırrı** — artık her sunucu başlangıcında ve
-  test koşusunda yüksek sesle uyarıyor (`app/main.py`); geliştirme törensiz
-  çalışmaya devam ediyor. Tam kaldırma (üretim modunda başlatmayı reddetme)
+- 🚧 **Backend'de varsayılan JWT sırrı** — iki katman: bootstrap admin
+  varsayılan sır altında **oluşturulmayı reddediyor** (`services/bootstrap.py`,
+  asıl kontrol) ve her başlangıçta uyarı basılıyor (`app/main.py`, mevcut-admin
+  + varsayılan-sır sessiz vakası için sinyal; bir merge'de bir kez kayboldu,
+  artık regresyon testi kilitli). Tam kaldırma (üretimde başlatmayı reddetme)
   bir "ortam" kavramı gerektiriyor ve dağıtım kararıyla birlikte verilecek.
 
 ### Yüksek öncelik: dayanıklılık
