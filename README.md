@@ -58,8 +58,8 @@ uv sync
 # Yerel veritabanını başlat (Postgres + PostGIS)
 docker compose up -d
 
-# Şemayı oluştur (henüz gerçek bir Alembic migration'ı yok - bkz. "Bilinen Sınırlamalar")
-uv run python -c "from app.core.db import Base, engine; import app.models; Base.metadata.create_all(engine)"
+# Şemayı oluştur (Alembic migration'ları ile)
+uv run alembic upgrade head
 
 # Başlangıç kategorilerini yükle (~55 kategori, 10 grup altında)
 uv run python -m app.ingest.seed_categories
@@ -401,6 +401,9 @@ Frontend'de şu an otomatik bir test suite'i yok - sadece `npm run lint`
 
 - Yazma uçları girdi doğrulaması için Pydantic şemalarını kullanır (`app/schemas/`).
 - Kullanıcı katkıları (öneri/rapor) moderasyon onayı olmadan asla herkese açık aramaya düşmez.
+- JWT tabanlı opsiyonel kimlik doğrulama (`python-jose`), şifreler `bcrypt` ile hash'lenir. Token almanın tek yolu `POST /auth/login`; self-serve kayıt bilinçli olarak yok (hesaplar yalnızca moderasyon/atıf içindir).
+- Moderasyon çıkışı: `BURADANE_ADMIN_EMAIL`/`BURADANE_ADMIN_PASSWORD` ile açılışta tek bir bootstrap moderatör oluşturulur (varsa asla üzerine yazılmaz); bekleyen raporlar `GET /reports` ile listelenir, `PATCH /reports/{id}` (`{"action": "accept"|"reject"}`) ile karara bağlanır. Kabul edilen `closed`/`under_maintenance` raporu mekanı `temporarily_closed` yapar, `reopened` tekrar `active` yapar, `broken_amenity` ilgili amenity bayrağını temizler; bilgilendirme türleri (yanlış konum/bilgi vb.) yalnızca raporu kapatır - veri düzeltmesi bilinçli bir admin düzenlemesi olarak kalır. Her iki karar da raporun güvenilirlik skoru üzerindeki bekleyen-rapor baskısını kaldırır.
+- `BURADANE_JWT_SECRET` artık yalnızca bir tavsiye değil: bootstrap admin yapılandırılmışken secret hâlâ varsayılan dev değerindeyse sunucu açılışta **açıkça reddeder** (herkesin forge edebileceği bir admin token'ı, admin'in hiç olmamasından kötüdür). Keşif-amaçlı, admin'siz çalıştırmalar secret'sız çalışmaya devam eder.
 - JWT tabanlı opsiyonel kimlik doğrulama (`python-jose`), şifreler `passlib[bcrypt]` ile hash'lenir.
 - `BURADANE_JWT_SECRET` prod'da mutlaka değiştirilmeli - varsayılan değer sadece yerel geliştirme içindir.
 - **Demo'nun admin uçları (`/api/admin/*`) paylaşılan-sır token'ı ile korunur.**
@@ -414,6 +417,7 @@ Frontend'de şu an otomatik bir test suite'i yok - sadece `npm run lint`
   kullanıcı hiç fark etmez, script 429 + `Retry-After` alır. Bellek içi
   olduğu için çok örnekli dağıtımda örnek başına uygulanır - sınırlar
   `frontend/src/lib/rate-limit.ts` içinde dürüstçe belgelidir.
+
 
 ## Bilinen Tuhaflıklar
 
@@ -481,11 +485,14 @@ sorgunun anlamını sessizce değiştirmek yerine.
 - Demo, backend/PostGIS'e değil statik bir JSON anlık görüntüsüne bağlı -
   iki taraf aynı sorgu sözleşmesini konuşuyor ama henüz birbirine
   bağlanmadı; bkz. "Yol Haritası".
-- **Henüz gerçek bir Alembic migration'ı yok.** Bu geliştirme ortamında
-  Docker/Postgres erişilebilir olmadığı için `alembic revision --autogenerate`
-  çalıştırılamadı - şema `Base.metadata.create_all()` ile oluşturuluyor
-  (yukarıdaki kurulum adımı). İlk gerçek migration, bir Postgres'e erişimi
-  olan bir ortamda (yerel Docker veya CI) üretilmeli.
+- ~~Henüz gerçek bir Alembic migration'ı yok.~~ **Çözüldü**: v1 şemasının
+  tamamı tek bir baseline migration'da (`alembic/versions/`), gerçek bir
+  PostGIS'e karşı üretilip doğrulandı (upgrade → autogenerate boş çıkıyor →
+  downgrade temiz, **up→down→up döngüsü de** - ilk baseline'ın downgrade'i
+  altı Postgres enum tipini sızdırıyordu ve ikinci upgrade DuplicateObject
+  ile ölüyordu; düzeltildi ve döngü artık scratch-veritabanlı bir regresyon
+  testiyle korunuyor). `tests/test_migrations.py` ayrıca model-migration
+  eşitliğini CI'da denetler: migration'sız yeni bir model tablosu testi kırar.
 - Fotoğraflar ve yorumlar backend'de modellendi (`PlacePhoto`/
   `PlaceReview`) ama ne backend API'sinde ne demo'da bir arayüzü var.
   Fotoğraflar için OSM etiketleri ölçüldü ve **bilinçli olarak

@@ -8,10 +8,12 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 
-from app.api.deps import DbSession, OptionalUser
+from app.api.deps import DbSession, DeviceTokenHash, OptionalUser
+from app.core.ratelimit import limit_writes
+from app.services.dedup import find_duplicate
 from app.models.category import Category, PlaceCategory
 from app.models.place import Place, PlaceStatus
 from app.models.signal import PlaceReport, PlaceVerification, ReportType
@@ -87,7 +89,12 @@ def get_place(place_id: uuid.UUID, db: DbSession) -> PlaceDetail:
     return PlaceDetail.from_orm_with_distance(place)
 
 
-@router.post("/suggest", status_code=status.HTTP_201_CREATED, response_model=PlaceDetail)
+@router.post(
+    "/suggest",
+    status_code=status.HTTP_201_CREATED,
+    response_model=PlaceDetail,
+    dependencies=[Depends(limit_writes)],
+)
 def suggest_place(payload: PlaceSuggestionIn, db: DbSession, user: OptionalUser) -> PlaceDetail:
     categories = db.execute(select(Category).where(Category.slug.in_(payload.category_slugs))).scalars().all()
     found_slugs = {c.slug for c in categories}
@@ -95,14 +102,35 @@ def suggest_place(payload: PlaceSuggestionIn, db: DbSession, user: OptionalUser)
     if missing:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, f"unknown category slug(s): {sorted(missing)}")
 
+    # The dedup service existed but was never consulted on this path, so
+    # every re-suggestion of a known place became a new pending row for a
+    # moderator to untangle. A confident match answers 409 pointing at the
+    # existing record - "verify or report that one" is the useful action.
+    duplicate = find_duplicate(db, name=payload.name, lat=payload.lat, lon=payload.lon)
+    if duplicate is not None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            {
+                "message": "a very similar place already exists; verify or report it instead",
+                "existing_place_id": str(duplicate.place.id),
+                "existing_place_name": duplicate.place.name,
+                "confidence": round(duplicate.confidence, 3),
+                "distance_m": round(duplicate.distance_m, 1),
+            },
+        )
+
     place = create_place_suggestion(db, payload=payload, categories=categories, user=user)
     db.commit()
     db.refresh(place)
     return PlaceDetail.from_orm_with_distance(place)
 
 
-@router.post("/{place_id}/reports", status_code=status.HTTP_201_CREATED)
-def report_place(place_id: uuid.UUID, payload: PlaceReportIn, db: DbSession, user: OptionalUser) -> dict:
+@router.post(
+    "/{place_id}/reports", status_code=status.HTTP_201_CREATED, dependencies=[Depends(limit_writes)]
+)
+def report_place(
+    place_id: uuid.UUID, payload: PlaceReportIn, db: DbSession, user: OptionalUser, device: DeviceTokenHash
+) -> dict:
     place = db.get(Place, place_id)
     if place is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "place not found")
@@ -112,14 +140,29 @@ def report_place(place_id: uuid.UUID, payload: PlaceReportIn, db: DbSession, use
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST, f"unknown report_type (expected one of {[t.value for t in ReportType]})"
         ) from exc
+    # signal.py promises this validation happens at the API layer; keeping
+    # the promise matters because an accepted broken_amenity report
+    # setattr()s this field name onto the Place (services/moderation.py).
+    if report_type == ReportType.broken_amenity and payload.field not in FILTERABLE_AMENITIES:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"broken_amenity requires field to be one of {sorted(FILTERABLE_AMENITIES)}",
+        )
 
-    report = create_place_report(db, place=place, report_type=report_type, field=payload.field, note=payload.note, user=user)
+    report = create_place_report(
+        db, place=place, report_type=report_type, field=payload.field, note=payload.note, user=user,
+        device_token_hash=device,
+    )
     db.commit()
     return {"id": str(report.id), "status": report.status.value}
 
 
-@router.post("/{place_id}/verifications", status_code=status.HTTP_201_CREATED)
-def verify_place(place_id: uuid.UUID, payload: PlaceVerificationIn, db: DbSession, user: OptionalUser) -> dict:
+@router.post(
+    "/{place_id}/verifications", status_code=status.HTTP_201_CREATED, dependencies=[Depends(limit_writes)]
+)
+def verify_place(
+    place_id: uuid.UUID, payload: PlaceVerificationIn, db: DbSession, user: OptionalUser, device: DeviceTokenHash
+) -> dict:
     place = db.get(Place, place_id)
     if place is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "place not found")
@@ -127,7 +170,8 @@ def verify_place(place_id: uuid.UUID, payload: PlaceVerificationIn, db: DbSessio
         raise HTTPException(status.HTTP_400_BAD_REQUEST, f"unknown verifiable field: {payload.field!r}")
 
     verification = create_place_verification(
-        db, place=place, field=payload.field, confirmed_value=payload.confirmed_value, user=user
+        db, place=place, field=payload.field, confirmed_value=payload.confirmed_value, user=user,
+        device_token_hash=device,
     )
     db.commit()
     return {"id": str(verification.id), "reliability_score": place.reliability_score}

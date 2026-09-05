@@ -9,10 +9,12 @@ variant.
 
 from __future__ import annotations
 
+import hashlib
+import re
 import uuid
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
@@ -62,3 +64,28 @@ def get_current_admin(user: OptionalUser) -> User:
 
 
 AdminUser = Annotated[User, Depends(get_current_admin)]
+
+
+# An anonymous, client-generated opaque token ("no account required" holds
+# even for contributing - user.py's docstring promised this hook). The
+# client sends the same X-Device-Token on every write; the server only ever
+# sees and stores its sha256. It is a spam hurdle, not authentication: a
+# determined attacker can mint tokens, which is why consensus counts
+# distinct identities rather than trusting any single one.
+_DEVICE_TOKEN_RE = re.compile(r"^[A-Za-z0-9_\-]{16,128}$")
+
+
+def get_device_token_hash(
+    x_device_token: Annotated[str | None, Header()] = None,
+) -> str | None:
+    if x_device_token is None:
+        return None
+    if not _DEVICE_TOKEN_RE.match(x_device_token):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="X-Device-Token must be 16-128 characters of A-Za-z0-9_-",
+        )
+    return hashlib.sha256(x_device_token.encode()).hexdigest()
+
+
+DeviceTokenHash = Annotated[str | None, Depends(get_device_token_hash)]

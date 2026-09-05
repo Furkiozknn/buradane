@@ -1,35 +1,33 @@
 from __future__ import annotations
 
-import logging
-import warnings
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import admin_regions, categories, health, places
+from app.api import admin_regions, auth, categories, health, places, reports
 from app.core.config import settings
 
-logger = logging.getLogger("buradane")
 
-# The default JWT secret is a working value on purpose - local development
-# must not require ceremony - but a deployment that keeps it lets anyone who
-# reads this public repository mint valid tokens. Shouting at import time is
-# the strongest thing that cannot break development: every server start and
-# every test run prints it until the variable is set, and it cannot be
-# missed the way a line in a settings file can.
-if settings.jwt_secret == "dev-secret-change-in-production":
-    _msg = (
-        "BURADANE_JWT_SECRET varsayılan değerde! Bu değer herkese açık depoda "
-        "yazılı - üretimde MUTLAKA değiştirin: "
-        "python -c \"import secrets; print(secrets.token_urlsafe(48))\""
-    )
-    logger.warning(_msg)
-    warnings.warn(_msg, stacklevel=1)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Guarded entirely by config: a run without BURADANE_ADMIN_EMAIL/
+    # PASSWORD (tests, discovery-only deployments) must not need a
+    # reachable database just to start.
+    if settings.admin_email and settings.admin_password:
+        from app.core.db import SessionLocal
+        from app.services.bootstrap import ensure_bootstrap_admin
+
+        with SessionLocal() as db:
+            ensure_bootstrap_admin(db)
+    yield
+
 
 app = FastAPI(
     title="buradane API",
     description="Türkiye'deki kamusal ve ortak kullanım alanlarını keşfetme platformu - API katmanı.",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -44,3 +42,5 @@ app.include_router(health.router)
 app.include_router(places.router)
 app.include_router(categories.router)
 app.include_router(admin_regions.router)
+app.include_router(auth.router)
+app.include_router(reports.router)

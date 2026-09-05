@@ -171,3 +171,50 @@ def test_bbox_search_returns_places_within_envelope_only(db_session):
 def test_empty_result_set_does_not_raise(db_session):
     results = search_places(db_session, PlaceSearchParams(lat=0.0, lon=0.0, radius_m=100))
     assert results == []
+
+
+def test_temporarily_closed_places_stay_visible_in_search(db_session):
+    # The PlaceStatus contract says temporarily_closed is "still shown but
+    # flagged" - a closed toilet you can see beats one that vanished.
+    flagged = _place("Tadilatta Tuvalet", *TAKSIM, status=PlaceStatus.temporarily_closed)
+    gone = _place("Yıkılmış Tuvalet", *KADIKOY, status=PlaceStatus.permanently_closed)
+    db_session.add_all([flagged, gone])
+    db_session.commit()
+
+    results = search_places(db_session, PlaceSearchParams())
+
+    names = {p.name for p, _ in results}
+    assert "Tadilatta Tuvalet" in names
+    assert "Yıkılmış Tuvalet" not in names
+
+
+def test_non_radius_search_pages_deterministically(db_session):
+    # Same reliability everywhere, so ordering can only come from the
+    # deliberate tie-break - without one, LIMIT/OFFSET pages could repeat
+    # or drop rows between requests.
+    db_session.add_all(
+        [_place(f"Yer {i}", 41.0 + i * 1e-4, 29.0, reliability_score=0.5) for i in range(10)]
+    )
+    db_session.commit()
+
+    bbox = (28.5, 40.5, 29.5, 41.5)
+    page1 = search_places(db_session, PlaceSearchParams(bbox=bbox, limit=5, offset=0))
+    page2 = search_places(db_session, PlaceSearchParams(bbox=bbox, limit=5, offset=5))
+    again1 = search_places(db_session, PlaceSearchParams(bbox=bbox, limit=5, offset=0))
+
+    ids1 = [p.id for p, _ in page1]
+    ids2 = [p.id for p, _ in page2]
+    assert ids1 == [p.id for p, _ in again1]      # stable across identical requests
+    assert not set(ids1) & set(ids2)              # no overlap between pages
+    assert len(ids1) + len(ids2) == 10            # nothing dropped
+
+
+def test_higher_reliability_places_come_first_in_bbox_search(db_session):
+    low = _place("Az Güvenilir", *TAKSIM, reliability_score=0.2)
+    high = _place("Çok Güvenilir", *KADIKOY, reliability_score=0.9)
+    db_session.add_all([low, high])
+    db_session.commit()
+
+    results = search_places(db_session, PlaceSearchParams(bbox=(28.5, 40.5, 29.5, 41.5)))
+
+    assert [p.name for p, _ in results] == ["Çok Güvenilir", "Az Güvenilir"]

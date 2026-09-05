@@ -24,12 +24,36 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 60 * 24 * 14  # 14 days
 
+    # The bootstrap moderator (see app/services/bootstrap.py). v1 has no
+    # self-serve registration - accounts exist only to moderate or
+    # attribute - so the single admin comes from the environment. Both must
+    # be set for a bootstrap to happen; unset (the default) means startup
+    # touches nothing and discovery-only deployments need no auth at all.
+    admin_email: str | None = None
+    admin_password: str | None = None
+
     # A time-decayed report/verification older than this is still shown, but
     # flagged as low-confidence in the reliability score (see
     # app/services/reliability.py) rather than silently trusted forever.
     stale_after_days: int = 90
 
     cors_origins: list[str] = ["http://localhost:3000"]
+
+    # How many DISTINCT submitters (accounts or anonymous devices) must
+    # confirm the same field/value inside the freshness window before a
+    # verification actually flips the public record. One phone in a shell
+    # loop must never be able to falsify accessibility data - the audit
+    # demonstrated exactly that against the previous apply-immediately
+    # behavior.
+    verification_consensus: int = 2
+
+    # Community writes per client IP: a refilling budget of
+    # write_rate_limit_per_hour with short bursts up to
+    # write_rate_limit_burst. In-process state - honest for the current
+    # single-process deployment; a multi-process deployment moves this to
+    # its proxy or a shared store.
+    write_rate_limit_per_hour: int = 30
+    write_rate_limit_burst: int = 10
 
 
 settings = Settings()
