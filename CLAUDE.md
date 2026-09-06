@@ -375,6 +375,24 @@ Hatalı bir service worker kullanıcıda kalıcıdır. Kurallar:
 - Service worker yalnızca production'da kaydolur (`ServiceWorkerRegistrar`);
   dev sunucusunun önünde HMR'ı keser.
 
+**Çevrimdışı davranışı DevTools'un "Offline" kutusuyla test etme.** CDP'nin
+ağ emülasyonu sayfa hedefine uygulanır, service worker hedefine değil:
+worker kendi `fetch`'ini yapmaya devam eder, istek sunucuya gider ve
+uygulama çevrimiçiymiş gibi davranır. Bu yanlış bir "çevrimdışı çalışıyor"
+sonucu üretir. Ölçülen belirti: sayfadan yapılan `fetch('/robots.txt?x=1')`
+başarısız olurken `/api/places` 200 dönüyor ve yanıtta `date`, `keep-alive`
+gibi canlı sunucu başlıkları bulunuyor.
+
+Gerçek test sunucuyu durdurmaktır. Doğru sonuç şöyle görünür:
+
+```
+sunucuyu durdur → sayfayı yenile
+  200 kart render oluyor
+  "Çevrimdışısınız — daha önce yüklenen sonuçlar gösteriliyor."
+  /api/places → x-buradane-cache: hit, x-buradane-offline: 1
+  yanıttaki `date` başlığı ESKİ (önbellekten geldiğinin kanıtı)
+```
+
 ### `AppShell.tsx`
 
 Büyük ve çok sayıda birbirine bağlı durum tutar (konum takibi ↔ şehir

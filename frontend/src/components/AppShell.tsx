@@ -15,7 +15,7 @@ import {
   X,
 } from "lucide-react";
 
-import { AMENITY_BY_KEY, NOTICE_CONTENT } from "@/lib/categories";
+import { AMENITY_BY_KEY, NOTICE_CONTENT, categoryMeta } from "@/lib/categories";
 import { CategoryChips, CategoryGrid } from "./CategoryPicker";
 import { PlaceCard, PlaceCardSkeleton } from "./PlaceCard";
 import { PlaceDetail } from "./PlaceDetail";
@@ -1067,7 +1067,7 @@ export function AppShell({
                   onAction={() => fetchPlaces(viewport ? { bbox: viewport.bbox } : {})}
                 />
               ) : places.length === 0 ? (
-                hasStructuralFilter ? (
+                filterCount > 0 ? (
                   <EmptyState
                     title="Filtrelere uyan yer yok"
                     body="Seçtiğin filtreleri gevşetmeyi ya da haritayı biraz kaydırmayı dene."
@@ -1082,6 +1082,27 @@ export function AppShell({
                     // user add what they know is there.
                     secondaryLabel="Yer öner"
                     onSecondary={() => setSuggestOpen(true)}
+                  />
+                ) : category !== null ? (
+                  // A category on its own, with nothing behind it. "Relax
+                  // your filters" is not advice here - a category is not a
+                  // dial you can loosen - and "pan the map" is often not
+                  // either: measured on the shipped snapshot, three
+                  // provinces (Iğdır, Kırıkkale, Kırşehir) have ZERO mapped
+                  // public toilets and fourteen more have one to three. In
+                  // those places panning is a promise the data cannot keep,
+                  // and a user who pans and still sees nothing concludes the
+                  // app is broken rather than that the map has a gap.
+                  //
+                  // So the primary action becomes the one that can actually
+                  // change the outcome: adding the place they know is there.
+                  <EmptyState
+                    title={`Bu alanda kayıtlı ${categoryMeta(category).label.toLocaleLowerCase("tr-TR")} yok`}
+                    body="Bu, çevrede öyle bir yer olmadığı anlamına gelmez — OpenStreetMap'te henüz kayıtlı değil demek. Bildiğin bir yer varsa ekleyebilirsin."
+                    actionLabel="Yer öner"
+                    onAction={() => setSuggestOpen(true)}
+                    secondaryLabel="Tüm kategoriler"
+                    onSecondary={() => setCategory(null)}
                   />
                 ) : searchText ? (
                   // A name the snapshot does not carry. Most Turkish POIs in

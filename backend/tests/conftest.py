@@ -10,6 +10,13 @@ best of this session's knowledge, but not run here. They DO run in CI
 will run locally once `docker compose up -d db` has been run - see
 README.md "Development" section.
 
+Since then they have been run: a local PostgreSQL 16 / PostGIS 3.4 cluster
+in a development container executed the whole suite, 0 skipped, and the
+query-count tests in test_query_counts.py were written against it. The
+paragraph above stays because it explains why the skip machinery exists at
+all - the point was never that the tests are unrunnable, only that they
+must not fail an environment that has no database.
+
 `db_session` below tries to connect to `settings.database_url` and skips
 (not fails) every test that requests it if no database is reachable, so
 `uv run pytest` still gives a clean, honest signal in an environment
