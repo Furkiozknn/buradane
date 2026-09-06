@@ -57,6 +57,26 @@ def _database_reachable() -> bool:
 
 DB_AVAILABLE = _database_reachable()
 
+#: Any value except the one config.py ships. deps._decode_user_id refuses
+#: EVERY token while the secret is the published default, so a test that
+#: logs in and then calls an authenticated endpoint gets 403 on a perfectly
+#: valid token unless the app is first put on a secret of its own. Nothing
+#: here authenticates against anything real; it only has to differ.
+TEST_JWT_SECRET = "test-only-secret-not-the-published-default"
+
+
+@pytest.fixture
+def api_jwt_secret(monkeypatch) -> str:
+    """Put the app on a secret under which tokens actually authenticate.
+
+    Every fixture that builds a TestClient for authenticated requests must
+    request this. Opt-in rather than autouse, deliberately: TestBootstrap
+    and test_default_secret_warning.py assert behaviour *under* the
+    published default, so the ambient setting has to stay untouched there.
+    """
+    monkeypatch.setattr(settings, "jwt_secret", TEST_JWT_SECRET)
+    return TEST_JWT_SECRET
+
 
 @pytest.fixture
 def db_session() -> Session:
