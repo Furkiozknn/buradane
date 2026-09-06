@@ -32,8 +32,15 @@ entegre edilirken lisans kontrolünün atlanmaması için not düşülüyor.
   `places` tablosu, OSM kaynaklı kayıtlar için) ODbL kapsamındadır; bu veriler
   ham dosya olarak yeniden dağıtılmaz, yalnızca buradane API'si üzerinden
   atıfla birlikte sunulur.
-- Ham OSM verisi bu repoda **saklanmaz** - `app/ingest/osm_overpass.py` her
-  çalıştığında canlı Overpass API'sinden çeker.
+- **Backend ingest yolu** (`app/ingest/osm_overpass.py`) veriyi saklamaz;
+  her çalıştığında canlı Overpass API'sinden çeker.
+- **Demo anlık görüntüsü ise repoda dağıtılır**: `frontend/data/places.*.json`
+  (81 il). Bu, OpenStreetMap'ten **türetilmiş bir veritabanıdır** ve ODbL 1.0
+  altındadır. Her dosya kendi `license` ve `attribution` alanını taşır,
+  uygulama atfı ekranda gösterir ve `NOTICE` bu ayrımı belirtir. Bu satır bir
+  zamanlar "ham OSM verisi bu repoda saklanmaz" diyordu; 40 MB türetilmiş veri
+  git'te dururken bu doğru değildi ve lisans belgesinin fiilî dağıtımı yanlış
+  tarif etmesi, denetlenecek en kötü yerdi.
 
 ## Güvenilirlik Ağırlığı Nedir?
 

@@ -3,3 +3,13 @@ The MIT license in LICENSE covers buradane's source code only.
 Geographic data ingested from OpenStreetMap is licensed separately under
 the Open Database License (ODbL) 1.0 - see backend/docs/DATA_SOURCES.md
 for per-source license terms and attribution requirements.
+
+This repository also DISTRIBUTES such data: frontend/data/places.*.json
+(one file per province) and frontend/data/admin-divisions.json are
+databases derived from OpenStreetMap and are covered by ODbL 1.0, not by
+the MIT license above. Each file carries its own `license` and
+`attribution` fields, and the application displays that attribution to
+users. If you redistribute these files, or a database derived from them,
+ODbL's share-alike and attribution terms apply to you as well.
+
+© OpenStreetMap katkıda bulunanları / © OpenStreetMap contributors
