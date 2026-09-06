@@ -292,9 +292,25 @@ export function PlaceDetail({
             </div>
           )}
 
-          {(place.address_line || hours.length > 0 || place.phone || place.website) && (
+          {(place.address_line ||
+            place.district ||
+            place.province ||
+            hours.length > 0 ||
+            place.phone ||
+            place.website) && (
             <section className="mt-5 space-y-2.5">
               {place.address_line && <InfoRow icon={<MapPin size={16} />}>{place.address_line}</InfoRow>}
+              {/* Where this is. Most records have no address_line, so without
+                  this the panel showed a place called "Park" with no
+                  location at all - while the card the user just tapped said
+                  "Sivas Merkez, Sivas" and the share page said the same. At
+                  national scale that is the only thing distinguishing a
+                  result across the street from one 900 km away. */}
+              {!place.address_line && (place.district || place.province) && (
+                <InfoRow icon={<MapPin size={16} />}>
+                  {[place.district, place.province].filter(Boolean).join(", ")}
+                </InfoRow>
+              )}
               {hours.length > 0 && (
                 <InfoRow icon={<Clock size={16} />}>
                   <span className="space-y-0.5">

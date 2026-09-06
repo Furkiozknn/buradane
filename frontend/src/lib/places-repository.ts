@@ -71,6 +71,10 @@ export interface DatasetMeta {
   license: string;
   attribution: string;
   count: number;
+  /** National per-category totals, precomputed. The admin dashboard needs
+   * the distribution and nothing else from the records; deriving it from
+   * allPlaces() made an untokened page load 167.829 records per request. */
+  categoryTotals: Record<string, number>;
   cities: {
     slug: string;
     label: string;
@@ -346,6 +350,7 @@ function loadIndex(): ProvinceIndexRow[] {
       license: string;
       attribution: string;
       count: number;
+      categoryTotals?: Record<string, number>;
       provinces: ProvinceIndexRow[];
     };
     metaCache = {
@@ -354,6 +359,7 @@ function loadIndex(): ProvinceIndexRow[] {
       license: raw.license,
       attribution: raw.attribution,
       count: raw.count,
+      categoryTotals: raw.categoryTotals ?? {},
       cities: raw.provinces.map((row) => ({
         slug: row.slug,
         label: row.label,
@@ -431,7 +437,18 @@ function rebuildIndexFromSnapshots(): ProvinceIndexRow[] {
     source = raw.source ?? source;
   }
 
-  metaCache = { generated_at: newest, source, license, attribution, count, cities };
+  metaCache = {
+    generated_at: newest,
+    source,
+    license,
+    attribution,
+    count,
+    // The fallback path has no precomputed totals; the admin page renders
+    // the categories with zeroes rather than paying a national load for a
+    // header. Running build_dataset_meta.mjs restores them.
+    categoryTotals: {},
+    cities,
+  };
   provinceIndex = rows;
   return rows;
 }
@@ -624,6 +641,39 @@ function loadAll(): Place[] {
   } finally {
     loadingAll = false;
   }
+}
+
+/**
+ * Is the word the search gave up on actually a place?
+ *
+ * Checks the 81 provinces first, then the official 973 districts, so
+ * "Alanya", "Kadıköy", "Çeşme" and "Ürgüp" resolve as readily as "Antalya"
+ * does. Returns nothing for an ordinary word, which is the common case and
+ * must stay cheap.
+ */
+function resolveNeedleLocation(
+  needle: string,
+): { needleLocation?: { label: string; province: string; center: { lat: number; lon: number } } } {
+  const province = findProvince(needle);
+  if (province) {
+    const center = officialProvinceCenter(province.name);
+    if (center) {
+      return { needleLocation: { label: province.name, province: province.name, center } };
+    }
+  }
+  const district = officialDistrict(needle);
+  // An ambiguous district name (province "") names several places, so
+  // offering to go to one of them would be a guess dressed as an answer.
+  if (district && district.province) {
+    return {
+      needleLocation: {
+        label: district.name,
+        province: district.province,
+        center: district.center,
+      },
+    };
+  }
+  return {};
 }
 
 /** Median coordinate of a city's places - resistant to a single node
@@ -1041,6 +1091,7 @@ export function queryPlaces(
       relaxedBy: relaxed
         ? {
             ...(relaxedNeedle ? { needle: relaxedNeedle } : {}),
+            ...(relaxedNeedle ? resolveNeedleLocation(relaxedNeedle) : {}),
             ...(droppedAmenities.length > 0 ? { amenities: droppedAmenities } : {}),
           }
         : undefined,

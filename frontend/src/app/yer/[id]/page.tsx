@@ -7,6 +7,7 @@ import {
   BadgeCheck,
   Banknote,
   Clock,
+  Info,
   MapPin,
   Navigation,
 } from "lucide-react";
@@ -193,8 +194,19 @@ export default async function PlacePage({ params }: { params: Promise<{ id: stri
       )}
 
       <p className="mt-5 flex items-center gap-1.5 text-[12.5px] text-text-muted">
-        <BadgeCheck size={14} aria-hidden style={{ color: "var(--success)" }} />
-        {place.freshness_label} · Kaynak: {place.source.name}
+        {/* A check mark, in the project's green, is a claim that somebody
+            confirmed this. Show it only when somebody did. This is the page
+            that unfurls in a WhatsApp preview, and it was the one surface
+            where "Topluluk doğrulaması yok" still sat under a green tick -
+            the exact fabricated-provenance problem the in-app cards were
+            fixed for. The licence belongs here too: this is the public,
+            indexable page, and ODbL asks for it. */}
+        {place.verification_count > 0 ? (
+          <BadgeCheck size={14} aria-hidden style={{ color: "var(--success)" }} />
+        ) : (
+          <Info size={14} aria-hidden />
+        )}
+        {place.freshness_label} · Kaynak: {place.source.name} ({place.source.license})
       </p>
 
       <div className="mt-6 flex flex-col gap-2">

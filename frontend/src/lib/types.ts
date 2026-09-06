@@ -157,6 +157,21 @@ export interface PlaceQueryResult {
     relaxedBy?: {
       /** Free text that matched no place name and was dropped. */
       needle?: string;
+      /**
+       * The dropped needle resolved to a real place on the map, when it is
+       * one. A dropped LOCATION word is categorically different from a
+       * dropped descriptive one: "sivas tuvalet" answered from İstanbul is
+       * not a widened search, it is the wrong answer to a different
+       * question. Resolved on the server because the official 973-district
+       * list is server-only, and the client can only recognise the 81
+       * provinces - which is why "Alanya tuvalet" used to come back as
+       * Sivas toilets with nothing but grey footnote text.
+       */
+      needleLocation?: {
+        label: string;
+        province: string;
+        center: { lat: number; lon: number };
+      };
       /** Amenity filters dropped because our data has no evidence either
        * way - `null` means unknown and is excluded on purpose. */
       amenities?: AmenityKey[];

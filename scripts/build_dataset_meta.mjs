@@ -49,10 +49,18 @@ const distinctIds = new Set();
 // trigger with one bogus /yer/<id> URL.
 const placeIndex = {};
 const indexedHasDistrict = {};
+// Distinct-id guard so a border-crossing way is not counted twice.
+const countedForCategories = new Set();
 // Per-province distinct ids, so the city picker's "N kayıtlı yer" matches
 // what the app actually holds - summing file lengths over-reported the
 // seven provinces that share a border-crossing way.
 const provinceIds = [];
+// National per-category totals. Fourteen numbers, so that the admin
+// dashboard can show the distribution without loading 167.829 records: it
+// used to call allPlaces() on every request behind `force-dynamic`, which
+// measured 26,7 seconds and blocked every other user on the box for the
+// duration - on a page that requires no token to render.
+const categoryTotals = {};
 let newest = "";
 let attribution = "© OpenStreetMap katkıda bulunanları";
 let license = "ODbL 1.0";
@@ -68,6 +76,12 @@ for (const file of files) {
   let maxLon = -Infinity;
   for (const p of data.places) {
     distinctIds.add(p.id);
+    if (!countedForCategories.has(p.id)) {
+      countedForCategories.add(p.id);
+      for (const slug of p.categories ?? []) {
+        categoryTotals[slug] = (categoryTotals[slug] ?? 0) + 1;
+      }
+    }
     // The copy WITH a district wins, exactly as the loader decides it
     // (places-repository.ts). First-file-wins disagreed with the loader for
     // the border-crossing ways, so the same place reported a different il
@@ -104,7 +118,15 @@ for (const file of files) {
 fs.writeFileSync(
   OUT,
   JSON.stringify(
-    { generated_at: newest, source, license, attribution, count: distinctIds.size, provinces },
+    {
+      generated_at: newest,
+      source,
+      license,
+      attribution,
+      count: distinctIds.size,
+      categoryTotals,
+      provinces,
+    },
     null,
     1,
   ),

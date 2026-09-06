@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
 import { listContributions, listOverrides } from "@/lib/contributions-store";
-import { allPlaces, categoryCounts, datasetMeta } from "@/lib/places-repository";
+import { datasetMeta } from "@/lib/places-repository";
 import { AdminQueue } from "@/components/AdminQueue";
 import { AdminTokenGate } from "@/components/AdminTokenGate";
 import { AdminPlaceEditor } from "@/components/AdminPlaceEditor";
@@ -12,9 +12,13 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminPage() {
   const [contributions, overrides] = await Promise.all([listContributions(), listOverrides()]);
-  const places = allPlaces();
-  const counts = categoryCounts(places);
+  // Deliberately NOT allPlaces(). This page is `force-dynamic` and needs no
+  // token to render, so calling it loaded all 81 snapshots on every request:
+  // measured at 26,7 seconds, during which a normal user's 11 ms search took
+  // 14,1 s because the single event loop was busy. Everything the header
+  // shows is in meta.json (18 KB), precomputed by build_dataset_meta.mjs.
   const meta = datasetMeta();
+  const counts = meta.categoryTotals;
 
   const pending = contributions.filter((c) => c.status === "pending");
 
@@ -46,7 +50,7 @@ export default async function AdminPage() {
       </header>
 
       <section className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Stat label="Toplam mekan" value={places.length.toLocaleString("tr-TR")} />
+        <Stat label="Toplam mekan" value={meta.count.toLocaleString("tr-TR")} />
         <Stat label="Bekleyen bildirim" value={String(pending.length)} highlight={pending.length > 0} />
         <Stat label="Toplam katkı" value={String(contributions.length)} />
         <Stat label="Uygulanan düzeltme" value={String(Object.keys(overrides).length)} />

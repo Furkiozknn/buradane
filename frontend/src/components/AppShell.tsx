@@ -24,7 +24,6 @@ import { SuggestPlaceDialog } from "./SuggestPlaceDialog";
 import { CityPicker } from "./CityPicker";
 import { DESKTOP_QUERY, useMediaQuery } from "@/lib/use-media-query";
 import { buildUrlSearch, type UrlState } from "@/lib/url-state";
-import { foldAscii } from "@/lib/administrative";
 import { formatDistance, haversineMeters } from "@/lib/geo";
 import { useFavorites } from "@/lib/use-favorites";
 import { useOnlineStatus } from "@/lib/use-online-status";
@@ -65,6 +64,23 @@ const SNAP_HEIGHT: Record<SheetSnap, string> = {
   // map visible so the user never loses spatial context.
   full: "calc(100dvh - 136px)",
 };
+
+/**
+ * Turkish dative suffix for a place name: Antalya'YA, İzmir'E, Bolu'YA.
+ *
+ * Hardcoding "'a" produced "Antalya'a git" and "İzmir'a git" for 48 of the
+ * 81 provinces - the first thing a native speaker notices. Vowel harmony
+ * picks a/e from the last vowel, and a name ending in a vowel takes a "y"
+ * buffer. The location chip above avoids suffixes entirely for the same
+ * reason; here the sentence needs one.
+ */
+function dativeSuffix(name: string): string {
+  const vowels = [...name.toLocaleLowerCase("tr-TR")].filter((c) => "aeıioöuü".includes(c));
+  const last = vowels[vowels.length - 1] ?? "a";
+  const back = "aıou".includes(last);
+  const endsWithVowel = "aeıioöuü".includes(name.slice(-1).toLocaleLowerCase("tr-TR"));
+  return `${endsWithVowel ? "y" : ""}${back ? "a" : "e"}`;
+}
 
 /** Turns the query engine's relaxation report into one short Turkish phrase. */
 function relaxationDetail(relaxedBy: PlaceQueryResult["applied"]["relaxedBy"]): string {
@@ -270,8 +286,12 @@ export function AppShell({
         setStaleViewport(false);
       } catch (err) {
         if (requestId !== requestIdRef.current) return;
-        // A hard failure means nothing answered at all - not even the cache.
-        setServedFromCache(true);
+        // Only a genuine network failure means "nothing answered". An HTTP
+        // error DID answer - flagging it as offline put a "Çevrimdışısınız"
+        // banner on a working connection and hid the server's actual
+        // explanation behind it.
+        const networkFailure = err instanceof TypeError;
+        if (networkFailure) setServedFromCache(true);
         setError(err instanceof Error ? err.message : "Sonuçlar getirilemedi");
       } finally {
         if (requestId === requestIdRef.current) setLoading(false);
@@ -532,14 +552,23 @@ export function AppShell({
    * province name and that province is not the one we are already showing.
    * Folded comparison so "hakkari" matches "Hakkâri" - the same rule the
    * city picker's filter uses, for the same keyboard-layout reason. */
-  const droppedProvince = useMemo(() => {
-    const needle = result?.applied.relaxedBy?.needle;
-    if (!needle) return null;
-    const folded = foldAscii(needle);
-    const hit = datasetMeta.cities.find((c) => foldAscii(c.label) === folded);
-    if (!hit || hit.slug === activeCity) return null;
-    return hit.label;
-  }, [result?.applied.relaxedBy?.needle, datasetMeta.cities, activeCity]);
+  /**
+   * The place the search gave up on, when the word it dropped names one.
+   *
+   * Resolved by the server against the 81 provinces AND the 973 districts.
+   * Matching province labels here on the client covered "Antalya eczane"
+   * and missed "Alanya tuvalet", "Kadıköy tuvalet", "Çeşme park" - the
+   * names people actually type - which came back as local results with
+   * nothing but 11,5 px of grey text admitting the word was ignored.
+   */
+  const droppedPlace = useMemo(() => {
+    const hint = result?.applied.relaxedBy?.needleLocation;
+    if (!hint) return null;
+    const activeLabel = datasetMeta.cities.find((c) => c.slug === activeCity)?.label;
+    // Already looking there: nothing to offer.
+    if (hint.label === activeLabel) return null;
+    return hint;
+  }, [result?.applied.relaxedBy?.needleLocation, datasetMeta.cities, activeCity]);
 
   const filterCount = activeFilterCount(filters);
   const hasAnyFilter = filterCount > 0 || category !== null || query.trim().length > 0;
@@ -835,7 +864,7 @@ export function AppShell({
                   the word we threw away names a province we cover, say so
                   where it cannot be missed and offer the one action that
                   actually answers the question. */}
-              {droppedProvince && !loading && (
+              {droppedPlace && !loading && (
                 <div
                   className="mx-4 mb-1 mt-2 rounded-lg px-3 py-2 text-[12.5px] leading-relaxed"
                   style={{ background: "var(--warning-soft)", color: "var(--text)" }}
@@ -845,17 +874,22 @@ export function AppShell({
                   <button
                     type="button"
                     onClick={() => {
-                      const target = cityOptions.find((c) => c.label === droppedProvince);
-                      if (!target) return;
-                      setActiveCity(target.slug);
+                      // Move to the resolved coordinates, and set the city to
+                      // the province that contains them so the chip, the
+                      // picker and the query origin all agree.
+                      const province = cityOptions.find((c) => c.label === droppedPlace.province);
+                      if (province) setActiveCity(province.slug);
                       setFollowUser(false);
+                      setSharedCenter(droppedPlace.center);
                       setViewport(null);
                       setStaleViewport(false);
-                      setMapFocus({ center: target.center, zoom: 12.5, nonce: Date.now() });
+                      setMapFocus({ center: droppedPlace.center, zoom: 12.5, nonce: Date.now() });
                     }}
                     className="font-semibold underline underline-offset-2"
                   >
-                    {droppedProvince}&apos;a git
+                    {droppedPlace.label}
+                    {droppedPlace.province !== droppedPlace.label ? ` (${droppedPlace.province})` : ""}
+                    &apos;{dativeSuffix(droppedPlace.label)} git
                   </button>
                 </div>
               )}
@@ -972,7 +1006,13 @@ export function AppShell({
               ) : error ? (
                 <EmptyState
                   title="Bir şeyler ters gitti"
-                  body="Sonuçları getiremedik."
+                  // The server's own sentence, which fetchPlaces already went
+                  // to the trouble of extracting and which this component
+                  // then threw away for a generic one. The API says useful
+                  // things - "Arama alanı çok geniş, biraz yakınlaşın" - and
+                  // a user who instead reads "Sonuçları getiremedik" plus a
+                  // retry button will press it forever.
+                  body={error}
                   actionLabel="Tekrar dene"
                   onAction={() => fetchPlaces(viewport ? { bbox: viewport.bbox } : {})}
                 />

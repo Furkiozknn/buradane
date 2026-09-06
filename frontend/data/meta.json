@@ -4,6 +4,22 @@
  "license": "ODbL 1.0",
  "attribution": "© OpenStreetMap katkıda bulunanları",
  "count": 167829,
+ "categoryTotals": {
+  "otopark": 22841,
+  "kutuphane": 781,
+  "dinlenme": 4552,
+  "cocuk-alani": 8177,
+  "wifi": 3726,
+  "tuvalet": 2990,
+  "eczane": 24377,
+  "su": 5297,
+  "spor": 22541,
+  "park": 24606,
+  "sarj": 708,
+  "cami": 46245,
+  "dus": 413,
+  "toplanma-alani": 678
+ },
  "provinces": [
   {
    "slug": "adana",
