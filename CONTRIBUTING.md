@@ -85,8 +85,8 @@ npm install
 npm run dev        # http://localhost:3000
 ```
 
-Demo verisi (`frontend/data/places.*.json`, on binlerce gerçek OSM mekanı;
-il sayısı 81'e doğru büyüyor) depoyla birlikte gelir. **Veri boru hattını çalıştırmana gerek yok**; harita
+Demo verisi (`frontend/data/places.*.json`, **81 ilin tamamı, 167.829 gerçek
+OSM mekanı**, her il kendi resmî OSM sınırından çekilmiş) depoyla birlikte gelir. **Veri boru hattını çalıştırmana gerek yok**; harita
 ve arayüz doğrudan çalışır.
 
 ### Backend (yalnızca backend'e katkı yapacaksan)

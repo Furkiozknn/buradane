@@ -109,8 +109,8 @@ Uyarlama katmanı yaklaşımı (bkz. §5) bu farkı da route içinde eritebilir.
 ## 7. Bilinen ve ayrıca duran işler
 
 - `conftest.py`'nin DB erişilebilirlik denetimi düzeltildi (2 sn zaman aşımı);
-  `uv run pytest` artık DB'siz ortamda asılı kalmıyor (2026-09-05: 32 geçti,
-  49 skip — skip edenler DB isteyenler, CI'da koşuyorlar).
+  `uv run pytest` artık DB'siz ortamda asılı kalmıyor (2026-09-06: toplam 85
+  test; DB isteyenler yerelde skip eder, CI'da gerçek PostGIS'e karşı koşar).
 - ✅ Baseline Alembic migration'ı depoda; upgrade→downgrade→upgrade döngüsü ve
   model↔migration eşitliği CI'da test ediliyor (`tests/test_migrations.py`).
 - Backend bu geliştirme makinesinde canlı veritabanına karşı koşturulamıyor

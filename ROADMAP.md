@@ -7,7 +7,7 @@ Kural: buradaki her "tamamlandı" maddesi depoda çalışan koda dayanır.
 Doğrulanmamış hiçbir şey tamamlanmış gibi yazılmamıştır. Bir madde
 belirsizse, belirsiz olduğu açıkça yazılıdır.
 
-**Son güncelleme:** 2026-09-04
+**Son güncelleme:** 2026-09-06
 
 ---
 
@@ -82,8 +82,9 @@ belirsizse, belirsiz olduğu açıkça yazılıdır.
   `admin-divisions.ts` ilçe adlarını kanonikleştiriyor.
 
 ### Veri
-- ✅ 44 il / **36.637** gerçek OpenStreetMap mekanı (2026-09-05 tabanı);
-  kalan iller arka planda il il iniyor - bkz. aşağıdaki 🚧
+- ✅ **81/81 il, 167.829** gerçek OpenStreetMap mekanı (2026-09-06). Her il
+  kendi resmî OSM il sınırından çekildi; il merkezi kutusu yaklaşımı
+  (ülkenin %2,2'si) tamamen bırakıldı.
 - ✅ Overpass veri boru hattı: il+kategori bazında checkpoint, üstel geri
   çekilme, çok aynalı
 - ✅ İl başına ayrı anlık görüntü dosyası — il eklemek bir config satırı
@@ -95,11 +96,13 @@ belirsizse, belirsiz olduğu açıkça yazılıdır.
 - ✅ Çevrimdışı yanıtlar **etiketleniyor** — kullanıcı verinin eski
   olabileceğini görüyor
 - ✅ PWA manifest (ana ekrana eklenebilir)
-- ✅ Ölçülen: LCP 168 ms · CLS 0,00 · API 15–36 ms
+- ✅ Ölçülen (81 il / 167.829 kayıt, üretim derlemesi): ana sayfa 14 ms ·
+  il içi yarıçap sorgusu soğuk 155–177 ms, sıcak 20 ms · sunucu RSS ~103 MB
+  (anlık görüntü tembel okunur: açılışta yalnızca 18 KB'lık meta.json)
 
 ### Kalite
 - ✅ Lighthouse: erişilebilirlik 100, best practices 100, SEO 100
-- ✅ 143 frontend testi (Vitest) + 81 backend testi (pytest, DB'li kısmı CI'da)
+- ✅ 161 frontend testi (Vitest) + 85 backend testi (pytest, DB'li kısmı CI'da)
 - ✅ 0 TypeScript hatası, 0 ESLint hatası
 
 ---
@@ -133,11 +136,10 @@ belirsizse, belirsiz olduğu açıkça yazılıdır.
   uyarlama katmanına dönüşmesi.
 
 ### Türkiye kapsamı
-- ✅ 44 il indi ve doğrulandı (2026-09-05 tabanı; güncel liste şehir
-  seçicisinde)
-- 🚧 Kalan iller — bbox'lar OSM'in kendi il-merkezi çapalarından üretiliyor
-  (`scripts/fetch_admin_divisions.py` + sentezlenmiş yapılandırma), ulusal
-  çekim `--only-missing` ile il il sürüyor
+- ✅ **81/81 il** indi ve doğrulandı; ilçe kapsamı **973/973 (%100)**
+- ✅ **Gerçek il sınırından çekim** (`scripts/fetch_by_district.py`): OSM'in
+  `admin_level=4` ilişkisi alan olarak sorgulanır, ilçe ise gerçek
+  `admin_level=6` poligonlarına nokta-içinde-poligon testiyle atanır.
 - ✅ 973 ilçelik resmî liste indi ve testlerle doğrulandı (81 il / 973 ilçe
   tam; ad çapraz kontrolü dahil)
 
@@ -223,12 +225,11 @@ belirsizse, belirsiz olduğu açıkça yazılıdır.
   türden kayıtlar aranır ve gösterilir; "Bu o" mevcut kaydı **doğrulamaya**
   çevirir (tazelik sinyali), "Hayır, yeni yer" öneriyi yine de gönderir.
   Kontrol bir kapı değil: başarısız olursa öneri normal yoldan geçer.
-- 🚧 **Kalan iller** için veri çekimi (ulusal çekim sürüyor — bkz. "Türkiye
-  kapsamı")
+- ✅ Kalan iller indi — kapsam 81/81.
 
 ### Düşük öncelik / ileride
 
-- 📋 Topluluk fotoğraf yüklemesi *(OSM'de fotoğraf kapsamı ölçüldü: %2,3 —
+- 📋 Topluluk fotoğraf yüklemesi *(OSM'de fotoğraf kapsamı ölçüldü: %0,34 —
   bu yüzden OSM fotoğrafları yerine topluluk yüklemesi düşünülüyor)*
 - 📋 Telemetri / analitik — şu an ne arandığı bilinmiyor
 - 📋 Production dağıtımı (hosting kararı verilmedi)
@@ -246,8 +247,10 @@ Bunlar **plan değil, açık sorulardır.** Fikrin varsa issue aç.
 - ❓ **`has_ramp` ve `is_quiet` alanlarının geleceği.** Modelde varlar ama
   OSM'de veri kaynağı yok (`ramp` etiketi mevcut anlık görüntüde hiç geçmiyor).
   Topluluk katkısıyla dolar mı, kaldırılmalı mı?
-- ❓ **`frontend/data/*.json` dosyalarının depoda tutulması.** ~15 MB ve 81
-  ile büyüyecek. Depoda tutmak katkıcı için kolaylık, klon boyutu için yük.
+- ❓ **`frontend/data/*.json` dosyalarının depoda tutulması.** Artık **144 MB**
+  (81 il). Depoda tutmak katkıcıya "klonla ve çalıştır" kolaylığı verir;
+  bedeli klon boyutudur. Okuma tarafı tembel olduğu için çalışma zamanı
+  maliyeti değil, yalnızca depo maliyeti.
 - ❓ **Mobil uygulama.** PWA yeterli mi, native gerekir mi?
 
 ---

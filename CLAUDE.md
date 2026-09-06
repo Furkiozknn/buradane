@@ -74,8 +74,10 @@ döngüsüyle çözmek Türkiye ölçeğinde işlemez.
 ```
 buradane/
 ├── frontend/
-│   ├── data/                       # OSM anlık görüntüleri (COMMIT'Lİ, ~15 MB)
-│   │   ├── places.<il>.json        # il başına bir dosya; kapsam 81 ile doğru büyüyor
+│   ├── data/                       # OSM anlık görüntüleri (COMMIT'Lİ, ~144 MB)
+│   │   ├── places.<il>.json        # 81 il, 167.829 mekan; her biri il sınırından
+│   │   ├── meta.json               # il indeksi (18 KB) - tembel okuma bunu okur
+│   │   ├── place-index.json        # id -> il (3,2 MB), yalnız id aramasında
 │   │   └── contributions.json      # ÇALIŞMA ZAMANI durumu, .gitignore'da
 │   ├── public/
 │   │   ├── sw.js                   # Service worker (çevrimdışı katman)
@@ -95,7 +97,7 @@ buradane/
 │   │   │       └── admin/          # Moderasyon + mekan düzenleme
 │   │   ├── components/             # İstemci bileşenleri
 │   │   └── lib/                    # Saf mantık — TESTLERİN ODAĞI
-│   ├── tests/                      # Vitest, 143 test
+│   ├── tests/                      # Vitest, 161 test
 │   ├── vitest.config.mts
 │   └── package.json
 ├── backend/
@@ -113,7 +115,7 @@ buradane/
 │   └── pyproject.toml
 ├── scripts/                        # Python veri boru hattı (Overpass)
 ├── .github/workflows/              # CI
-└── README.md                       # Uzun teknik doküman (613 satır)
+└── README.md                       # Uzun teknik doküman (657 satır)
 ```
 
 ### En kritik dosyalar
@@ -274,8 +276,8 @@ Bu kurallar estetik değil. İhlali, kullanıcının boşuna yürümesi demektir
    kullanıcı önerisi) söylenmemiş her alan `null` kalır.
 3. **Kaynak dürüstlüğü.** OSM verisi ODbL'dir; kullanıcı katkısı değildir.
    `source.slug` her kaydın gerçekte nereden geldiğini söyler.
-4. **Sessizlik kapalı demek değil.** Mekanların yalnızca küçük bir
-   azınlığında (ulusal veri büyüdükçe ~%3) çalışma saati var. "Kapalıları gizle" filtresi yalnızca *kapalı olduğu bilinenleri*
+4. **Sessizlik kapalı demek değil.** Mekanların yalnızca **%1,81**'inde
+   (167.829'da 3.039) çalışma saati var. "Kapalıları gizle" filtresi yalnızca *kapalı olduğu bilinenleri*
    eler.
 5. **Girilemeyen yer listelenmez.** `access=private`/`no` olan kayıtlar sonuç
    döndürmez. `customers`/`permit` döner **ama etiketlenir**.
@@ -325,7 +327,7 @@ Bu kurallar estetik değil. İhlali, kullanıcının boşuna yürümesi demektir
 ## 8. Test kuralları
 
 ```bash
-cd frontend && npm test          # 143 test geçmeli
+cd frontend && npm test          # 161 test geçmeli
 cd frontend && npx tsc --noEmit  # 0 hata
 cd frontend && npm run lint      # 0 hata
 cd frontend && npm run build     # başarılı
@@ -487,9 +489,8 @@ Bunlar README'de de yazılıdır ve bilinçli kabul edilmiş durumlardır:
 - Backend bu geliştirme makinesinde canlı veritabanına karşı çalıştırılamaz
   (Docker/Postgres yok); DB'ye ihtiyaç duyan testler yerelde skip eder ve
   **CI'daki gerçek Postgres+PostGIS servisinde koşar** (`.github/workflows/ci.yml`).
-- İl kapsamı hâlâ kısmi: ulusal çekim il il ilerliyor (güncel liste şehir
-  seçicisinde); hedef 81 il / 973 ilçe ve ilçe referans listesi
-  (`frontend/data/admin-divisions.json`) tamamlandı.
+- İl kapsamı **tamamlandı**: 81/81 il, her biri gerçek OSM il sınırından;
+  167.829 mekan; 973 ilçe merkezinin tamamının 15 km'sinde veri var.
 - Fotoğraf desteği yoktur (OSM'de ölçülen kapsam %2,3 olduğu için ertelendi).
 - `backend/app/core/config.py`, var olmayan bir `docs/ARCHITECTURE.md`
   dosyasına atıf yapar.

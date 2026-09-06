@@ -21,10 +21,11 @@ süresi) ve **"bu bilgi hâlâ doğru mu?"** (tek dokunuşla "Evet, burada"
 doğrulaması, tazelik etiketi, kaynak ve güvenilirlik skoru).
 
 > **Demo ekran görüntüsü:** Henüz eklenmedi. Aşağıdaki "Hızlı Başlangıç →
-> Frontend" adımlarıyla demoyu yerelde çalıştırıp **25.000'i aşkın gerçek
+> Frontend" adımlarıyla demoyu yerelde çalıştırıp **167.829 gerçek
 > OpenStreetMap mekanı** üzerinde harita ve liste arayüzünü görebilirsiniz.
-> Kapsam il il 81'e doğru genişliyor; güncel il listesi ve sayılar şehir
-> seçicide görünür (son doğrulanan taban 2026-09-05: 44 il / 36.637 mekan; ulusal çekim sürüyor).
+> **Kapsam tamamlandı (2026-09-06): 81/81 il**, her biri kendi resmî OSM il
+> sınırından çekildi - il merkezine çizilmiş bir kutudan değil. Ölçülen
+> sonuç: **973 ilçe merkezinin 973'ünün 15 km'si içinde veri var**.
 
 ## v1 Kapsamı
 
@@ -503,7 +504,7 @@ sorgunun anlamını sessizce değiştirmek yerine.
 - Fotoğraflar ve yorumlar backend'de modellendi (`PlacePhoto`/
   `PlaceReview`) ama ne backend API'sinde ne demo'da bir arayüzü var.
   Fotoğraflar için OSM etiketleri ölçüldü ve **bilinçli olarak
-  ertelendi**: mekanların yalnızca %2,3'ünde (6.481'de 147) `image` ya da
+  ertelendi**: mekanların yalnızca %0,34'ünde (167.829'da 571) `image` ya da
   `wikimedia_commons` etiketi var, yani özellik eklense detay
   sayfalarının büyük çoğunluğu yine yer tutucuda kalır ve bugünkü tutarlı
   görünümden daha kötü durur. Gerçek fotoğraf kaynağı, kullanıcı
@@ -548,16 +549,16 @@ düzelttiğimiz üç nokta:
 
 | Bulgu | Veri | Karar |
 |---|---|---|
-| `access=private/no` | 146 mekan (17'si tuvalet) | Sonuçlara **hiç girmez**. Özel mülk içindeki bir tuvaleti umumi diye göstermek, acelesi olan birini açılmayacak bir kapıya göndermektir. |
+| `access=private/no` | 612 mekan | Sonuçlara **hiç girmez**. Özel mülk içindeki bir tuvaleti umumi diye göstermek, acelesi olan birini açılmayacak bir kapıya göndermektir. |
 | `access=customers` / `permit` | 9 tuvalet + diğerleri | **Kalır ama etiketlenir.** "Bir çay al, tuvaleti kullan" İstanbul'da gerçekten işleyen bir çözüm; gizlemek gerçek bir cevabı çöpe atmak olurdu. |
-| `opening_hours` | Mekanların yalnızca **~%4**'ünde var. Üç şehirlik anlık görüntüde ölçülen dağılım: 514 açık, **17 kapalı**, 10.875 bilinmiyor | Filtre yalnızca **kapalı olduğu bilinenleri** eler; çipin adı da bu ("Kapalıları gizle"). 17 kapalıyı ayıklamak için 10.875 kaydı gizlemek, filtreyi işe yaramaz değil zararlı yapardı. |
+| `opening_hours` | Mekanların yalnızca **%1,81**'inde var (167.829'da 3.039) | Filtre yalnızca **kapalı olduğu bilinenleri** eler; çipin adı da bu ("Kapalıları gizle"). Bilinmeyeni kapalı saymak, 164.790 kaydı gizlemek için birkaç yüzünü ayıklamak olurdu - filtreyi işe yaramaz değil, zararlı yapardı. |
 | `wheelchair=designated` | 3 mekan | Artık `true`. OSM'nin en güçlü erişilebilirlik iddiasıydı ve "bilinmiyor" sayılıyordu. |
 | `wheelchair=limited` | 70 mekan | Boolean'a **düşürülmüyor** (ne evet ne hayır), detay sayfasında olduğu gibi yazılıyor. |
 
 **Cevabı bizde olmayan sorular.** Bazı aramaların doğru cevabı açık
 haritalama verisinde yapısal olarak yok. En net örnek "nöbetçi eczane":
 nöbet listesi her gün değişir, il eczacı odalarınca belirlenir ve hiçbir OSM
-etiketinde geçmez. Kelimeyi eşleştirip şehirdeki 594 eczaneyi döndürmek eksik
+etiketinde geçmez. Kelimeyi eşleştirip ülkedeki 24.377 eczaneyi döndürmek eksik
 bir cevap değil, **yanlış** bir cevaptır. Bu yüzden sorgu bunu söylüyor ve
 gerçek kaynağa — TİTCK'nın e-Devlet üzerindeki resmî sorgusuna — yönlendiriyor
 (`QUERY_NOTICES`, `categories.ts`). UI'da özel bir durum olarak değil, tablo
@@ -610,8 +611,8 @@ dev sunucusunun önünde HMR'ı keser. Test etmek için: `npm run build && npm r
 
 ## Yol Haritası
 
-**v1 (şu an, çalışıyor)**: 20+ ilde (81'e doğru il il tamamlanıyor)
-25.000'i aşkın gerçek OSM mekanı üzerinde harita, konum, yakındakiler, 14 kategori, yer detayı,
+**v1 (şu an, çalışıyor)**: 81 ilin tamamında 167.829 gerçek OSM mekanı
+üzerinde harita, konum, yakındakiler, 14 kategori, yer detayı,
 Türkçe doğal-dil araması, dinamik filtreler, sıralama (en yakın / en
 güvenilir), yön göstergesi, yol tarifi, tek dokunuşla yerinde doğrulama,
 kullanıcı önerisi ve sorun bildirimi, moderasyon + mekan düzenleme paneli,
@@ -630,7 +631,7 @@ offline bölge indirme (service worker), erişilebilirlik/ihtiyaç profiline
 göre kişiselleştirme, gerçek bir semantik/AI destekli arama katmanı
 (demo'daki lookup-tablosu tabanlı ayrıştırmanın ötesinde), gelişmiş
 öneriler, oyunlaştırma (katkı puanı/rozet), belediye açık verisi
-(İBB/ULAŞAV) entegrasyonu, kalan 72 il.
+(İBB/ULAŞAV) entegrasyonu.
 
 ## Katkı
 
