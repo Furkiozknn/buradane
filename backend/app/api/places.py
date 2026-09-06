@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 
 from app.api.deps import DbSession, DeviceTokenHash, OptionalUser
-from app.core.ratelimit import limit_verifications, limit_writes
+from app.core.ratelimit import limit_reports, limit_verifications, limit_writes
 from app.services.dedup import find_duplicate
 from app.models.category import Category, PlaceCategory
 from app.models.place import Place, PlaceStatus
@@ -126,7 +126,14 @@ def suggest_place(payload: PlaceSuggestionIn, db: DbSession, user: OptionalUser)
 
 
 @router.post(
-    "/{place_id}/reports", status_code=status.HTTP_201_CREATED, dependencies=[Depends(limit_writes)]
+    "/{place_id}/reports",
+    status_code=status.HTTP_201_CREATED,
+    # Both, like verifications: limit_writes is the general anti-spam budget,
+    # limit_reports holds one address to one report per place per day. Three
+    # pending reports max out the reliability penalty, so without the second
+    # one a script could bury any place it liked - and every report is a row
+    # a human moderator has to clear by hand.
+    dependencies=[Depends(limit_writes), Depends(limit_reports)],
 )
 def report_place(
     place_id: uuid.UUID, payload: PlaceReportIn, db: DbSession, user: OptionalUser, device: DeviceTokenHash

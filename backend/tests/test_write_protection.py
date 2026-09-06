@@ -211,6 +211,35 @@ class TestRateLimiting:
             "tek adres konsensüsü tek başına doldurabilir"
         )
 
+    def test_one_address_cannot_flood_reports_on_a_place(self, monkeypatch):
+        """Reports were the cheap side of the asymmetry: verifications had a
+        per-place ceiling, reports had only the general burst of 10, and
+        three pending reports max out the -0,4 reliability penalty. That
+        buried any place a script chose and left three rows for a human to
+        clear."""
+        from fastapi import HTTPException
+
+        monkeypatch.setattr(
+            ratelimit, "_report_limiter", ratelimit.TokenBucketLimiter(per_hour=1 / 24, burst=1)
+        )
+        place = uuid.uuid4()
+
+        class FakeClient:
+            host = "203.0.113.9"
+
+        request = SimpleNamespace(client=FakeClient(), path_params={"place_id": str(place)})
+        ratelimit.limit_reports(request)  # first one is the honest case
+        with pytest.raises(HTTPException) as denied:
+            ratelimit.limit_reports(request)
+        assert denied.value.status_code == 429
+
+        # Same address, DIFFERENT place: unaffected. Reporting two broken
+        # fountains on one walk must not trip anything.
+        other = SimpleNamespace(
+            client=FakeClient(), path_params={"place_id": str(uuid.uuid4())}
+        )
+        ratelimit.limit_reports(other)
+
     def test_one_ipv6_line_shares_a_bucket_across_its_whole_prefix(self):
         """A residential or mobile IPv6 line is handed a /64 - 2^64 source
         addresses the holder can cycle through for free. Charged per /128

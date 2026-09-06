@@ -132,6 +132,17 @@ def client_key(request: Request) -> str:
     return str(address)
 
 
+# Reports get the same per-address-per-place ceiling as verifications, for
+# the same reason and with a different number. Reports were the cheaper
+# side of the asymmetry: the general limiter allowed 10 in a burst, and
+# three pending reports on one place max out the -0,4 reliability penalty,
+# which drops a well-documented place below any min_reliability filter and
+# leaves three rows for a human to clear. One report per address per place
+# per day is generous for the honest case (you report a broken fountain
+# once) and useless for the flooding one.
+_report_limiter = TokenBucketLimiter(per_hour=1 / 24, burst=1)
+
+
 def limit_writes(request: Request) -> None:
     """FastAPI dependency: one token per community write, keyed by client IP.
 
@@ -140,6 +151,22 @@ def limit_writes(request: Request) -> None:
     --proxy-headers so request.client is already the real peer).
     """
     _write_limiter.check(client_key(request))
+
+
+def _place_key(request: Request) -> str:
+    """`address:place`, with the place id canonicalised - see
+    limit_verifications for why the raw path text is not safe to key on."""
+    raw = str(request.path_params.get("place_id", ""))
+    try:
+        place_key = str(uuid.UUID(raw))
+    except ValueError:
+        place_key = raw
+    return f"{client_key(request)}:{place_key}"
+
+
+def limit_reports(request: Request) -> None:
+    """Per-IP-per-place ceiling for reports - see _report_limiter."""
+    _report_limiter.check(_place_key(request))
 
 
 def limit_verifications(request: Request) -> None:
@@ -159,9 +186,4 @@ def limit_verifications(request: Request) -> None:
     cannot reach a real place, so it keeps its raw form and is still charged
     rather than skipped.
     """
-    raw = str(request.path_params.get("place_id", ""))
-    try:
-        place_key = str(uuid.UUID(raw))
-    except ValueError:
-        place_key = raw
-    _verification_limiter.check(f"{client_key(request)}:{place_key}")
+    _verification_limiter.check(_place_key(request))

@@ -137,24 +137,33 @@ class PlaceSuggestionIn(BaseModel):
     """A user proposing a brand-new place - lands as status=pending_review,
     never directly published (brief: moderation before publish)."""
 
+    # Every free-text field is bounded, and the bounds are the COLUMN's.
+    # `name` always was; the others were bare `str | None` on an
+    # unauthenticated endpoint, which meant two different failures. A 100 MB
+    # `description` (Text column, no limit) landed in Postgres 30 times an
+    # hour per address, and `note` went on into PlaceSourceRecord.raw_data as
+    # unbounded attacker-controlled JSONB. Meanwhile `address_line` maps to
+    # String(400), so 500 characters passed validation and died at INSERT
+    # with StringDataRightTruncation - a 500 on a public endpoint where the
+    # honest answer is 422.
     name: str = Field(min_length=2, max_length=300)
     lat: float = Field(ge=-90, le=90)
     lon: float = Field(ge=-180, le=180)
-    category_slugs: list[str] = Field(min_length=1)
-    description: str | None = None
-    address_line: str | None = None
-    note: str | None = None
+    category_slugs: list[str] = Field(min_length=1, max_length=10)
+    description: str | None = Field(default=None, max_length=2000)
+    address_line: str | None = Field(default=None, max_length=400)
+    note: str | None = Field(default=None, max_length=1000)
 
 
 class PlaceReportIn(BaseModel):
     """A status-change signal on an existing place - "kapalı", "çeşme
     çalışmıyor", etc. Also moderated (see app/models/signal.py)."""
 
-    report_type: str
-    field: str | None = None
-    note: str | None = None
+    report_type: str = Field(max_length=40)
+    field: str | None = Field(default=None, max_length=80)
+    note: str | None = Field(default=None, max_length=1000)
 
 
 class PlaceVerificationIn(BaseModel):
-    field: str
+    field: str = Field(max_length=80)
     confirmed_value: bool

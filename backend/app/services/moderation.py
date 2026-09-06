@@ -241,6 +241,16 @@ def _identity_expr():
     return func.coalesce(sa_cast(PlaceVerification.user_id, SAString), PlaceVerification.device_token_hash)
 
 
+def _report_identity_expr():
+    """The same coalesce, over PlaceReport - reports and verifications must
+    agree on what "a distinct submitter" means, or the cheaper side becomes
+    the attack surface."""
+    from sqlalchemy import String as SAString
+    from sqlalchemy import cast as sa_cast
+
+    return func.coalesce(sa_cast(PlaceReport.user_id, SAString), PlaceReport.device_token_hash)
+
+
 def _recompute_reliability(db: Session, place: Place) -> None:
     now = datetime.now(timezone.utc)
     window_start = now - _stale_window()
@@ -267,11 +277,36 @@ def _recompute_reliability(db: Session, place: Place) -> None:
             _identity_expr().is_not(None),
         )
     ).scalar_one()
+    # DISTINCT identities, not rows - the same discipline verifications
+    # already used, and its absence here was the asymmetry that made report
+    # flooding work. The penalty is -0.15 per pending report capped at -0.4,
+    # so three POSTs from one script took a well-documented OSM place from
+    # 0,7 to 0,2, dropped it below any min_reliability filter, sorted it last
+    # under sort=reliability, and left three rows for a human moderator to
+    # clear by hand. Counting identities means a lone actor can move the
+    # score by at most one report's worth however many they send.
     pending_conflicting_reports = db.execute(
+        select(func.count(func.distinct(_report_identity_expr())))
+        .select_from(PlaceReport)
+        .where(
+            PlaceReport.place_id == place.id,
+            PlaceReport.status == ReportStatus.pending,
+            _report_identity_expr().is_not(None),
+        )
+    ).scalar_one()
+    # An anonymous report carries no identity at all (no account, no device
+    # token). Those still count - silencing them would be worse - but as a
+    # single collective voice rather than one voice per request.
+    if db.execute(
         select(func.count())
         .select_from(PlaceReport)
-        .where(PlaceReport.place_id == place.id, PlaceReport.status == ReportStatus.pending)
-    ).scalar_one()
+        .where(
+            PlaceReport.place_id == place.id,
+            PlaceReport.status == ReportStatus.pending,
+            _report_identity_expr().is_(None),
+        )
+    ).scalar_one():
+        pending_conflicting_reports += 1
     has_photos = (
         db.execute(
             select(func.count())
