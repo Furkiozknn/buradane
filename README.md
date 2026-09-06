@@ -1,3 +1,5 @@
+![buradane - ihtiyac odakli kamusal alan bulma platformu, konsensus kapili dogrulama ile](assets/banner.svg)
+
 # buradane
 
 **"Burada ne var?"** — Türkiye'deki kamusal ve ihtiyaç alanlarını (tuvalet,
