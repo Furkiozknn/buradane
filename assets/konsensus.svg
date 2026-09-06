@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 584" width="1200" height="584" role="img" aria-label="buradane konsensus kapisi: kimliksiz bir dogrulama zayif sinyal olarak saklanir ama alani degistiremez ve tazelik damgasini yenileyemez; kimlikli bir dogrulama ise ancak tazelik penceresi icinde en az iki FARKLI kimlik ayni degeri onaylarsa ve destekleyenler celisenlerden fazlaysa alani degistirir. Ayrica IP ve mekan ile anahtarlanan ayri bir kova, tek bir adresin belirleyici kimligi saglamasini engeller.">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0d1117"/>
+      <stop offset="55%" stop-color="#0f2416"/>
+      <stop offset="100%" stop-color="#0b1d14"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#3fb950"/>
+      <stop offset="50%" stop-color="#39d3bb"/>
+      <stop offset="100%" stop-color="#4c8dff"/>
+    </linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#8b98a9"/>
+    </marker>
+  </defs>
+  <rect width="1200" height="584" fill="url(#bg)"/>
+  <rect x="0" y="0" width="1200" height="4" fill="url(#accent)"/>
+  <text x="40" y="56" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="24" font-weight="700" fill="#e6edf3">konsensüs kapısı</text>
+  <text x="40" y="84" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="14.5" fill="#8b98a9">bir doğrulama, herkese görünen bir gerçeğe dönüşmeden önce geçmesi gereken kapılar</text>
+    <rect x="40" y="234" width="220" height="62" rx="12" fill="#131a26" stroke="#8b98a9" stroke-width="1.6"/>
+    <text x="150" y="261" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" font-weight="700" fill="#8b98a9">POST /verify</text>
+    <text x="150" y="281" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" fill="#8b98a9">field, confirmed_value</text>
+    <path d="M260 265 L320 265" stroke="#8b98a9" stroke-width="1.8" fill="none" marker-end="url(#arrow)"/>
+    <rect x="320" y="234" width="250" height="62" rx="12" fill="#131a26" stroke="#6cb6ff" stroke-width="1.6"/>
+    <text x="445" y="261" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" font-weight="700" fill="#6cb6ff">kimlik var mı?</text>
+    <text x="445" y="281" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" fill="#8b98a9">hesap ya da cihaz jetonu</text>
+    <path d="M570 250 L636 122" stroke="#f2777a" stroke-width="1.8" fill="none" marker-end="url(#arrow)"/>
+    <rect x="636" y="90" width="524" height="56" rx="12" fill="#131a26" stroke="#f2777a" stroke-width="1.6"/>
+    <text x="898" y="123" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#f2777a">kimliksiz: zayıf sinyal olarak saklanır</text>
+    <text x="646" y="168" text-anchor="start" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" fill="#5c6b7f">alanı değiştiremez, last_verified_at'i tazeleyemez - aksi halde</text>
+    <text x="646" y="188" text-anchor="start" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" fill="#5c6b7f">başlığı hiç göndermemek bypass'ın kendisi olurdu</text>
+    <path d="M570 282 L636 240" stroke="#3fb950" stroke-width="1.8" fill="none" marker-end="url(#arrow)"/>
+    <rect x="636" y="214" width="524" height="122" rx="14" fill="#131a26" stroke="#3fb950" stroke-width="1.6"/>
+    <text x="658" y="246" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="15" font-weight="700" fill="#3fb950">kimlikli: iki koşul birden</text>
+    <path d="M658 258 L1138 258" stroke="#26324a" stroke-width="1"/>
+    <circle cx="666" cy="279" r="3.5" fill="#3fb950"/>
+    <text x="682" y="284" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#e6edf3">tazelik penceresi içinde FARKLI kimlik sayısı &gt;= 2</text>
+    <circle cx="666" cy="309" r="3.5" fill="#3fb950"/>
+    <text x="682" y="314" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#e6edf3">destekleyenler, çelişenlerden kesinlikle fazla</text>
+    <path d="M898 336 L898 376" stroke="#8b98a9" stroke-width="1.8" fill="none" marker-end="url(#arrow)"/>
+    <rect x="636" y="376" width="524" height="56" rx="12" fill="#131a26" stroke="#3fb950" stroke-width="1.6"/>
+    <text x="898" y="409" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#3fb950">alan değişir, kayıt herkese güncellenir</text>
+    <rect x="40" y="454" width="1120" height="98" rx="14" fill="#131a26" stroke="#f0b429" stroke-width="1.6"/>
+    <text x="62" y="484" text-anchor="start" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" fill="#f0b429">ve tek başına bu yetmiyordu</text>
+    <text x="62" y="510" text-anchor="start" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" fill="#8b98a9">Kimlik, istemcinin kendi ürettiği X-Device-Token. Tek bir IP, bir kabuk döngüsünde jeton döndürerek eşiği kendi</text>
+    <text x="62" y="532" text-anchor="start" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12.5" fill="#5c6b7f">başına doldurabilirdi. Bu yüzden ayrı bir kova IP+mekân ile anahtarlanır ve penceresi konsensüs penceresinden okunur.</text>
+</svg>
