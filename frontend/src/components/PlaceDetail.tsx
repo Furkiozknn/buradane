@@ -23,6 +23,7 @@ import { AMENITIES, categoryMeta } from "@/lib/categories";
 import { formatDistance, walkingMinutes } from "@/lib/geo";
 import { humanizeOpeningHours, isOpenNow, openStateLabel } from "@/lib/opening-hours";
 import { directionsUrl, osmUrl } from "@/lib/directions";
+import { displayUrl, safeExternalUrl } from "@/lib/external-url";
 import type { Place } from "@/lib/types";
 import { ReportDialog } from "./ReportDialog";
 
@@ -48,6 +49,10 @@ export function PlaceDetail({
   const Icon = primary.icon;
   const openState = isOpenNow(place.opening_hours_raw);
   const hours = humanizeOpeningHours(place.opening_hours_raw);
+  // null when the OSM value is not a usable web address, which also drops
+  // the whole contact section if it was the only field in it - see
+  // external-url.ts for what "usable" excludes and why.
+  const websiteHref = safeExternalUrl(place.website);
 
   // Split into what we know is true, and what we genuinely don't know. The
   // second list matters: hiding unknowns would let the UI imply "no".
@@ -297,7 +302,7 @@ export function PlaceDetail({
             place.province ||
             hours.length > 0 ||
             place.phone ||
-            place.website) && (
+            websiteHref) && (
             <section className="mt-5 space-y-2.5">
               {place.address_line && <InfoRow icon={<MapPin size={16} />}>{place.address_line}</InfoRow>}
               {/* Where this is. Most records have no address_line, so without
@@ -329,15 +334,15 @@ export function PlaceDetail({
                   </a>
                 </InfoRow>
               )}
-              {place.website && (
+              {websiteHref && (
                 <InfoRow icon={<Globe size={16} />}>
                   <a
-                    href={place.website}
+                    href={websiteHref}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="break-all text-brand underline-offset-2 hover:underline"
                   >
-                    {place.website}
+                    {displayUrl(place.website!)}
                   </a>
                 </InfoRow>
               )}
