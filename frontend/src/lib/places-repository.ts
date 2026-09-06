@@ -1,17 +1,17 @@
 /**
  * The demo data adapter.
  *
- * Reads the real OpenStreetMap İstanbul snapshot (frontend/data/
- * places.istanbul.json, produced by scripts/fetch_demo_data.py) and answers
+ * Reads the real OpenStreetMap snapshots (frontend/data/places.<il>.json,
+ * one per province, produced by scripts/fetch_by_district.py) and answers
  * the same queries the FastAPI + PostGIS backend answers - radius search,
  * bbox/viewport search, multi-category filtering, amenity filtering,
  * free-text search - with the same result shape and ordering.
  *
- * This is NOT mock data: every place here is a real OSM feature with a real
- * OSM id you can open on openstreetmap.org. What's synthesized is only the
- * *community layer* the demo has no history for yet (verification counts and
- * freshness), and that is generated deterministically and flagged, so it can
- * never be mistaken for real user activity - see `deriveCommunitySignals`.
+ * Nothing here is mock data. Every place is a real OSM feature with a real
+ * OSM id you can open on openstreetmap.org, and no field is invented: the
+ * community layer (verification counts, report counts, last-verified date)
+ * starts empty because the snapshot has no community history, and only real
+ * contributions move it - see `deriveCommunitySignals`.
  *
  * Swapping to the live backend = pointing the API routes at it instead of
  * this module. Nothing above this file knows which one it's talking to.
@@ -89,32 +89,26 @@ export interface DatasetMeta {
 
 let cache: { places: Place[]; meta: DatasetMeta; searchText: Map<string, string> } | null = null;
 
-/** Deterministic 0..1 hash of a string - same input always yields the same
- * value, so the demo doesn't shuffle its own numbers on every request. */
-function hash01(input: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < input.length; i += 1) {
-    h ^= input.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return ((h >>> 0) % 10000) / 10000;
-}
-
 /**
- * The one place where demo-only values are produced.
+ * Reliability, computed from what is actually known about the record.
  *
- * A real deployment computes these from actual PlaceVerification /
- * PlaceReport rows (backend/app/services/reliability.py). The demo has no
- * community history, so rather than showing every place an identical,
- * meaningless "0 doğrulama", it derives a stable pseudo-history from the
- * place id and - importantly - from signals that are genuinely real: how
- * complete the OSM record is. A place with a name, opening hours, and
- * wheelchair tagging genuinely *is* better-documented than a bare node, so
- * scoring it higher is defensible rather than decorative.
+ * This function used to also invent a community history: a hash of the
+ * place id produced a verification count (0-5), a report count and a
+ * "last verified" date up to 120 days back. The UI then showed those with
+ * a green check - "5 kişi doğruladı · 17 gün önce doğrulandı" - on records
+ * whose snapshot carries no timestamp at all and which no human being has
+ * ever confirmed. A UX audit named it the finding that would embarrass the
+ * project hardest, and it was right: fabricated provenance in a civic tool
+ * whose whole pitch is trustworthy open data is worse than an empty field.
+ *
+ * What survives is the part that was always real: OSM completeness. A place
+ * with a mapped name, opening hours, an address and wheelchair tagging
+ * genuinely IS better documented than a bare node, and saying so is a claim
+ * about the DATA, which we hold, not about people, which we do not. Counts
+ * start at zero and only real community input moves them - the same numbers
+ * the backend derives from actual PlaceVerification / PlaceReport rows.
  */
 function deriveCommunitySignals(place: RawDataset["places"][number]) {
-  const seed = hash01(place.id);
-
   let completeness = 0.35;
   if (!place.name.match(/^(Umumi Tuvalet|Park|İçme Suyu Çeşmesi|Oturma Alanı|Çocuk Oyun Alanı|Spor Alanı|Otopark|Duş|Ücretsiz Wi-Fi Noktası)$/)) {
     completeness += 0.2; // has a real, mapped name
@@ -125,26 +119,21 @@ function deriveCommunitySignals(place: RawDataset["places"][number]) {
   if (place.operator) completeness += 0.07;
   if (place.website || place.phone) completeness += 0.05;
 
-  const verificationCount = Math.floor(seed * 6);
-  const reportCount = seed > 0.88 ? 1 : 0;
-
-  const ageDays = Math.floor(seed * 120);
-  const lastVerified = new Date(Date.now() - ageDays * 86_400_000);
-
-  // Mirrors the shape of the backend formula: source weight + verification
-  // freshness bonus, minus an unresolved-report penalty, clamped to 0..1.
-  const freshnessBonus = 0.3 * Math.max(0, 1 - ageDays / 90);
-  const score = Math.min(
-    1,
-    Math.max(0, completeness * 0.75 + freshnessBonus + Math.min(0.15, 0.04 * verificationCount) - reportCount * 0.15),
-  );
+  // Same shape as the backend formula, minus the invented terms: the
+  // verification bonus and the report penalty are earned by real community
+  // input, which a fresh snapshot has none of. applyOverride adds them back
+  // as people actually contribute.
+  const score = Math.min(1, Math.max(0, completeness * 0.75));
 
   return {
     reliability_score: Number(score.toFixed(3)),
-    verification_count: verificationCount,
-    report_count: reportCount,
-    last_verified_at: lastVerified.toISOString(),
-    freshness_label: freshnessLabel(ageDays),
+    verification_count: 0,
+    report_count: 0,
+    // No timestamp exists in the snapshot - OSM's own edit dates are not in
+    // the extract - so there is nothing honest to put here. null, and the
+    // label says what that means rather than implying a recent visit.
+    last_verified_at: null,
+    freshness_label: "Topluluk doğrulaması yok",
   };
 }
 
@@ -236,15 +225,6 @@ function accessFromTags(tags: Record<string, string> | undefined): AccessType {
   if (value === "customers") return "customers";
   if (value === "permit" || value === "permissive") return "permit";
   return "public";
-}
-
-/** Matches backend/app/services/reliability.py's `freshness_label` wording. */
-function freshnessLabel(ageDays: number): string {
-  if (ageDays < 1) return "Bugün doğrulandı";
-  if (ageDays < 2) return "Dün doğrulandı";
-  if (ageDays < 30) return `${ageDays} gün önce doğrulandı`;
-  if (ageDays < 365) return `${Math.floor(ageDays / 30)} ay önce doğrulandı`;
-  return `${Math.floor(ageDays / 365)} yıl önce doğrulandı`;
 }
 
 /**

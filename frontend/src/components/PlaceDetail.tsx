@@ -11,6 +11,7 @@ import {
   ExternalLink,
   Flag,
   Globe,
+  Info,
   MapPin,
   Navigation,
   Phone,
@@ -391,7 +392,11 @@ export function PlaceDetail({
                 />
               </div>
               <p className="flex items-center gap-1.5 text-[12.5px] text-text-secondary">
-                <BadgeCheck size={14} aria-hidden />
+                {place.verification_count > 0 ? (
+                  <BadgeCheck size={14} aria-hidden />
+                ) : (
+                  <Info size={14} aria-hidden />
+                )}
                 {place.freshness_label}
                 {place.verification_count > 0 && <> · {place.verification_count} kişi doğruladı</>}
               </p>

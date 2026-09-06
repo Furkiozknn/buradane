@@ -39,7 +39,15 @@ export async function GET(request: Request) {
     bbox = parts as [number, number, number, number];
   }
 
-  const limit = Math.min(num("limit") ?? 60, 300);
+  // Both ends clamped. The ceiling was always here; the FLOOR was not, and
+  // without it `?limit=-1` reached `results.slice(offset, offset + limit)`
+  // where slice(0, -1) means "everything but the last one" - one
+  // unauthenticated GET returned the entire national dataset as a 42 MB
+  // response in 716 ms of blocked event loop. A performance audit
+  // demonstrated it against the production build. Same reasoning for
+  // offset: a negative one silently returned an empty page.
+  const limit = Math.max(1, Math.min(num("limit") ?? 60, 300));
+  const offset = Math.max(0, num("offset") ?? 0);
 
   const overrides = await listOverrides();
   const communityPlaces = await listCommunityPlaces();
@@ -60,7 +68,7 @@ export async function GET(request: Request) {
     openNow: params.get("open_now") === "true",
     q: params.get("q") ?? undefined,
     limit,
-    offset: num("offset") ?? 0,
+    offset,
   });
 
   return NextResponse.json(result, {

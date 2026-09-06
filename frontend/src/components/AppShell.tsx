@@ -24,7 +24,7 @@ import { SuggestPlaceDialog } from "./SuggestPlaceDialog";
 import { CityPicker } from "./CityPicker";
 import { DESKTOP_QUERY, useMediaQuery } from "@/lib/use-media-query";
 import { buildUrlSearch, type UrlState } from "@/lib/url-state";
-import { haversineMeters } from "@/lib/geo";
+import { formatDistance, haversineMeters } from "@/lib/geo";
 import { useFavorites } from "@/lib/use-favorites";
 import { useOnlineStatus } from "@/lib/use-online-status";
 import type { CategorySlug, Place, PlaceQueryResult, SortKey } from "@/lib/types";
@@ -251,18 +251,51 @@ export function AppShell({
   // The two disables are deliberate:
   //  - exhaustive-deps: `viewport` is read but intentionally NOT a dependency.
   //    Panning must not silently re-query (that's what the "Bu alanda ara"
-  //    button is for); only a filter/search/location change re-fetches.
+  //    button is for); only a filter/search/location/CENTRE change re-fetches.
+  //
+  // `centerKey` earns its place in that list the hard way. Without it, the
+  // query origin never followed the map: picking Sivas flew the camera and
+  // relabelled the chip while the list still held İstanbul's results, the
+  // header still read "en yakın 33 m", and every card offered a walking time
+  // to a bench 900 km away. A UX audit reproduced it three ways (city
+  // picker, first location fix, shared link). Both handlers that move the
+  // centre already null the viewport, so this re-queries around the new
+  // origin rather than re-running the old city's bbox.
   //  - set-state-in-effect: fetchPlaces sets loading/error synchronously.
   //    That's the point - this effect synchronises with an external system
   //    (the API), and the actual hazard it warns about, a stale response
   //    overwriting a newer one, is handled by the request-id guard inside
   //    fetchPlaces.
+  // Rounded to ~11 m so GPS jitter cannot re-query on every fix while the
+  // user stands still; a city change or a real move always clears it.
+  const centerKey = `${center.lat.toFixed(4)},${center.lon.toFixed(4)}`;
+
   useEffect(() => {
     const bbox = viewport?.bbox;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void fetchPlaces(bbox ? { bbox } : {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [category, filters, query, sort, location.status]);
+  }, [category, filters, query, sort, location.status, centerKey]);
+
+  // The first location fix flies the camera. The locate button only calls
+  // setMapFocus when a fix ALREADY exists, so the very first tap - the one
+  // that asks for permission - moved nothing: the user granted access, the
+  // header updated, and the map sat on İstanbul until they tapped a second
+  // time with no indication that they should. Fires once per fix, only
+  // while following the user, so browsing another city is never yanked back.
+  const flownToFixRef = useRef(false);
+  useEffect(() => {
+    if (location.status !== "granted" || !followUser) {
+      if (location.status !== "granted") flownToFixRef.current = false;
+      return;
+    }
+    if (flownToFixRef.current) return;
+    flownToFixRef.current = true;
+    setViewport(null);
+    setStaleViewport(false);
+    setMapFocus({ center: { lat: location.lat, lon: location.lon }, zoom: 15, nonce: Date.now() });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.status, followUser]);
 
   // Coming back into coverage refreshes on its own. Making someone who just
   // walked out of a metro station notice a stale list and hunt for a refresh
@@ -587,10 +620,14 @@ export function AppShell({
               <>Konumundasın</>
             ) : location.status === "granted" ? (
               <>{activeCityLabel}</>
+            ) : location.status === "denied" ? (
+              <>Konum kapalı — {activeCityLabel}</>
             ) : (
-              <>
-                {location.status === "denied" ? "Konum kapalı" : "Yaklaşık konum"} — {activeCityLabel}
-              </>
+              // "Yaklaşık konum" claimed we had approximated where the user
+              // is. We had not: nothing has asked the browser yet, and the
+              // city is a hardcoded default, which for 80 of 81 provinces
+              // points 500-1400 km away. Say what is true instead.
+              <>Konum sorulmadı — {activeCityLabel}</>
             )}
             <span className="text-brand">&middot; {followingUser ? "şehir seç" : "değiştir"}</span>
           </button>
@@ -764,14 +801,23 @@ export function AppShell({
                     Kayıtlı {favoriteCount}
                   </button>
                 )}
-                <p className="text-[13px] font-medium text-text-secondary" aria-live="polite">
+                <p className="min-w-0 truncate text-[13px] font-medium text-text-secondary" aria-live="polite">
                   {loading
                     ? "Yakındakiler aranıyor…"
                     : error
                       ? "Sonuçlar getirilemedi"
-                      : `${result?.total ?? 0} sonuç${
+                      : // The count is the whole match set but the list holds
+                        // at most `limit`, and saying only "47.319 sonuç"
+                        // over 200 cards is a 236x disagreement the reader
+                        // cannot see. formatDistance, not raw metres: the
+                        // header used to read "en yakın 692778 m".
+                        `${
+                          result && result.total > places.length
+                            ? `${places.length} / ${result.total}`
+                            : (result?.total ?? 0)
+                        } sonuç${
                           places[0]?.distance_m != null
-                            ? ` · en yakın ${Math.round(places[0].distance_m)} m`
+                            ? ` · en yakın ${formatDistance(places[0].distance_m)}`
                             : ""
                         }`}
                 </p>
@@ -812,6 +858,18 @@ export function AppShell({
                   </button>
                 )}
               </div>
+
+              {/* ODbL attribution, in the sheet's always-rendered header.
+                  It used to live after the last of up to 200 cards and only
+                  inside the `places.length > 0` branch, which on a phone put
+                  it ~22.000 px down the scroll and removed it entirely from
+                  every empty and error state - while MapLibre's own control
+                  sits behind the sheet at all snap heights. The licence
+                  requires it to be reasonably visible, so it is now on
+                  screen whatever the result set does. */}
+              <p className="truncate px-4 pb-2 text-[11px] text-text-muted">
+                {datasetMeta.attribution} · {datasetMeta.count.toLocaleString("tr-TR")} kayıt · ODbL
+              </p>
             </div>
 
             {/* The bottom padding clears the iPhone home indicator: the
@@ -886,9 +944,6 @@ export function AppShell({
                     <Plus size={15} aria-hidden />
                     Eksik bir yer mi var? Öner
                   </button>
-                  <p className="mt-3 text-[11px] text-text-muted">
-                    {datasetMeta.attribution} · {datasetMeta.count.toLocaleString("tr-TR")} kayıt
-                  </p>
                 </div>
               )}
             </div>

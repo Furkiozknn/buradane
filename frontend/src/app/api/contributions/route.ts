@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { adminAuthErrorResponse, checkAdminAuth } from "@/lib/admin-auth";
 import { addContribution, listContributions } from "@/lib/contributions-store";
+import { getPlaceById } from "@/lib/places-repository";
 import { checkRateLimit, getClientKey } from "@/lib/rate-limit";
 import type { ContributionKind } from "@/lib/types";
 
@@ -11,6 +12,33 @@ const VALID_KINDS: ContributionKind[] = [
   "report_closed",
   "verify_present",
 ];
+
+const MAX_BODY_BYTES = 32 * 1024;
+const MAX_PAYLOAD_KEYS = 30;
+const MAX_PAYLOAD_STRING = 500;
+
+/**
+ * `payload` is stored verbatim, so it is the one field a caller could grow
+ * without limit. Kept permissive in shape (the demo's suggestion payload
+ * evolves) but bounded in size: a fixed number of keys, each scalar capped,
+ * nested objects flattened away rather than walked.
+ */
+function cappedPayload(value: unknown): Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return {};
+  const out: Record<string, unknown> = {};
+  for (const [key, raw] of Object.entries(value).slice(0, MAX_PAYLOAD_KEYS)) {
+    if (typeof raw === "string") out[key.slice(0, 60)] = raw.slice(0, MAX_PAYLOAD_STRING);
+    else if (typeof raw === "number" || typeof raw === "boolean" || raw === null) {
+      out[key.slice(0, 60)] = raw;
+    } else if (Array.isArray(raw)) {
+      out[key.slice(0, 60)] = raw
+        .slice(0, MAX_PAYLOAD_KEYS)
+        .filter((item) => typeof item === "string" || typeof item === "number")
+        .map((item) => (typeof item === "string" ? item.slice(0, MAX_PAYLOAD_STRING) : item));
+    }
+  }
+  return out;
+}
 
 /**
  * GET /api/contributions - the moderation queue.
@@ -49,10 +77,30 @@ export async function POST(request: Request) {
     );
   }
 
+  // Body size ceiling. App Router route handlers have NO default limit (the
+  // documented one applies to Pages API routes and Server Actions), and
+  // every contribution is appended to one JSON file that the public read
+  // path parses on each request - so an unbounded body is not just storage,
+  // it is an amplification bomb aimed at every later reader. 32 KB is far
+  // above any real submission (a name, coordinates, a note capped at 1000
+  // chars) and far below anything that hurts.
+  const declaredLength = Number(request.headers.get("content-length") ?? 0);
+  if (declaredLength > MAX_BODY_BYTES) {
+    return NextResponse.json({ error: "Gönderilen veri çok büyük" }, { status: 413 });
+  }
+  const rawBody = await request.text();
+  // Re-checked after reading: content-length is a claim, not a guarantee.
+  if (rawBody.length > MAX_BODY_BYTES) {
+    return NextResponse.json({ error: "Gönderilen veri çok büyük" }, { status: 413 });
+  }
+
   let body: Record<string, unknown>;
   try {
-    body = await request.json();
+    body = JSON.parse(rawBody);
   } catch {
+    return NextResponse.json({ error: "Geçersiz JSON gövdesi" }, { status: 400 });
+  }
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
     return NextResponse.json({ error: "Geçersiz JSON gövdesi" }, { status: 400 });
   }
 
@@ -82,13 +130,23 @@ export async function POST(request: Request) {
     }
   } else if (typeof body.placeId !== "string" || !body.placeId) {
     return NextResponse.json({ error: "Rapor için placeId gerekli" }, { status: 400 });
+  } else if (!getPlaceById(body.placeId)) {
+    // The id must name a real place. Without this the store accumulated
+    // override entries for ids that do not exist - unbounded growth driven
+    // entirely by the caller - and those ids became keys on a plain object,
+    // so "__proto__"/"constructor"/"toString" ended up as own properties of
+    // the overrides map. Existence is public information (anyone can list
+    // places), so a 404 here leaks nothing.
+    return NextResponse.json({ error: "Mekan bulunamadı" }, { status: 404 });
   }
 
   const contribution = await addContribution({
     kind,
     placeId: typeof body.placeId === "string" ? body.placeId : null,
-    placeName: typeof body.placeName === "string" ? body.placeName : null,
-    payload: (body.payload ?? {}) as Record<string, unknown>,
+    // Every free-text field is capped. `note` always was; these were not,
+    // and they are stored verbatim in the same file.
+    placeName: typeof body.placeName === "string" ? body.placeName.slice(0, 300) : null,
+    payload: cappedPayload(body.payload),
     note: typeof body.note === "string" ? body.note.slice(0, 1000) : null,
   });
 

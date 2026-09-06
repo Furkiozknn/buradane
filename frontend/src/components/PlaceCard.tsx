@@ -1,6 +1,6 @@
 "use client";
 
-import { BadgeCheck, ChevronRight, CircleAlert, Navigation } from "lucide-react";
+import { BadgeCheck, ChevronRight, CircleAlert, Info, Navigation } from "lucide-react";
 
 import { AMENITY_BY_KEY, categoryMeta } from "@/lib/categories";
 import { bearingDegrees, bearingLabel, formatDistance, walkingMinutes, type LatLon } from "@/lib/geo";
@@ -96,6 +96,18 @@ export function PlaceCard({
           {place.price_type === "paid" && <> · Ücretli</>}
         </p>
 
+        {/* Where this actually is. At one city the card could leave it out;
+            across 81 provinces a result 900 km away looked identical to one
+            across the street, and the distance alone did not give the reader
+            anything to check it against. The shareable /yer/[id] page always
+            showed the province - the in-app card is the surface people
+            actually use, and it was the one staying silent. */}
+        {(place.district || place.province) && (
+          <p className="truncate text-[12px] text-text-muted">
+            {[place.district, place.province].filter(Boolean).join(", ")}
+          </p>
+        )}
+
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
           {isClosed ? (
             <Badge tone="danger" icon={<CircleAlert size={12} />}>
@@ -125,7 +137,14 @@ export function PlaceCard({
               Bilgi güncelliği düşük
             </Badge>
           ) : (
-            <Badge tone="neutral" icon={<BadgeCheck size={12} />}>
+            <Badge
+              tone="neutral"
+              // A check mark is a claim that someone confirmed this. Show it
+              // only when someone actually did; an unverified record gets an
+              // informational mark, because "Topluluk doğrulaması yok" under
+              // a green tick reads as the opposite of what it says.
+              icon={place.verification_count > 0 ? <BadgeCheck size={12} /> : <Info size={12} />}
+            >
               {place.freshness_label}
             </Badge>
           )}

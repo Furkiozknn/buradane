@@ -183,9 +183,15 @@ async function addContributionUnlocked(input: {
       verification_count: verificationCount,
       last_verified_at: contribution.createdAt,
       freshness_label: "Bugün doğrulandı",
-      // A place someone just confirmed is standing is, by definition, not
-      // closed - so an earlier approved "kapalı" report is superseded.
-      status: "active",
+      // Deliberately NOT writing `status`. This used to set "active" on the
+      // reasoning that a place someone just confirmed cannot be closed -
+      // which quietly made an anonymous, tokenless click the strongest
+      // authority in the system: it reversed an admin's
+      // `permanently_closed` PATCH and any approved "kapalı" moderation,
+      // both of which ARE token-gated. A security review demonstrated the
+      // reversal. Verification is a FRESHNESS signal and nothing more; a
+      // place wrongly marked closed is corrected through the report flow,
+      // which a moderator actually reads.
       // Deliberately NOT storing reliability_score here. This store has no
       // idea what the place's computed score is, so writing an absolute
       // value would clobber it with a guess - the first version did exactly
