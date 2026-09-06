@@ -376,6 +376,8 @@ Tuhaflıklar".
 
 ## Veri Güvenilirliği
 
+<img src="assets/konsensus.svg" alt="Konsensüs kapısı: kimliksiz bir doğrulama zayıf sinyal olarak saklanır ama alanı değiştiremez ve tazelik damgasını yenileyemez; kimlikli bir doğrulama ise ancak tazelik penceresi içinde en az iki farklı kimlik aynı değeri onaylarsa ve destekleyenler çelişenlerden fazlaysa alanı değiştirir. Ayrıca IP+mekân ile anahtarlanan ayrı bir kova, tek bir adresin belirleyici kimliği sağlamasını engeller." width="100%">
+
 Her `Place`, hangi kaynak(lar)dan geldiğini (`PlaceSourceRecord` →
 `DataSource`), ne zaman son doğrulandığını, kaç kez doğrulandığını ve
 çözülmemiş kaç çelişen rapor olduğunu taşır. Bunlardan tek, açıklanabilir bir
@@ -480,6 +482,8 @@ relaxed: true` alanı arayüzün "arama genişletildi" demesini sağlıyor -
 sorgunun anlamını sessizce değiştirmek yerine.
 
 ## Bilinen Sınırlamalar
+
+<img src="assets/bedel.svg" alt="Konsensüs savunmasının kazandırdığı ve kaybettirdiği: tek bir telefon artık bir mekânın erişilebilirlik verisini tek başına çeviremiyor ve bir adres pencere başına en fazla consensus-1 doğrulama yapabiliyor; buna karşılık tek bir CGNAT adresi arkasındaki ikinci hane aynı mekân için geri çevriliyor, o mekânın konsensüsü başka bir ağdan gelmek zorunda kalıyor." width="100%">
 
 - ~~Yönetim panelinin görüntülenmesi token istemez~~ **Çözüldü.** Kuyruk
   içerikleri artık `AdminTokenGate` arkasında ve `GET /api/contributions`

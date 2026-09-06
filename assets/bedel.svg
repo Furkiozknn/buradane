@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 464" width="1200" height="464" role="img" aria-label="Konsensus savunmasinin kazandirdigi ve kaybettirdigi: tek bir telefon artik bir mekanin erisilebilirlik verisini tek basina ceviremiyor ve bir adres pencere basina en fazla consensus-1 dogrulama yapabiliyor; buna karsilik tek bir CGNAT adresi arkasindaki ikinci hane ayni mekan icin geri cevriliyor, o mekanin konsensusu baska bir agdan gelmek zorunda kaliyor.">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0d1117"/>
+      <stop offset="55%" stop-color="#0f2416"/>
+      <stop offset="100%" stop-color="#0b1d14"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#3fb950"/>
+      <stop offset="50%" stop-color="#39d3bb"/>
+      <stop offset="100%" stop-color="#4c8dff"/>
+    </linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#8b98a9"/>
+    </marker>
+  </defs>
+  <rect width="1200" height="464" fill="url(#bg)"/>
+  <rect x="0" y="0" width="1200" height="4" fill="url(#accent)"/>
+  <text x="40" y="56" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="24" font-weight="700" fill="#e6edf3">ödenen bedel, gizlenmiyor</text>
+  <text x="40" y="84" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="14.5" fill="#8b98a9">her savunmanın bir maliyeti var - burada maliyet yazılı, çünkü yazılmayan maliyet kullanıcıya sürpriz olur</text>
+    <rect x="40" y="128" width="550" height="242" rx="14" fill="#131a26" stroke="#3fb950" stroke-width="1.6"/>
+    <text x="62" y="160" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="15" font-weight="700" fill="#3fb950">ne kazandık</text>
+    <path d="M62 172 L568 172" stroke="#26324a" stroke-width="1"/>
+    <circle cx="70" cy="193" r="3.5" fill="#3fb950"/>
+    <text x="86" y="198" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#e6edf3">Tek telefon, tek kabuk döngüsü artık bir mekânın</text>
+    <text x="86" y="228" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#8b98a9">erişilebilirlik verisini tek başına çeviremiyor</text>
+    <circle cx="70" cy="253" r="3.5" fill="#3fb950"/>
+    <text x="86" y="258" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#e6edf3">Bir adres, konsensüs penceresi başına en fazla</text>
+    <text x="86" y="288" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#8b98a9">consensus-1 doğrulama - sabırla da aşılamaz</text>
+    <circle cx="70" cy="313" r="3.5" fill="#3fb950"/>
+    <text x="86" y="318" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#e6edf3">reliability_score açıklanabilir bir fonksiyon,</text>
+    <text x="86" y="348" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#8b98a9">v1'de bir ML modeli değil</text>
+    <rect x="610" y="128" width="550" height="242" rx="14" fill="#131a26" stroke="#f0b429" stroke-width="1.6"/>
+    <text x="632" y="160" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="15" font-weight="700" fill="#f0b429">ne kaybettik</text>
+    <path d="M632 172 L1138 172" stroke="#26324a" stroke-width="1"/>
+    <circle cx="640" cy="193" r="3.5" fill="#f0b429"/>
+    <text x="656" y="198" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#e6edf3">Tek bir CGNAT adresi arkasındaki iki gerçek hane</text>
+    <text x="656" y="228" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#8b98a9">aynı mekânı doğrularsa ikincisi geri çevriliyor</text>
+    <circle cx="640" cy="253" r="3.5" fill="#f0b429"/>
+    <text x="656" y="258" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#e6edf3">O mekânın konsensüsü başka bir ağdan gelmeli</text>
+    <circle cx="640" cy="283" r="3.5" fill="#f0b429"/>
+    <text x="656" y="288" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#e6edf3">Doğru nihai çözüm - konsensüsün kendi içinde farklı</text>
+    <text x="656" y="318" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#8b98a9">adresleri saymak - bir şema değişikliği, ROADMAP'te</text>
+    <circle cx="640" cy="343" r="3.5" fill="#f0b429"/>
+    <text x="656" y="348" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#e6edf3">Demo verisinde bu alanlar OSM doluluğundan türetiliyor</text>
+    <text x="40" y="412" text-anchor="start" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#8b98a9">Bu, istemcinin üretemeyeceği bir kimlik sinyalinin bedeli. Türkiye'de mobil operatörlerde CGNAT yaygın olduğu için</text>
+    <text x="40" y="436" text-anchor="start" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#5c6b7f">bu gerçek bir kullanıcı senaryosu - varsayımsal bir kenar durum değil, ve bu yüzden burada yazıyor.</text>
+</svg>
