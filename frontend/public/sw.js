@@ -33,15 +33,26 @@
 // stored every navigation under "/", so a browser that visited /admin before
 // that fix is still holding the moderation panel behind the homepage, and
 // correcting the write path does nothing for a copy already on disk.
-const VERSION = "v2";
+// v3: the dataset went from one city (~9.800 places) to all 81 provinces,
+// and the API's answers changed shape with it (province/district on every
+// record, no invented verification history). Entries cached under v2 are
+// answers to the old dataset - correctly labelled "cached", but stale in a
+// way the label does not convey, since it is the DATA that moved, not the
+// clock. Bumping is the only thing that clears them.
+const VERSION = "v3";
 const SHELL_CACHE = `buradane-shell-${VERSION}`;
 const ASSET_CACHE = `buradane-assets-${VERSION}`;
 const DATA_CACHE = `buradane-data-${VERSION}`;
 const TILE_CACHE = `buradane-tiles-${VERSION}`;
 
-/** Vector tiles are small but numerous; this is roughly a few large cities'
- * worth at typical zoom levels, and well inside a normal origin quota. */
-const TILE_LIMIT = 1200;
+/** Sized by measurement, not by feel. Tile bytes are wildly zoom-dependent:
+ * z14 3,5 KB, z12 24 KB, z8 167 KB, z6 265 KB. The old 1200 was reasoned
+ * about at city zooms (~15 KB, so ~18 MB); a country-wide app invites z6-z10
+ * panning, where the same 1200 entries are worth 103-180 MB for one origin -
+ * enough that iOS evicts the whole origin under pressure and takes the
+ * offline layer with it. 600 keeps the documented footprint at the zooms
+ * people actually browse. */
+const TILE_LIMIT = 600;
 /** One entry per distinct query the user actually ran. */
 const DATA_LIMIT = 120;
 

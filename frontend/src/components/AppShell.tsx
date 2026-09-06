@@ -226,7 +226,14 @@ export function AppShell({
           setError("Çevrimdışısınız ve bu arama daha önce yüklenmemiş");
           return;
         }
-        if (!response.ok) throw new Error(`Sunucu ${response.status} döndü`);
+        if (!response.ok) {
+          // Prefer the server's own sentence. The API says useful, actionable
+          // things ("Arama alanı çok geniş, biraz yakınlaşın") that a generic
+          // "Sunucu 400 döndü" would throw away, leaving the user with a dead
+          // end instead of an instruction.
+          const body = (await response.json().catch(() => null)) as { error?: string } | null;
+          throw new Error(body?.error ?? `Sunucu ${response.status} döndü`);
+        }
         const data = (await response.json()) as PlaceQueryResult;
         // A slower earlier request must never overwrite a newer result.
         if (requestId !== requestIdRef.current) return;

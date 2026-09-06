@@ -30,7 +30,7 @@ import type {
 } from "./types";
 import { boundingBox, haversineMeters } from "./geo";
 import { isOpenNow } from "./opening-hours";
-import { QUERY_NOTICES, SEARCH_SYNONYMS, type QueryNotice } from "./categories";
+import { AMENITIES, QUERY_NOTICES, SEARCH_SYNONYMS, type QueryNotice } from "./categories";
 import { findProvince, foldAscii, parseLocality, resolveDistrict } from "./administrative";
 import { divisionCounts, officialDistrict } from "./admin-divisions";
 
@@ -88,6 +88,11 @@ export interface DatasetMeta {
 }
 
 let cache: { places: Place[]; meta: DatasetMeta; searchText: Map<string, string> } | null = null;
+
+/** Hoisted once: the facet pass runs this over every match in the result
+ * set, and rebuilding it per place was the single most expensive line in a
+ * national query. */
+const AMENITY_KEYS = AMENITIES.map((a) => a.key) as AmenityKey[];
 
 /**
  * Reliability, computed from what is actually known about the record.
@@ -705,12 +710,14 @@ export function queryPlaces(
     for (const slug of place.categories) {
       facets.categories[slug] = (facets.categories[slug] ?? 0) + 1;
     }
-    for (const [key, value] of Object.entries(place.amenities)) {
-      // Only `true` counts. `null` means unknown, and counting it here would
-      // promise exactly the facilities the filter refuses to claim.
-      if (value === true) {
-        const amenityKey = key as AmenityKey;
-        facets.amenities[amenityKey] = (facets.amenities[amenityKey] ?? 0) + 1;
+    // Indexed, not Object.entries: entries allocated an array of 14
+    // two-element arrays PER PLACE, which on a national query is 664.636
+    // throwaway arrays and, measured, 50,6 ms of the facet pass's 86 ms.
+    // Only `true` counts - `null` means unknown, and counting it here would
+    // promise exactly the facilities the filter refuses to claim.
+    for (const key of AMENITY_KEYS) {
+      if (place.amenities[key] === true) {
+        facets.amenities[key] = (facets.amenities[key] ?? 0) + 1;
       }
     }
     if (place.price_type === "free") facets.freeOnly += 1;
@@ -760,31 +767,40 @@ export function queryPlaces(
         : loadDataset().places;
 
     for (const base of candidates) {
-      const place = hasOverrides ? applyOverride(base, overrides[base.id]) : base;
-
-      if (place.status === "pending_review" || place.status === "permanently_closed") continue;
-
-      // A place tagged `access=private` is inside someone's property. Sending
-      // a person in a hurry to a door that will not open is the worst thing
-      // this app can do, so these never reach a result - 146 places in the
-      // current snapshot restrict access, 17 of them toilets, and every one
-      // was being served as freely usable. `customers` and `permit` DO reach
-      // results: they are usable under a condition a person can meet, and
-      // they carry a badge saying so.
-      if (place.access === "private") continue;
-
+      // Geometry BEFORE the override merge. An override never moves a place,
+      // so rejecting on coordinates first is exactly equivalent - and it is
+      // the difference between doing 47.474 dictionary lookups plus object
+      // spreads per query and doing a few hundred. Measured: one single
+      // community verification anywhere in Türkiye took a 2 km radius query
+      // from 8,8 ms to 28,3 ms, because `hasOverrides` is global and the
+      // merge ran before the cheap rejection. Every filter that legitimately
+      // needs the merged record (status, access, open-now, score) still runs
+      // after it, below.
       if (box) {
         // Cheap rejection before the trigonometry, same idea as PostGIS using
         // the GiST index before ST_Distance.
-        if (place.lat < box.minLat || place.lat > box.maxLat || place.lon < box.minLon || place.lon > box.maxLon) {
+        if (base.lat < box.minLat || base.lat > box.maxLat || base.lon < box.minLon || base.lon > box.maxLon) {
           continue;
         }
       }
 
       if (bbox) {
         const [minLon, minLat, maxLon, maxLat] = bbox;
-        if (place.lon < minLon || place.lon > maxLon || place.lat < minLat || place.lat > maxLat) continue;
+        if (base.lon < minLon || base.lon > maxLon || base.lat < minLat || base.lat > maxLat) continue;
       }
+
+      const place = hasOverrides ? applyOverride(base, overrides[base.id]) : base;
+
+      if (place.status === "pending_review" || place.status === "permanently_closed") continue;
+
+      // A place tagged `access=private` is inside someone's property. Sending
+      // a person in a hurry to a door that will not open is the worst thing
+      // this app can do, so these never reach a result - 155 places in the
+      // national snapshot restrict access, and every one was being served as
+      // freely usable before this line. `customers` and `permit` DO reach
+      // results: they are usable under a condition a person can meet, and
+      // they carry a badge saying so.
+      if (place.access === "private") continue;
 
       if (effectiveCategories.length > 0 && !place.categories.some((c) => effectiveCategories.includes(c))) continue;
 
@@ -796,11 +812,10 @@ export function queryPlaces(
 
       // Excludes places we KNOW are closed, not places we have no hours for.
       //
-      // Only 5.5% of the dataset carries `opening_hours` at all: across
-      // 11,406 places, 514 are known open, 17 are known closed, and 10,875
-      // are unknown. Requiring "open" therefore discarded ~10,875 places to
-      // filter out 17 - and for toilets specifically it hid 544 of 569 while
-      // not a single one was known to be closed. A park with no posted hours
+      // Only 2,45% of the national dataset carries `opening_hours` at all:
+      // across 47.474 places, 444 are known open, 603 known closed, and
+      // 46.309 unknown. Requiring "open" would therefore discard 46.309
+      // places to filter out 603. A park with no posted hours
       // is almost certainly open; treating silence as "closed" is the same
       // mistake as treating a null amenity as "no", and here it made the
       // filter actively harmful.
