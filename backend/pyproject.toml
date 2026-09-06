@@ -19,6 +19,10 @@ dependencies = [
     "python-jose[cryptography]>=3.3.0",
     "bcrypt>=4.1",
     "python-multipart>=0.0.12",
+    # Already present transitively (starlette runs on it), declared because
+    # app/main.py now imports it directly to bound the request thread pool.
+    # An undeclared import works right up until the transitive path changes.
+    "anyio>=4.0",
 ]
 
 [dependency-groups]
