@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { X } from "lucide-react";
 
 import { EXTRA_FILTERS, FILTERABLE_AMENITIES } from "@/lib/categories";
@@ -58,11 +58,14 @@ export function FilterSheet({
   onChange: (next: FilterState) => void;
   onClose: () => void;
 }) {
+  // Focus moves INTO the dialog on open - see CityPicker for why.
+  const dialogRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
     };
     document.addEventListener("keydown", onKey);
+    dialogRef.current?.focus();
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
@@ -79,6 +82,8 @@ export function FilterSheet({
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
       <div className="absolute inset-0 bg-black/45" onClick={onClose} role="presentation" />
       <div
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="filters-title"
@@ -208,13 +213,16 @@ export function FilterSheet({
         </div>
 
         <div className="border-t border-border p-4">
+          {/* Never disabled. It used to go inert at zero results - the
+              biggest, most obvious control in the sheet, dead exactly when
+              the user most needs to back out of the filters that emptied
+              their list. It closes the sheet; that is useful at any count. */}
           <button
             type="button"
             onClick={onClose}
-            disabled={resultCount === 0}
-            className="h-12 w-full rounded-xl bg-brand text-[15px] font-semibold text-brand-contrast disabled:opacity-40"
+            className="h-12 w-full rounded-xl bg-brand text-[15px] font-semibold text-brand-contrast"
           >
-            {resultCount === 0 ? "Sonuç yok" : `${resultCount} sonucu göster`}
+            {resultCount === 0 ? "Sonuç yok — geri dön" : `${resultCount} sonucu göster`}
           </button>
         </div>
       </div>

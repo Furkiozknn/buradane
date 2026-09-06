@@ -9,6 +9,17 @@ interface Props {
   counts?: Record<string, number>;
 }
 
+/** Categories with results first, in their original order; the empty ones
+ * keep their order too, just after. A stable partition rather than a sort,
+ * so a chip never moves relative to its neighbours for any reason other
+ * than "this one has nothing in it here". */
+function categoriesByAvailability(counts: Props["counts"]) {
+  if (!counts) return CATEGORIES;
+  const available = CATEGORIES.filter((c) => (counts[c.slug] ?? 0) > 0);
+  const empty = CATEGORIES.filter((c) => (counts[c.slug] ?? 0) === 0);
+  return [...available, ...empty];
+}
+
 /**
  * First-run state: a big, thumb-reachable grid answering "Ne arıyorsun?".
  * This is the app's opening move - within two seconds the user should
@@ -89,7 +100,13 @@ export function CategoryChips({ selected, onSelect, counts }: Props) {
         Tümü
       </button>
 
-      {CATEGORIES.map((category) => {
+      {/* Empty chips last. The row is a hidden-scrollbar horizontal strip
+          ~1500 px wide; in a sparse province the first five visible chips
+          were Tuvalet (0), Su (0), Dinlenme (0) while Eczane (12) and Cami
+          (9) - 70 % of everything that province has - started 2,5 screens
+          to the right with no scrollbar to hint at it. Order is otherwise
+          preserved, so nothing moves in a province with full coverage. */}
+      {categoriesByAvailability(counts).map((category) => {
         const Icon = category.icon;
         const isSelected = selected === category.slug;
         const count = counts?.[category.slug];

@@ -24,6 +24,7 @@ import { SuggestPlaceDialog } from "./SuggestPlaceDialog";
 import { CityPicker } from "./CityPicker";
 import { DESKTOP_QUERY, useMediaQuery } from "@/lib/use-media-query";
 import { buildUrlSearch, type UrlState } from "@/lib/url-state";
+import { foldAscii } from "@/lib/administrative";
 import { formatDistance, haversineMeters } from "@/lib/geo";
 import { useFavorites } from "@/lib/use-favorites";
 import { useOnlineStatus } from "@/lib/use-online-status";
@@ -500,6 +501,19 @@ export function AppShell({
   const activeCityLabel =
     datasetMeta.cities.find((c) => c.slug === activeCity)?.label ?? "İstanbul";
 
+  /** The province name the search engine threw away, when it threw away a
+   * province name and that province is not the one we are already showing.
+   * Folded comparison so "hakkari" matches "Hakkâri" - the same rule the
+   * city picker's filter uses, for the same keyboard-layout reason. */
+  const droppedProvince = useMemo(() => {
+    const needle = result?.applied.relaxedBy?.needle;
+    if (!needle) return null;
+    const folded = foldAscii(needle);
+    const hit = datasetMeta.cities.find((c) => foldAscii(c.label) === folded);
+    if (!hit || hit.slug === activeCity) return null;
+    return hit.label;
+  }, [result?.applied.relaxedBy?.needle, datasetMeta.cities, activeCity]);
+
   const filterCount = activeFilterCount(filters);
   const hasAnyFilter = filterCount > 0 || category !== null || query.trim().length > 0;
 
@@ -785,6 +799,39 @@ export function AppShell({
                 );
               })}
 
+              {/* A dropped LOCATION word is categorically different from a
+                  dropped descriptive one. "sivas tuvalet" on an İstanbul map
+                  returned 75 confident İstanbul results with `"sivas"
+                  aranmadı` in 11,5 px muted text next to them - the reader
+                  had no reason to doubt an answer that looked complete. If
+                  the word we threw away names a province we cover, say so
+                  where it cannot be missed and offer the one action that
+                  actually answers the question. */}
+              {droppedProvince && !loading && (
+                <div
+                  className="mx-4 mb-1 mt-2 rounded-lg px-3 py-2 text-[12.5px] leading-relaxed"
+                  style={{ background: "var(--warning-soft)", color: "var(--text)" }}
+                  role="status"
+                >
+                  Sonuçlar <strong>{activeCityLabel}</strong> çevresinden.{" "}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const target = cityOptions.find((c) => c.label === droppedProvince);
+                      if (!target) return;
+                      setActiveCity(target.slug);
+                      setFollowUser(false);
+                      setViewport(null);
+                      setStaleViewport(false);
+                      setMapFocus({ center: target.center, zoom: 12.5, nonce: Date.now() });
+                    }}
+                    className="font-semibold underline underline-offset-2"
+                  >
+                    {droppedProvince}&apos;a git
+                  </button>
+                </div>
+              )}
+
               {category === null && (isDesktop || snap !== "peek") ? (
                 <CategoryGrid selected={category} onSelect={setCategory} counts={counts} />
               ) : (
@@ -845,7 +892,7 @@ export function AppShell({
                 <button
                   type="button"
                   onClick={() => setSort((s) => (s === "distance" ? "reliability" : "distance"))}
-                  className="flex shrink-0 items-center gap-1 text-[12.5px] font-medium text-text-secondary"
+                  className="flex min-h-11 shrink-0 items-center gap-1 px-1 text-[12.5px] font-medium text-text-secondary"
                   aria-label={`Sıralama: ${sort === "distance" ? "en yakın" : "en güvenilir"}. Değiştir.`}
                 >
                   <ArrowUpDown size={12} aria-hidden />
@@ -859,7 +906,7 @@ export function AppShell({
                       setFilters(EMPTY_FILTERS);
                       setSearchInput("");
                     }}
-                    className="shrink-0 text-[12.5px] font-medium text-brand"
+                    className="min-h-11 shrink-0 px-1 text-[12.5px] font-medium text-brand"
                   >
                     Temizle
                   </button>
