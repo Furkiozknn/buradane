@@ -57,7 +57,11 @@ describe("national coverage", () => {
     expect(thin).toEqual([]);
   });
 
-  it("finds every province by typing its name where you are standing", () => {
+  // Its own budget: this walks all 81 provinces, and the reader is lazy, so
+  // it is the one test that deliberately pays a full national load - 81 cold
+  // file reads. That work is real and bounded; the default 20 s is not a
+  // statement about it.
+  it("finds every province by typing its name where you are standing", { timeout: 180_000 }, () => {
     // The real shape of this query: the app always sends the map's centre,
     // so "Sivas" typed while looking at Sivas must match Sivas's own
     // records. Written this way rather than as a bare text query for two
@@ -116,7 +120,8 @@ describe("national coverage", () => {
     expect(duplicates).toEqual([]);
   });
 
-  it("gives real coverage inside each province, not just at its centre", () => {
+  // Same reason as above: 973 district-centre probes across every province.
+  it("gives real coverage inside each province, not just at its centre", { timeout: 180_000 }, () => {
     // THE regression test for the finding that mattered most: "81 il" once
     // meant 81 boxes of ~12x12 km around the provincial capitals - 2,2% of
     // the country - and every other check passed on it. A user standing in

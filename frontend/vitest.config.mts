@@ -20,17 +20,19 @@ export default defineConfig({
     // The repository reads data/places.*.json relative to cwd, exactly as
     // the route handlers do at runtime.
     root: import.meta.dirname,
-    // Vitest's default is 5000 ms, and several suites load the whole
-    // national snapshot: measured at 3,5 s each on an idle developer
-    // machine, which left ~1,4 s of headroom on a shared two-core CI
-    // runner. Under load that produced timeouts - a FALSE RED, which is the
-    // failure mode that erodes trust in a suite and gets people reaching for
-    // --retry. The work is real and bounded; the limit just has to admit it.
-    testTimeout: 20_000,
-    // Hooks get the same allowance for the same reason: a beforeEach that
-    // touches the dataset (to pick a real place id, say) pays the same load
-    // once, and vitest's 10 s hook default is under it now that the national
-    // snapshot is ~110.000 records.
-    hookTimeout: 20_000,
+    // Vitest's default is 5000 ms and the dataset is 167.829 records across
+    // 81 files. Most tests read one or two provinces (the reader is lazy),
+    // but the ones that assert a property of the WHOLE dataset genuinely
+    // pay a full national load - ~15-20 s on an idle machine and more on a
+    // shared two-core CI runner. Timing those out is a FALSE RED, which is
+    // the failure mode that erodes trust in a suite and gets people
+    // reaching for --retry.
+    //
+    // 60 s is the ceiling for "something is wrong", not a budget anyone is
+    // expected to use: the whole suite runs in about a minute. The two
+    // tests that walk all 81 provinces one at a time carry their own
+    // larger budget inline, where the reason is visible next to the work.
+    testTimeout: 60_000,
+    hookTimeout: 60_000,
   },
 });
