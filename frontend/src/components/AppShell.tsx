@@ -675,7 +675,26 @@ export function AppShell({
         {/* mt-3, not mt-2: at mt-2 this row clipped the bottom of the 48px
             filter button above it, leaving it only ~6px of free space and
             failing the touch-target spacing check. */}
-        <div className="pointer-events-auto mx-auto mt-3 flex max-w-2xl justify-center">
+        {/* The right gutter is the map's zoom controls, which float at the
+            edge of the map and are NOT part of this row. Without it the chip,
+            being centred and sized to its content, grew under them: measured
+            at 360x800 with the longest province name in the country, "Konum
+            sorulmadı — Afyonkarahisar · değiştir" ran to x=332 while the "+"
+            button starts at x=306, and the chip painted straight over it. The
+            zoom-in control was not merely clipped, it was unreachable.
+            Desktop keeps its natural centring - the whole top bar lives in
+            the 416 px sidebar there and never reaches the map controls. */}
+        {/* pointer-events stay OFF on this row and go on the button alone.
+            The row is a full-width centring box, so it still lies across the
+            zoom controls even after the padding above pulls the chip off
+            them - and with pointer-events on, it swallowed the tap while
+            painting nothing. Measured: elementsFromPoint at the "+" button's
+            own centre returned this div on top. A control that looks
+            reachable and is not is worse than one that looks blocked. */}
+        <div
+          className="pointer-events-none mx-auto mt-3 flex max-w-2xl justify-center"
+          style={isDesktop ? undefined : { paddingRight: 56 }}
+        >
           {/* Tappable: when we can't locate someone, "pick your city" is a
               far better recovery than a blank map or a re-prompt the browser
               will silently swallow - and when we can, it is how you go look
@@ -683,30 +702,37 @@ export function AppShell({
           <button
             type="button"
             onClick={() => setCityPickerOpen(true)}
-            className="flex min-h-11 items-center gap-1.5 rounded-full bg-surface/95 px-3 py-1 text-[12px] font-medium text-text-secondary shadow-sm transition-colors hover:bg-surface"
+            className="pointer-events-auto flex min-h-11 max-w-full items-center gap-1.5 rounded-full bg-surface/95 px-3 py-1 text-[12px] font-medium text-text-secondary shadow-sm transition-colors hover:bg-surface"
           >
-            <MapPin size={12} aria-hidden />
+            <MapPin size={12} aria-hidden className="shrink-0" />
             {/* Three genuinely different situations, said differently.
                 "Yaklaşık konum" is a confession that we could not locate the
                 user, so it must not appear when we know exactly where they
                 are and they simply chose to look at another city. That case
                 gets the bare city name - the pin icon already says what it
                 means, and naming it any harder would drag in Turkish case
-                suffixes that differ per city (Ankara'ya, İzmir'e, Bursa'ya). */}
-            {followingUser ? (
-              <>Konumundasın</>
-            ) : location.status === "granted" ? (
-              <>{activeCityLabel}</>
-            ) : location.status === "denied" ? (
-              <>Konum kapalı — {activeCityLabel}</>
-            ) : (
-              // "Yaklaşık konum" claimed we had approximated where the user
-              // is. We had not: nothing has asked the browser yet, and the
-              // city is a hardcoded default, which for 80 of 81 provinces
-              // points 500-1400 km away. Say what is true instead.
-              <>Konum sorulmadı — {activeCityLabel}</>
-            )}
-            <span className="text-brand">&middot; {followingUser ? "şehir seç" : "değiştir"}</span>
+                suffixes that differ per city (Ankara'ya, İzmir'e, Bursa'ya).
+
+                Truncating, and it is this half that gives way: on a narrow
+                screen the province name is also readable from the map, while
+                "değiştir" is the only way out of a wrong city and must stay
+                whole and tappable. */}
+            <span className="min-w-0 truncate">
+              {followingUser
+                ? "Konumundasın"
+                : location.status === "granted"
+                  ? activeCityLabel
+                  : location.status === "denied"
+                    ? `Konum kapalı — ${activeCityLabel}`
+                    : // "Yaklaşık konum" claimed we had approximated where the
+                      // user is. We had not: nothing has asked the browser yet,
+                      // and the city is a hardcoded default, which for 80 of 81
+                      // provinces points 500-1400 km away. Say what is true.
+                      `Konum sorulmadı — ${activeCityLabel}`}
+            </span>
+            <span className="shrink-0 text-brand">
+              &middot; {followingUser ? "şehir seç" : "değiştir"}
+            </span>
           </button>
         </div>
       </div>
@@ -894,7 +920,24 @@ export function AppShell({
                 </div>
               )}
 
-              {category === null && (isDesktop || snap !== "peek") ? (
+              {/* The grid is a desktop affordance. It shipped in the first
+                  commit, when the sheet showed it at every snap above peek
+                  and the category set was smaller. With 14 categories it is
+                  three columns by five rows - about 506 px - and the mobile
+                  sheet is 439 px at "half" and 708 px at "full". Measured on
+                  a 390x844 screen it did not fit either one: at "half" it was
+                  cut off, and at "full" the first result card started 14 px
+                  below the fold. Expanding the sheet therefore showed FEWER
+                  results than the collapsed state, which shows one. The
+                  gesture means "show me the list"; it was answering with a
+                  category picker.
+
+                  The chips carry the same information - icon, name, count -
+                  in a row that scrolls, which is what peek already used and
+                  what the list needs the space for. The sidebar keeps the
+                  grid: five columns there is three rows, and it sits beside
+                  the results rather than on top of them. */}
+              {category === null && isDesktop ? (
                 <CategoryGrid selected={category} onSelect={setCategory} counts={counts} />
               ) : (
                 <CategoryChips selected={category} onSelect={setCategory} counts={counts} />
