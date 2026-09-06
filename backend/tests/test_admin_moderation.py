@@ -24,8 +24,12 @@ ADMIN_EMAIL = "mod@buradane.example"
 ADMIN_PASSWORD = "correct-horse-battery"
 
 
+
 @pytest.fixture
-def client(db_session, monkeypatch):
+def client(db_session, monkeypatch, api_jwt_secret):
+    # api_jwt_secret is not decoration: without it every request below
+    # carries a valid token that _decode_user_id refuses outright, because
+    # the app is on the secret this repository publishes. See conftest.
     monkeypatch.setattr(
         ratelimit, "_write_limiter", ratelimit.TokenBucketLimiter(per_hour=10_000, burst=1_000)
     )
