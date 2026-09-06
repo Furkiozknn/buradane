@@ -45,6 +45,32 @@ Anlık görüntü artık **tembel** okunuyor: açılışta yalnızca 18 KB'lık
 `meta.json`, sorgu geldiğinde yalnızca kutusuyla kesişen il dosyaları.
 512 MB'lık bir container rahat yetiyor.
 
+### Dayanıklılık
+
+**Eşzamanlı yükte 500 yerine gecikme.** Backend'in bağlantı havuzu
+SQLAlchemy'nin varsayılanlarını devralıyordu — `pool_size=5`,
+`max_overflow=10`, yani tavan 15 — ama uygulamanın 11 uç noktasının hepsi
+senkron `def`. Starlette bunların her birini kendi iş parçacığı havuzunda
+(varsayılan **40** iş parçacığı) çalıştırıyor ve her istek tüm süresi
+boyunca bir oturum tutuyor. 40 iş parçacığı 15 bağlantı için yarışınca
+fazlalık **kuyruğa girmiyor**: havuzda `pool_timeout` (30 sn) bekleyip
+`QueuePool limit of size 5 overflow 10 reached` ile düşüyor — istemcinin
+gördüğü yavaş bir 200 değil, geç gelen bir 500.
+
+Ölçüldü (`backend/tests/test_pool_ceiling.py`, veritabanı gerektirmez):
+
+| 40 eşzamanlı istek | Yanıtlanan | Düşen |
+|---|---|---|
+| 5+10 havuz, sınırsız iş parçacığı | 15 | **25** |
+| Aynı havuz, tavanla sınırlı | **40** | 0 |
+
+İki taraftan da kapatıldı: havuz artık açıkça yapılandırılıyor
+(`BURADANE_DB_POOL_SIZE`/`BURADANE_DB_MAX_OVERFLOW`, varsayılan 10+10 = 20
+— eskiden gerçekte yanıtlanan 15'ten fazla), ve açılışta iş parçacığı
+havuzu bu tavana sabitleniyor. Böylece bekleme, bedelsiz olduğu yere
+taşınıyor: bir istek iş parçacığı bekliyor, bir iş parçacığı bağlantı
+beklemiyor.
+
 ### Güvenlik
 
 Bağımsız incelemelerin bulduğu ve kapatılan açıklar:

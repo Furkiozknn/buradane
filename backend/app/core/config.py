@@ -55,5 +55,14 @@ class Settings(BaseSettings):
     write_rate_limit_per_hour: int = 30
     write_rate_limit_burst: int = 10
 
+    # SQLAlchemy connection pool. Explicit rather than inherited, because
+    # the ceiling (pool_size + max_overflow) is this app's real concurrency
+    # limit and nobody had chosen it: SQLAlchemy's own defaults are 5 + 10,
+    # and app/core/db.py explains what the mismatch with the request thread
+    # pool costs. Keep the ceiling in mind against the database server's
+    # own max_connections when running several workers.
+    db_pool_size: int = 10
+    db_max_overflow: int = 10
+
 
 settings = Settings()

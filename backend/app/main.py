@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from contextlib import asynccontextmanager
 
+import anyio.to_thread
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -32,6 +33,30 @@ if settings.jwt_secret == "dev-secret-change-in-production":
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Never let more requests run than there are connections to serve them.
+    #
+    # Every endpoint here is a sync `def`, so Starlette hands each request
+    # to anyio's default thread pool - 40 threads - and each one holds a DB
+    # session for its whole life. Against the connection pool's ceiling
+    # that is not a queue: the surplus requests wait pool_timeout (30s) at
+    # the pool and then fail with "QueuePool limit ... reached". Measured
+    # on a 5 + 10 pool: 40 concurrent requests, 15 served, 25 errors.
+    #
+    # Capping the thread pool at the ceiling moves the waiting to where it
+    # is free - a request waits for a thread instead of a thread waiting
+    # for a connection - so load past the limit is latency, not 500s. It
+    # costs nothing here because this app puts nothing else in the thread
+    # pool: no StaticFiles, no run_in_threadpool of its own, 11 endpoints
+    # that all take a session.
+    #
+    # Imported here rather than at module scope to keep this file's existing
+    # property that importing it touches no database machinery at all. (It
+    # would be harmless - create_engine does not connect - but the deferred
+    # import below was written for that reason and this one honours it.)
+    from app.core.db import POOL_CEILING
+
+    anyio.to_thread.current_default_thread_limiter().total_tokens = POOL_CEILING
+
     # Guarded entirely by config: a run without BURADANE_ADMIN_EMAIL/
     # PASSWORD (tests, discovery-only deployments) must not need a
     # reachable database just to start.

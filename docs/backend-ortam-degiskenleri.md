@@ -44,6 +44,15 @@ BURADANE_VERIFICATION_CONSENSUS=2
 BURADANE_WRITE_RATE_LIMIT_PER_HOUR=30
 BURADANE_WRITE_RATE_LIMIT_BURST=10
 
+# --- Bağlantı havuzu -------------------------------------------------------
+# Bu iki değerin toplamı (varsayılan 20) bu sürecin aynı anda tutabileceği
+# en fazla bağlantı sayısıdır VE pratikte eşzamanlı istek sınırıdır: açılışta
+# istek iş parçacığı havuzu bu tavana sabitlenir (app/main.py). Çok sayıda
+# worker çalıştırıyorsan toplamı PostgreSQL'in max_connections değeriyle
+# karşılaştır.
+BURADANE_DB_POOL_SIZE=10
+BURADANE_DB_MAX_OVERFLOW=10
+
 # --- CORS ------------------------------------------------------------------
 BURADANE_CORS_ORIGINS=["http://localhost:3000"]
 ```
@@ -64,6 +73,7 @@ BURADANE_CORS_ORIGINS=["http://localhost:3000"]
 | `BURADANE_ADMIN_EMAIL` / `BURADANE_ADMIN_PASSWORD` | tanımsız | İkisi birden tanımlıysa açılışta tek bir bootstrap moderatör hesabı oluşturulur (`app/services/bootstrap.py`); mevcut hesabın üzerine asla yazılmaz. Varsayılan JWT sırrı ile birlikte ayarlanırsa açılış `RuntimeError` ile **reddedilir**. |
 | `BURADANE_VERIFICATION_CONSENSUS` | `2` | Bir alan doğrulamasının mekana uygulanması için gereken farklı katılımcı sayısı. `1` yapmak tek kişilik onayı açar — üretimde düşürme. |
 | `BURADANE_WRITE_RATE_LIMIT_PER_HOUR` | `30` | IP başına saatlik yazma bütçesi (öneri/bildirim/doğrulama/login). |
+| `BURADANE_DB_POOL_SIZE` / `BURADANE_DB_MAX_OVERFLOW` | `10` / `10` | SQLAlchemy bağlantı havuzu. Toplamları (**tavan**, varsayılan 20) yalnızca bir veritabanı ayarı değil: her uç nokta senkron `def` olduğu için her istek bir iş parçacığında çalışır ve tüm istek boyunca bir oturum tutar, dolayısıyla tavan aynı zamanda eşzamanlı istek sınırıdır. Açılışta iş parçacığı havuzu bu tavana sabitlenir (`app/main.py`), böylece tavanı aşan yük **500 değil gecikme** üretir — ölçüldü: SQLAlchemy'nin devraldığı 5+10 havuzuna 40 eşzamanlı istek → 15'i yanıtlandı, 25'i `QueuePool limit ... reached` ile düştü. |
 | `BURADANE_WRITE_RATE_LIMIT_BURST` | `10` | Aynı bütçenin anlık patlama tavanı. Doğrulama ucunda ayrıca IP+mekan başına ikinci bir sınır vardır; ayrı değişkeni yoktur, bilinçli olarak türetilir: bütçe `BURADANE_VERIFICATION_CONSENSUS - 1`, dolum penceresi `BURADANE_STALE_AFTER_DAYS` (konsensüs penceresiyle aynı — kısa olsaydı sabırlı token rotasyonu konsensüsü doldururdu). |
 
 ---
