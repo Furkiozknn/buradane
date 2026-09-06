@@ -31,7 +31,14 @@ import type {
 import { boundingBox, haversineMeters } from "./geo";
 import { isOpenNow } from "./opening-hours";
 import { AMENITIES, QUERY_NOTICES, SEARCH_SYNONYMS, type QueryNotice } from "./categories";
-import { findProvince, foldAscii, foldWords, parseLocality, resolveDistrict } from "./administrative";
+import {
+  findProvince,
+  foldAscii,
+  foldWords,
+  parseLocality,
+  resolveDistrict,
+  stripCaseSuffixes,
+} from "./administrative";
 import { divisionCounts, officialDistrict, officialProvinceCenter } from "./admin-divisions";
 
 interface RawDataset {
@@ -959,6 +966,19 @@ const GLUE_SUFFIXES: RegExp[] = [
   // question/locative glue: "nerede", "neredeki", "nereden", "hangisi"
   /^nere/,
   /^hangi/,
+  // A case ending left standing on its own. Turkish writes a proper noun's
+  // suffix after an apostrophe - "Kadıköy'deki" - and the tokeniser above
+  // turns every non-letter into a space, so that arrives here as two words:
+  // "kadıköy" and "deki". The orphan is not a name, but it became one: the
+  // needle then required a place whose words begin with both "kadıköy" AND
+  // "deki", nothing matched, and the ladder dropped the district entirely.
+  // Measured before this: "kadıköy tuvalet" 26 results, "kadıköy'deki
+  // tuvalet" 278 - every toilet within 15 km.
+  //
+  // Anchored on both ends so it only ever removes a bare ending. The glued
+  // spelling ("kadıköydeki", one token) is a different problem and is
+  // handled by stripCaseSuffixes, after a literal lookup has failed.
+  /^(da|de|ta|te|dan|den|tan|ten|daki|deki|taki|teki)$/,
 ];
 
 function isGlue(token: string): boolean {
@@ -1243,6 +1263,21 @@ export function queryPlaces(
   let droppedAmenities: AmenityKey[] = [];
   let activeAmenities = effectiveAmenities;
   let results = collect(textNeedle, activeAmenities);
+
+  // Before widening, try UNDERSTANDING. "Kadıköy'deki tuvalet" is the same
+  // question as "Kadıköy tuvalet" and deserves the same 26 answers, not the
+  // 278 that dropping the needle produced. This runs regardless of
+  // `hasStructure` because it is not a relaxation: nothing is being given
+  // up, a case ending is being read. And it is deliberately NOT recorded in
+  // `relaxedNeedle` - telling the user "we widened your search" when we
+  // simply parsed their Turkish would be a false confession.
+  if (results.length === 0 && textNeedle) {
+    const stem = stripCaseSuffixes(textNeedle);
+    if (stem !== textNeedle) {
+      const understood = collect(stem, activeAmenities);
+      if (understood.length > 0) results = understood;
+    }
+  }
 
   if (results.length === 0 && textNeedle && hasStructure) {
     const widened = collect(null, activeAmenities);

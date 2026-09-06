@@ -97,7 +97,7 @@ buradane/
 │   │   │       └── admin/          # Moderasyon + mekan düzenleme
 │   │   ├── components/             # İstemci bileşenleri
 │   │   └── lib/                    # Saf mantık — TESTLERİN ODAĞI
-│   ├── tests/                      # Vitest, 173 test
+│   ├── tests/                      # Vitest, 182 test
 │   ├── vitest.config.mts
 │   └── package.json
 ├── backend/
@@ -327,7 +327,7 @@ Bu kurallar estetik değil. İhlali, kullanıcının boşuna yürümesi demektir
 ## 8. Test kuralları
 
 ```bash
-cd frontend && npm test          # 173 test geçmeli
+cd frontend && npm test          # 182 test geçmeli
 cd frontend && npx tsc --noEmit  # 0 hata
 cd frontend && npm run lint      # 0 hata
 cd frontend && npm run build     # başarılı
@@ -534,6 +534,25 @@ Bunlar README'de de yazılıdır ve bilinçli kabul edilmiş durumlardır:
 - İl kapsamı **tamamlandı**: 81/81 il, her biri gerçek OSM il sınırından;
   167.829 mekan; 973 ilçe merkezinin tamamının 15 km'sinde veri var.
 - Fotoğraf desteği yoktur (OSM'de ölçülen kapsam %2,3 olduğu için ertelendi).
+- **`wheelchair=limited` listede görünmez, yalnızca detay panelinde görünür.**
+  Sorgu motoru yanıttan `raw_tags`'i çıkarıyor (167.829 kayıt × ~11 etiketi
+  tel üzerinden göndermemek için), `limited` ise boolean amenity'ye
+  düzleştirilemez — `null` "bilinmiyor" demek, "kısmen" değil. Sonuç:
+  PlaceDetail'deki "kısmen mümkün" notu çalışıyor (detay ucu `raw_tags`
+  gönderiyor), PlaceCard'da hiçbir işaret yok.
+
+  Ölçüm: 1.203 kayıt `yes`, **340 kayıt `limited`**, 454 `no`, 10
+  `designated`. Yani olumlu tekerlekli sandalye sinyali olan kayıtların
+  %22'si listede görünmüyor, ve "Engelli erişimli" filtresi onları
+  (doğru olarak) elemiyor — kısmi bir rampayla idare edebilecek biri onları
+  hiçbir akışta göremiyor.
+
+  Düzeltmek `Place`'e ayrı bir alan eklemeyi gerektirir (§7: alan eklemek
+  geriye dönük uyumludur ama hem `types.ts` hem backend şeması hem README
+  güncellenmelidir). Yalnızca frontend'de opsiyonel bir alan eklemek
+  §7'nin uyardığı sessiz kırılmayı yaratır: gerçek backend'e geçildiği anda
+  rozet sessizce kaybolur. Bu yüzden bilinçli olarak **maintainer kararına
+  bırakılmıştır**.
 - **Sunucu yeniden başladıktan sonra bir ile yapılan ilk sorgu yavaştır.**
   Ölçüm: İstanbul 2717 ms, Ankara 1358 ms, Trabzon 258 ms; ısındıktan sonra
   hepsi 41-65 ms (bkz. §9). Yalnızca İstanbul, `public/sw.js`'teki 2,5 sn'lik

@@ -347,4 +347,72 @@ export function foldWords(value: string): string {
     .join(" ");
 }
 
+/**
+ * Turkish locative and ablative case endings, longest first.
+ *
+ * People type where they are looking as a phrase, not as a keyword:
+ * "Kadıköy'deki tuvalet", "Beşiktaş'ta eczane", "Ankara'dan". The search
+ * needle is matched word-prefix-wise against place names, and
+ * "kadikoydeki" is not a prefix of "kadikoy" - it is longer - so the whole
+ * district filter silently fell off the query. Measured before this existed:
+ * "kadıköy tuvalet" returned 26 places, "kadıköydeki tuvalet" returned 278,
+ * every toilet within 15 km. The user asked a narrower question and got a
+ * wider answer with no indication that anything had been dropped.
+ *
+ * Both spellings fold to the same thing: `foldAscii` removes the apostrophe
+ * Turkish puts before a suffix on a proper noun, so "Kadıköy'deki" and
+ * "kadıköydeki" both arrive here as "kadikoydeki".
+ *
+ * Longest-first is load-bearing. Stripping "da" before "daki" would turn
+ * "kadikoydeki" into "kadikoyki", which matches nothing and looks like the
+ * bug it was meant to fix.
+ */
+const CASE_SUFFIXES = [
+  // locative + relative: "-daki" (the one in X)
+  "daki",
+  "deki",
+  "taki",
+  "teki",
+  // ablative: "-dan" (from X)
+  "dan",
+  "den",
+  "tan",
+  "ten",
+  // locative: "-da" (in X)
+  "da",
+  "de",
+  "ta",
+  "te",
+];
+
+/** Shortest stem we will accept. Below this the "suffix" is most of the
+ * word and stripping it produces noise: "date" would become "d". */
+const MIN_STEM = 3;
+
+/**
+ * Removes a Turkish case ending from each word of an ALREADY FOLDED needle,
+ * returning the input unchanged when there was nothing to remove.
+ *
+ * This is deliberately NOT applied up front. Plenty of real Turkish place
+ * names end in these letters - Vişnezade, Üsküdar's Bulgurlu, any "-tepe" -
+ * and pre-stripping would break the names that work today to fix the ones
+ * that do not. The caller tries the literal needle first and only reaches
+ * for this when that found nothing, which is the same discipline the rest of
+ * the relaxation ladder follows: never widen a query that is already
+ * answering.
+ */
+export function stripCaseSuffixes(foldedNeedle: string): string {
+  let changed = false;
+  const words = foldedNeedle.split(" ").map((word) => {
+    for (const suffix of CASE_SUFFIXES) {
+      if (word.length >= suffix.length + MIN_STEM && word.endsWith(suffix)) {
+        changed = true;
+        return word.slice(0, -suffix.length);
+      }
+    }
+    return word;
+  });
+  return changed ? words.join(" ") : foldedNeedle;
+}
+
 export { foldAscii, foldTr };
