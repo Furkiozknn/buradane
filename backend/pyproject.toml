@@ -1,6 +1,6 @@
 [project]
 name = "buradane-backend"
-version = "0.1.0"
+version = "1.0.0"
 description = "buradane API - Turkey-focused civic/public-space discovery backend (places, categories, geospatial search, community contributions)."
 readme = "README.md"
 license = { text = "MIT" }
