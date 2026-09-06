@@ -44,10 +44,26 @@ npm run build          # prebuild MapLibre worker'ını kopyalar, tip kontrolü 
 npm run start          # varsayılan port 3000
 ```
 
-İlk isteğin birkaç saniye sürmesi beklenir: 81 ilin anlık görüntüsü
-(47.000+ kayıt) belleğe alınır. Sonraki istekler milisaniyeler içindedir.
-Bellek: süreç başına ~350 MB'a kadar çıkabilir; **512 MB'lık bir container
-sınırda kalır, 1 GB rahat eder.**
+**Ölçülmüş davranış** (üretim derlemesi, 132.475 kayıt, tek makine):
+
+| | |
+|---|---|
+| Ana sayfa (soğuk) | **14 ms** |
+| İl içi yarıçap sorgusu (soğuk) | **155-177 ms** |
+| Aynı sorgu (sıcak) | **20 ms** |
+| Sunucu RSS (birkaç il yüklendikten sonra) | **~103 MB** |
+
+Anlık görüntü **tembel** okunur: uygulama açılışta yalnızca `data/meta.json`
+(18 KB) okur, bir sorgu geldiğinde ise yalnızca o sorgunun kutusuyla kesişen
+il dosyalarını yükler ve önbelleğe alır. Bu yüzden **512 MB'lık bir container
+rahat yeter.** (Tüm illeri birden okuyan eski sürüm 7,4 sn açılış ve 433 MB
+RSS demekti - üstelik Next.js bunu route ve RSC grafikleri için ayrı ayrı
+ödüyordu.)
+
+> Veri tazelendikten sonra `node scripts/build_dataset_meta.mjs` çalıştırmayı
+> unutmayın: `meta.json` türetilmiş veridir ve bayat kalırsa uygulama bir
+> sayı, harita başka bir sayı gösterir. `npm test` ve doğrulama betiği bu
+> kaymayı yakalar.
 
 ## 4. Ters proxy (rate limit'in çalışması için şart)
 
@@ -101,7 +117,8 @@ OSM anlık görüntüsü depoda commit'lidir; tazelemek bir kod değişikliğidi
 
 ```bash
 uv run --no-project python scripts/fetch_by_district.py --only-missing
-node scripts/validate_places_data.mjs      # şema + sınır + mükerrer + yayılım
+node scripts/build_dataset_meta.mjs        # meta.json'u yeniden üret (ZORUNLU)
+node scripts/validate_places_data.mjs      # şema + sınır + mükerrer + kapsam
 cd frontend && npm test                    # ulusal kapsam testleri dahil
 ```
 
