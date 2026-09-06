@@ -34,16 +34,17 @@ içinde hiçbir yerde "Turkey" sabiti hardcode edilmedi - ileride başka bir
 ülke eklenmek istenirse bu bir mimari değişiklik değil, bir konfigürasyon +
 veri yükleme işi olacak. Şu an için tek aktif ülke Türkiye.
 
-**Pilot sıra**: İstanbul → Ankara/İzmir → Antalya/Bursa/Kocaeli/Adana/
-Gaziantep/Konya → geri kalan 81 il. Altyapı (idari hiyerarşi, veri modeli)
-81 ilin tamamını gün 1'den itibaren destekler; sadece veri doldurma bu
-sırayla ilerler.
+**Pilot sıra şuydu**: İstanbul → Ankara/İzmir → Antalya/Bursa/Kocaeli/
+Adana/Gaziantep/Konya → geri kalan iller. Altyapı (idari hiyerarşi, veri
+modeli) 81 ilin tamamını gün 1'den beri destekliyordu; veri doldurma bu
+sırayla ilerledi ve **2026-09'da 81/81 tamamlandı**.
 
-Demo şu an **üç şehrin** çekirdek alanını kapsıyor (İstanbul, Ankara,
-İzmir). Her şehir kendi `places.<şehir>.json` dosyasında; okuma tarafı
-klasörü tarayarak hepsini yüklüyor, yani **dördüncü şehri eklemek bir
-konfigürasyon satırı + bir çekim koşusu** (bkz. "Veri Pipeline"), kod
-değişikliği değil.
+Demo **81 ilin tamamını** kapsıyor. Her il kendi `places.<il>.json`
+dosyasında ve dosyalar il *sınırından* çekiliyor (il merkezine çizilmiş bir
+kutudan değil - o yaklaşım ülkenin yalnızca %2,2'sini görüyordu ve Alanya
+gibi 350 bin nüfuslu ilçeleri tamamen dışarıda bırakıyordu). Okuma tarafı
+klasörü tarayarak hepsini yükler; bir ili yeniden çekmek kod değişikliği
+gerektirmez (bkz. "Veri Pipeline").
 
 ## Hızlı Başlangıç
 
@@ -53,10 +54,13 @@ Gereksinimler: [uv](https://docs.astral.sh/uv/), Docker (yerel Postgres+PostGIS 
 
 ```bash
 cd backend
-uv sync
 
-# Yerel veritabanını başlat (Postgres + PostGIS)
-docker compose up -d
+# Yerel veritabanını ÖNCE başlat. `--wait` şart: `up -d` healthcheck'i
+# beklemez, PostGIS bağlantı kabul etmeye ~5-10 sn sonra başlar ve hemen
+# ardından gelen `alembic upgrade head` "connection refused" alır.
+docker compose up -d --wait
+
+uv sync
 
 # Şemayı oluştur (Alembic migration'ları ile)
 uv run alembic upgrade head
@@ -87,7 +91,7 @@ ortam değişkeni olarak) - bkz. `app/core/config.py`:
 
 ### Frontend (demo)
 
-Gereksinimler: Node.js + npm.
+Gereksinimler: **Node.js 20.9+** (CI 20 ve 22 ile koşar), npm.
 
 ```bash
 cd frontend
@@ -182,7 +186,7 @@ içine yakınlaştırır. Düşük güvenilirlikli kayıtlar (`reliability_score
 kullanıcı hâlâ görür, kart neden "zayıf" göründüğünü açıklar. Kullanıcının
 kendi konumu, nabız animasyonlu tek bir DOM marker'ı ile ayrıca gösterilir
 (bir sembol katmanının ifade edemeyeceği tek özel durum). Alt sayfa (bottom
-sheet, `vaul` tabanlı) açıkken harita `setPadding` ile görünür alanı
+sheet; snap noktalı, el yazımı - harici bir sheet kütüphanesi yok) açıkken harita `setPadding` ile görünür alanı
 sayfanın üstünde ortalar. Taban harita OpenFreeMap'in ücretsiz, API
 anahtarı gerektirmeyen "positron" stili - bilinçli olarak sade/gri:
 haritadaki her renk 14 kategori pin'ine ait, canlı bir taban harita yoğun
@@ -250,12 +254,13 @@ uv run --no-project python scripts/enrich_demo_data.py
 uv run --no-project python scripts/repair_demo_data.py
 ```
 
-**Yeni şehir eklemek:** `fetch_demo_data.py`'deki `CITIES` sözlüğüne bir
-satır (slug, etiket, bbox, cap ölçeği) ekleyip script'i o şehir için
-koşmak yeterli. Okuma tarafı `data/` klasörünü tarayarak yeni dosyayı
-kendiliğinden alır; `AppShell`'deki `CITY_CENTERS`'a şehrin merkezi
-eklenince şehir seçicide de görünür. Uygulama kodunda başka değişiklik
-gerekmez.
+**Bir ili yeniden çekmek:** `scripts/fetch_by_district.py --province <İl>`.
+İl sınırından (OSM'in kendi `admin_level=4` ilişkisi) çeker ve her mekanın
+ilçesini gerçek ilçe sınırlarından atar. Okuma tarafı `data/` klasörünü
+tarayarak dosyayı kendiliğinden alır ve harita merkezini verinin kendisinden
+türetir. **Uygulama kodunda hiçbir değişiklik gerekmez** - şehir merkezleri
+için elle tutulan bir tablo yoktur (bir zamanlar vardı; merkezi eklenmeyen
+şehir sessizce İstanbul'da açılıyordu).
 
 1. **`fetch_demo_data.py`** - `CITIES`'te tanımlı her şehrin çekirdek alanı
    için Overpass API'den 14 kategorinin OSM verisini çeker.
@@ -473,10 +478,12 @@ sorgunun anlamını sessizce değiştirmek yerine.
 
 ## Bilinen Sınırlamalar
 
-- Yönetim panelinin **görüntülenmesi** hâlâ token istemez: moderasyon
-  kuyruğu ve istatistikler sunucuda render edilir ve sayfayı açan herkes
-  okuyabilir. Token yalnızca **yazma** işlemlerini korur; sayfa okumasını da
-  kapatmak çerez tabanlı bir oturum gerektirir ve henüz yapılmadı.
+- ~~Yönetim panelinin görüntülenmesi token istemez~~ **Çözüldü.** Kuyruk
+  içerikleri artık `AdminTokenGate` arkasında ve `GET /api/contributions`
+  admin token'ı ister; token'sız bir istek hiçbir katkı satırı, not ya da ad
+  göremez. Token'sız görünmeye devam eden tek şey sayısal agregalardır
+  (bekleyen/toplam katkı sayısı, kategori dağılımı) - bilinçli: sayaç,
+  içerik değil.
 - Demo'daki güvenilirlik skoru / doğrulama sayısı / tazelik etiketleri
   gerçek bir topluluk geçmişinden değil, OSM kaydının doluluğundan
   **deterministik olarak üretiliyor** (demo'nun hiç topluluk geçmişi yok).

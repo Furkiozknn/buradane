@@ -1,4 +1,5 @@
-"""Fetch every place in Türkiye by ILÇE (district) area, not by a box.
+"""Fetch every place in Türkiye by province BOUNDARY, and assign each one
+its ilçe from the real district polygons.
 
 Why this replaces the bbox fetch
 --------------------------------
@@ -6,34 +7,31 @@ fetch_demo_data.py fetches a bounding box per province. For the 19
 hand-written cities that box is the metropolitan core; for the other 62 it
 is a synthesized ~12 km x 12 km square around the provincial capital. A
 data-quality audit measured what that actually covers: **2,2 % of
-Türkiye's land area**. Antalya's file holds 1.668 places while the full
+Türkiye's land area**. Antalya's file held 1.668 places while the full
 province holds 6.797 in six categories alone; Alanya (350.000 residents,
-110 km from the box) has *nothing*, and the app meanwhile tells the user
-"81 ilin 81 tanesi kapsanıyor". Only 16,8 % of the country's 973 district
-centres had any data within 10 km.
+110 km from the box) had *nothing*, while the app told the user "81 ilin
+81 tanesi kapsanıyor". Only 16,8 % of the country's 973 district centres
+had any data within 10 km.
 
-The district is the right fetch unit for three separate reasons:
+Two queries per province, not one per district
+----------------------------------------------
+Querying each of the 973 ilçe areas directly would give district labels for
+free, and it was tried first - measured at ~2 minutes per district (~29
+hours), because Overpass recomputes the area for every request. One query
+over the *province* area returns all 14 categories in **16 seconds**
+(Yozgat, 1.021 elements). So: 81 place queries + 81 boundary queries, and
+the district comes from a point-in-polygon test against the boundaries we
+already need to be correct anyway.
 
-1. **Coverage.** 973 district areas tile the country exactly - no gaps
-   between them, no overlap, no bbox guessing. Every settlement is inside
-   exactly one.
-2. **District labels for free.** Places came back from *this district's*
-   area, so their district is known by construction. The tag-based path
-   filled 6,7 % of records; there is nothing to infer and no polygon
-   arithmetic to get wrong.
-3. **Fewer requests, not more.** All 14 categories go in ONE union query
-   per district: 973 requests, against the 1.134 (81 x 14) the province
-   fetch needed. A district is small enough that one combined query is
-   comfortable where a province-wide one would time out.
+The district test uses the crossing-number rule over the union of the
+relation's member-way segments. Rings are deliberately NOT stitched: parity
+counting does not care what order the edges arrive in, only that the set of
+edges closes, and `inner` members (holes) flip parity exactly where they
+should. That removes the one part of this that would otherwise be fiddly
+enough to get quietly wrong.
 
 Output is unchanged: one places.<il>.json per province, same schema, so
-nothing downstream has to know this script exists. Each place gains an
-authoritative `district_raw` (and `province_raw`) from its fetch unit.
-
-Checkpointed per district in .overpass-cache/districts/ - 973 requests
-against a rate-limited free API will be interrupted, and losing 900 of
-them to a 429 on the 901st is the failure this project has already
-learned twice.
+nothing downstream has to know this script exists.
 
 Usage:
     uv run --no-project python scripts/fetch_by_district.py
@@ -63,12 +61,36 @@ from fetch_demo_data import (  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 DIVISIONS = ROOT / "frontend" / "data" / "admin-divisions.json"
-CACHE_DIR = ROOT / ".overpass-cache" / "districts"
+CACHE_DIR = ROOT / ".overpass-cache" / "provinces-full"
 
-# One request per district, so the polite gap between them is what keeps the
-# whole run under Overpass' fair-use ceiling. 6s x 973 is ~1.6 hours of pure
-# waiting, which is the price of not being rate-limited into a backoff spiral.
-POLITE_SLEEP_SECONDS = 6
+POLITE_SLEEP_SECONDS = 8
+
+# Which OSM tags survive into the snapshot's `raw_tags`.
+#
+# The bbox fetcher stored the whole tag bag - 267 distinct keys across
+# Ankara alone. Every one of them becomes a live string in the Node heap of
+# a server that already holds the national dataset twice, and almost none is
+# ever read: the app derives its own fields at fetch time (access,
+# amenities, district, province), the list response strips raw_tags
+# entirely, and the only consumer left is PlaceDetail's `wheelchair ===
+# "limited"` badge. This list is that consumer plus the handful a detail
+# page can honestly show. Anything else is re-fetchable from OSM by the id
+# we keep, which is the whole reason the snapshot is disposable.
+KEPT_TAGS = frozenset(
+    {
+        "wheelchair",           # rendered as a badge
+        "opening_hours",        # the parser reads the normalized field, but the raw string is worth showing
+        "operator",
+        "phone",
+        "website",
+        "description",
+        "access",
+        "fee",
+        "toilets:disposal",
+        "changing_table",
+        "drinking_water",
+    }
+)
 
 
 def slugify(name: str) -> str:
@@ -84,32 +106,38 @@ def slugify(name: str) -> str:
     return out.lower().replace(" ", "").replace("-", "")
 
 
-def district_query(area_id: int) -> str:
-    """Every category in one union. `nwr` covers nodes, ways and relations -
-    the bbox path used node+way only, so relation-mapped places (a park
-    drawn as a multipolygon) were invisible to it."""
+def places_query(area_id: int) -> str:
+    """Every category in one union. `nwr` covers nodes, ways AND relations -
+    the bbox path used node+way only, so a park mapped as a multipolygon was
+    invisible to it."""
     parts = []
     for config in CATEGORIES.values():
         for selector in config["selectors"]:
             parts.append(f"  nwr{selector}(area:{area_id});")
     body = "\n".join(parts)
-    return f"[out:json][timeout:300];\n(\n{body}\n);\nout center tags;"
+    return f"[out:json][timeout:600];\n(\n{body}\n);\nout center tags;"
 
 
-def categories_for(element: dict) -> list[str]:
+def boundaries_query(area_id: int) -> str:
+    return (
+        f'[out:json][timeout:600];\n'
+        f'relation["boundary"="administrative"]["admin_level"="6"](area:{area_id});\n'
+        f"out geom;"
+    )
+
+
+def categories_for(tags: dict) -> list[str]:
     """Which of our categories this OSM element satisfies.
 
     The bbox fetcher knew the category because it ran one query per
     category. A union query does not say which branch matched, so the
-    selectors are re-evaluated here against the returned tags - and a place
-    matching several stays one place with several categories, which is the
+    selectors are re-evaluated against the returned tags - and a place
+    matching several stays ONE place with several categories, which is the
     data model's core promise.
     """
-    tags = element.get("tags", {})
     matched = []
     for category, config in CATEGORIES.items():
         for selector in config["selectors"]:
-            # Selectors are simple ["k"="v"] / ["k"!="v"] conjunctions.
             conditions = [c for c in selector.strip("[]").split("][") if c]
             ok = True
             for condition in conditions:
@@ -129,42 +157,115 @@ def categories_for(element: dict) -> list[str]:
     return matched
 
 
-def fetch_district(province: dict, district: dict) -> list[dict]:
+def district_shapes(province: dict) -> list[dict]:
+    """[{name, min_lat, max_lat, min_lon, max_lon, edges}] for every ilçe.
+
+    `edges` is the flat list of boundary segments, not assembled rings - see
+    the module docstring for why that is enough and safer.
+    """
     cache_dir = CACHE_DIR / slugify(province["name"])
     cache_dir.mkdir(parents=True, exist_ok=True)
-    cache_file = cache_dir / f"{district['osm_relation']}.json"
+    cache_file = cache_dir / "boundaries.json"
     if cache_file.exists():
         return json.loads(cache_file.read_text(encoding="utf-8"))
 
-    area_id = 3600000000 + district["osm_relation"]
-    elements = run_query(district_query(area_id))
-
-    places: list[dict] = []
+    elements = run_query(boundaries_query(3600000000 + province["osm_relation"]))
+    shapes = []
     for element in elements:
-        matched = categories_for(element)
+        name = element.get("tags", {}).get("name")
+        if not name:
+            continue
+        edges: list[list[float]] = []
+        lats: list[float] = []
+        lons: list[float] = []
+        for member in element.get("members", []):
+            if member.get("type") != "way" or member.get("role") not in ("outer", "inner", ""):
+                continue
+            geometry = member.get("geometry") or []
+            for a, b in zip(geometry, geometry[1:]):
+                edges.append([a["lat"], a["lon"], b["lat"], b["lon"]])
+                lats.append(a["lat"])
+                lons.append(a["lon"])
+        if not edges:
+            continue
+        shapes.append(
+            {
+                "name": name,
+                "min_lat": min(lats), "max_lat": max(lats),
+                "min_lon": min(lons), "max_lon": max(lons),
+                "edges": edges,
+            }
+        )
+    cache_file.write_text(json.dumps(shapes, ensure_ascii=False), encoding="utf-8")
+    return shapes
+
+
+def contains(shape: dict, lat: float, lon: float) -> bool:
+    """Crossing-number test against the union of the boundary's segments.
+
+    Order-independent on purpose: a district boundary arrives as many member
+    ways in arbitrary order and direction, and parity only depends on the
+    SET of edges a ray crosses. Holes (`inner` members) are included and
+    flip parity exactly where they should.
+    """
+    if not (shape["min_lat"] <= lat <= shape["max_lat"] and shape["min_lon"] <= lon <= shape["max_lon"]):
+        return False
+    inside = False
+    for lat1, lon1, lat2, lon2 in shape["edges"]:
+        if (lat1 > lat) != (lat2 > lat):
+            # Longitude of the boundary at this latitude.
+            crossing_lon = lon1 + (lat - lat1) / (lat2 - lat1) * (lon2 - lon1)
+            if lon < crossing_lon:
+                inside = not inside
+    return inside
+
+
+def fetch_province(province: dict) -> list[dict]:
+    cache_dir = CACHE_DIR / slugify(province["name"])
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    cache_file = cache_dir / "places.json"
+    if cache_file.exists():
+        return json.loads(cache_file.read_text(encoding="utf-8"))
+
+    elements = run_query(places_query(3600000000 + province["osm_relation"]))
+    places = []
+    for element in elements:
+        matched = categories_for(element.get("tags", {}))
         if not matched:
             continue
-        # normalize() wants the category it was fetched under; the first
-        # match names the place, merge_multi_category unions the rest.
         place = normalize(element, matched[0])
         if place is None:
             continue
         place["categories"] = sorted(set(matched))
-        # Authoritative, because the query WAS this district's area. The
-        # loader still prefers an explicit addr:* tag when OSM has one.
-        place["district_raw"] = district["name"]
-        place["province_raw"] = province["name"]
         places.append(place)
-
     cache_file.write_text(json.dumps(places, ensure_ascii=False), encoding="utf-8")
     return places
 
 
-def write_province(province: dict, places: list[dict]) -> Path:
+def write_province(province: dict, places: list[dict], shapes: list[dict]) -> tuple[Path, int, int]:
     slug = slugify(province["name"])
     merged = merge_multi_category(places)
+
+    located = 0
     for place in merged:
         place["city"] = slug
+        # Trimmed HERE, not at fetch time, so it applies to cached provinces
+        # too - a checkpoint written before this rule existed still produces
+        # a trimmed file on the next run, with no re-fetch.
+        place["raw_tags"] = {
+            key: value for key, value in (place.get("raw_tags") or {}).items() if key in KEPT_TAGS
+        }
+        # The province is a fact about the query: this place came back from
+        # inside that boundary. The district is a fact about the geometry.
+        # An explicit addr:* tag still wins on read (places-repository.ts),
+        # which is right - OSM's own answer beats ours where it exists.
+        place["province_raw"] = province["name"]
+        for shape in shapes:
+            if contains(shape, place["lat"], place["lon"]):
+                place["district_raw"] = shape["name"]
+                located += 1
+                break
+
     out_path = DATA_DIR / f"places.{slug}.json"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(
@@ -178,8 +279,8 @@ def write_province(province: dict, places: list[dict]) -> Path:
                 "attribution": "© OpenStreetMap katkıda bulunanları",
                 # The unit this file was fetched by, so a reader never has to
                 # guess whether it is a box or a boundary again.
-                "fetch_unit": "district_areas",
-                "district_count": len(province["districts"]),
+                "fetch_unit": "province_boundary",
+                "district_count": len(shapes),
                 "count": len(merged),
                 "places": merged,
             },
@@ -187,7 +288,7 @@ def write_province(province: dict, places: list[dict]) -> Path:
         ),
         encoding="utf-8",
     )
-    return out_path
+    return out_path, len(merged), located
 
 
 def main() -> None:
@@ -196,7 +297,7 @@ def main() -> None:
     parser.add_argument(
         "--only-missing",
         action="store_true",
-        help="yalnızca henüz ilçe tabanlı çekilmemiş illeri işle",
+        help="yalnızca henüz sınır tabanlı çekilmemiş illeri işle",
     )
     args = parser.parse_args()
 
@@ -207,34 +308,34 @@ def main() -> None:
         if not provinces:
             raise SystemExit(f"il bulunamadı: {args.province}")
 
-    total_places = 0
+    grand_total = 0
     for index, province in enumerate(provinces, 1):
         slug = slugify(province["name"])
         out_path = DATA_DIR / f"places.{slug}.json"
         if args.only_missing and out_path.exists():
             existing = json.loads(out_path.read_text(encoding="utf-8"))
-            if existing.get("fetch_unit") == "district_areas":
-                print(f"[{index:2}/{len(provinces)}] {province['name']}: zaten ilçe tabanlı, atlandı")
+            if existing.get("fetch_unit") == "province_boundary":
+                print(f"[{index:2}/{len(provinces)}] {province['name']}: zaten sınır tabanlı, atlandı", flush=True)
                 continue
 
-        print(f"\n=== [{index}/{len(provinces)}] {province['name']} "
-              f"({len(province['districts'])} ilçe) ===")
-        province_places: list[dict] = []
-        for d_index, district in enumerate(province["districts"], 1):
-            cached = (CACHE_DIR / slug / f"{district['osm_relation']}.json").exists()
-            found = fetch_district(province, district)
-            province_places.extend(found)
-            print(f"  [{d_index:2}/{len(province['districts'])}] {district['name']:24} "
-                  f"{len(found):5} mekan{' (önbellek)' if cached else ''}")
-            if not cached:
-                time.sleep(POLITE_SLEEP_SECONDS)
+        print(f"[{index:2}/{len(provinces)}] {province['name']} çekiliyor...", flush=True)
+        cached = (CACHE_DIR / slug / "places.json").exists()
+        places = fetch_province(province)
+        if not cached:
+            time.sleep(POLITE_SLEEP_SECONDS)
+        shapes = district_shapes(province)
+        time.sleep(POLITE_SLEEP_SECONDS)
 
-        path = write_province(province, province_places)
-        merged_count = json.loads(path.read_text(encoding="utf-8"))["count"]
-        total_places += merged_count
-        print(f"  ✓ {province['name']}: {merged_count} mekan → {path.name}")
+        path, count, located = write_province(province, places, shapes)
+        grand_total += count
+        share = f"{100 * located / count:.0f}%" if count else "-"
+        print(
+            f"     ✓ {count} mekan, {len(shapes)} ilçe sınırı, ilçesi bulunan: {located} ({share}) "
+            f"→ {path.name}",
+            flush=True,
+        )
 
-    print(f"\n✓ {len(provinces)} il işlendi, {total_places} mekan")
+    print(f"\n✓ {len(provinces)} il işlendi, {grand_total} mekan", flush=True)
 
 
 if __name__ == "__main__":
