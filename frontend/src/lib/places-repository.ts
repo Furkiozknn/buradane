@@ -119,6 +119,26 @@ export interface DatasetMeta {
  * is the rare one.
  */
 const provinceCache = new Map<string, Place[]>();
+
+/**
+ * How many province snapshots stay resident.
+ *
+ * Lazy loading made the FIRST query cheap; it did nothing about the tenth,
+ * because nothing ever evicted. A performance audit walked one /yer page per
+ * province - which is exactly what a search engine does with the 60.000-URL
+ * sitemap this app publishes - and took the process to 452 MB, then 741 MB
+ * once a single /api/places request filled the second module registry. The
+ * deployment note promised a 512 MB container; 82 ordinary unauthenticated
+ * GETs falsified it.
+ *
+ * Eight is deliberate rather than round: the same audit measured how many
+ * files a real query reads over a national grid - p50 one, p99 three, max
+ * four - so a working set of eight holds every realistic query plus the
+ * province the user came from, and evicting past it costs a re-read
+ * (measured 150 ms for a small province, ~3 s for İstanbul) rather than
+ * correctness.
+ */
+const MAX_RESIDENT_PROVINCES = 8;
 let metaCache: DatasetMeta | null = null;
 let provinceIndex: ProvinceIndexRow[] | null = null;
 const searchTextCache = new Map<string, string>();
@@ -480,8 +500,32 @@ function loadProvince(slug: string): Place[] {
   }
 
   provinceCache.set(slug, places);
+  evictOldestProvinces();
   return places;
 }
+
+/** Least-recently-INSERTED eviction, which a Map gives for free through its
+ * insertion order. Re-inserting on read would make it true LRU; it is not
+ * worth the extra write on the hot path, because a working set of eight
+ * over a p99 of three means eviction is rare either way. The search text of
+ * an evicted province goes with it - otherwise that Map becomes the leak
+ * this one just stopped being. */
+function evictOldestProvinces(): void {
+  while (provinceCache.size > MAX_RESIDENT_PROVINCES) {
+    const oldest = provinceCache.keys().next();
+    if (oldest.done) return;
+    const dropped = provinceCache.get(oldest.value);
+    provinceCache.delete(oldest.value);
+    if (dropped) for (const place of dropped) searchTextCache.delete(place.id);
+    // A full national load is the one case where eviction would thrash: it
+    // asks for all 81 in sequence and needs them all at once. loadAll marks
+    // itself so the guard steps aside for it.
+    if (loadingAll) return;
+  }
+}
+
+/** Set only while loadAll() is assembling every province - see above. */
+let loadingAll = false;
 
 /**
  * The records for a set of provinces, with cross-province duplicates
@@ -552,10 +596,34 @@ function loadPlaceIndex(): PlaceIndexFile | null {
   return placeIndexCache;
 }
 
+/**
+ * Every province, assembled once and kept.
+ *
+ * Deliberately exempt from the residency cap, because the cap and this
+ * function answer different questions. The cap exists so a REQUEST can
+ * never pin the country in memory; a full load is not a request path -
+ * every route now requires a geographic scope (api/places), and a lookup by
+ * id goes through place-index.json. What is left is the sitemap at build
+ * time and the tests, both of which want the whole thing and both of which
+ * would otherwise thrash: eight slots against an 81-province walk means
+ * re-reading almost every file, which took the suite from 40 s to 515 s.
+ *
+ * The one request path that can still reach here is getPlaceById on a
+ * deployment with no place-index.json - a degraded configuration the code
+ * warns about rather than a normal one.
+ */
+let allPlacesCache: Place[] | null = null;
+
 function loadAll(): Place[] {
-  const all = placesFor(loadIndex().map((row) => row.slug));
-  allLoaded = true;
-  return all;
+  if (allPlacesCache) return allPlacesCache;
+  loadingAll = true;
+  try {
+    allPlacesCache = placesFor(loadIndex().map((row) => row.slug));
+    allLoaded = true;
+    return allPlacesCache;
+  } finally {
+    loadingAll = false;
+  }
 }
 
 /** Median coordinate of a city's places - resistant to a single node

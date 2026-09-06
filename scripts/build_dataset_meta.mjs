@@ -48,6 +48,11 @@ const distinctIds = new Set();
 // costs a full national load (~15 s, ~400 MB), which any crawler could
 // trigger with one bogus /yer/<id> URL.
 const placeIndex = {};
+const indexedHasDistrict = {};
+// Per-province distinct ids, so the city picker's "N kayıtlı yer" matches
+// what the app actually holds - summing file lengths over-reported the
+// seven provinces that share a border-crossing way.
+const provinceIds = [];
 let newest = "";
 let attribution = "© OpenStreetMap katkıda bulunanları";
 let license = "ODbL 1.0";
@@ -63,20 +68,26 @@ for (const file of files) {
   let maxLon = -Infinity;
   for (const p of data.places) {
     distinctIds.add(p.id);
-    // First file wins, matching the loader's own preference order closely
-    // enough for a lookup hint: the record is read from that province and
-    // the dedupe rule then applies as usual.
-    if (!(p.id in placeIndex)) placeIndex[p.id] = provinces.length;
+    // The copy WITH a district wins, exactly as the loader decides it
+    // (places-repository.ts). First-file-wins disagreed with the loader for
+    // the border-crossing ways, so the same place reported a different il
+    // and ilçe depending on whether you reached it by id or by viewport.
+    const seenAt = placeIndex[p.id];
+    if (seenAt === undefined || (p.district_raw && !indexedHasDistrict[p.id])) {
+      placeIndex[p.id] = provinces.length;
+      indexedHasDistrict[p.id] = Boolean(p.district_raw);
+    }
     if (p.lat < minLat) minLat = p.lat;
     if (p.lat > maxLat) maxLat = p.lat;
     if (p.lon < minLon) minLon = p.lon;
     if (p.lon > maxLon) maxLon = p.lon;
   }
 
+  provinceIds.push(new Set(data.places.map((p) => p.id)).size);
   provinces.push({
     slug,
     label: data.city_label ?? slug,
-    count: data.places.length,
+    count: provinceIds[provinceIds.length - 1],
     fetch_unit: data.fetch_unit ?? "legacy_bbox",
     // The extent of this province's OWN records. A query whose search box
     // misses this rectangle cannot match anything in the file, which is the

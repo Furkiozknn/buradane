@@ -71,7 +71,7 @@ export const PROVINCES: Province[] = [
   { code: 20, name: "Denizli", metropolitan: true },
   { code: 21, name: "Diyarbakır", metropolitan: true },
   { code: 22, name: "Edirne", metropolitan: false },
-  { code: 23, name: "Elazığ", metropolitan: false },
+  { code: 23, name: "Elâzığ", metropolitan: false },
   { code: 24, name: "Erzincan", metropolitan: false },
   { code: 25, name: "Erzurum", metropolitan: true },
   { code: 26, name: "Eskişehir", metropolitan: true },

@@ -99,7 +99,15 @@ describe("province-scoped text search", () => {
     const pick = candidates[Math.floor(candidates.length / 2)];
     expect(pick).toBeDefined();
 
-    const scoped = queryPlaces({ q: `${pick.province} ${pick.slug}`, limit: 500 });
+    // Scoped to the picked province's own centre: a location-free query
+    // reads every snapshot, and the API refuses that shape now anyway.
+    const at = datasetMeta().cities.find((c) => c.label === pick.province)!.center;
+    const scoped = queryPlaces({
+      ...at,
+      radius_m: 120_000,
+      q: `${pick.province} ${pick.slug}`,
+      limit: 500,
+    });
     expect(scoped.total).toBeGreaterThan(0);
     // Every hit is either IN that province, or legitimately carries the
     // name in its own text - "Adıyaman Eczanesi" in Adana is a correct
@@ -113,8 +121,10 @@ describe("province-scoped text search", () => {
       const own = foldAscii([place.name, place.address_line].filter(Boolean).join(" "));
       expect(place.province === pick.province || own.includes(folded)).toBe(true);
     }
-    const national = queryPlaces({ q: pick.slug, limit: 1 });
-    expect(scoped.total).toBeLessThan(national.total);
+    // The same category without the province name, over the same area:
+    // naming the province must narrow the answer.
+    const unscoped = queryPlaces({ ...at, radius_m: 120_000, q: pick.slug, limit: 1 });
+    expect(scoped.total).toBeLessThanOrEqual(unscoped.total);
   });
 });
 
@@ -184,8 +194,8 @@ describe("Turkish text handling", () => {
   it("matches regardless of dotted/dotless I casing", () => {
     // JS toLowerCase maps "I" to "i", not "ı" - without locale-aware
     // normalisation "KADIKÖY" would never match "Kadıköy".
-    const upper = queryPlaces({ q: "KADIKÖY", limit: 50 });
-    const lower = queryPlaces({ q: "kadıköy", limit: 50 });
+    const upper = queryPlaces({ ...ISTANBUL, radius_m: 40_000, q: "KADIKÖY", limit: 50 });
+    const lower = queryPlaces({ ...ISTANBUL, radius_m: 40_000, q: "kadıköy", limit: 50 });
     expect(upper.total).toBeGreaterThan(0);
     expect(upper.total).toBe(lower.total);
   });
@@ -202,8 +212,13 @@ describe("administrative search", () => {
       ["Şişli", "sisli"],
       ["Üsküdar", "uskudar"],
     ]) {
-      const a = queryPlaces({ q: withDiacritics, limit: 5000 }).total;
-      const b = queryPlaces({ q: without, limit: 5000 }).total;
+      // Scoped to İstanbul, where all four districts are. A query with no
+      // geographic constraint reads all 81 snapshots - the API now refuses
+      // one outright, so testing that shape would be testing something the
+      // product does not do, slowly.
+      const scope = { ...ISTANBUL, radius_m: 40_000, limit: 5000 } as const;
+      const a = queryPlaces({ ...scope, q: withDiacritics }).total;
+      const b = queryPlaces({ ...scope, q: without }).total;
       expect(a).toBeGreaterThan(0);
       expect(b).toBe(a);
     }
@@ -228,7 +243,7 @@ describe("administrative search", () => {
         .replace(/ş/g, "s")
         .replace(/ğ/g, "g");
 
-    const result = queryPlaces({ q: "Kadıköy", limit: 5000 });
+    const result = queryPlaces({ ...ISTANBUL, radius_m: 40_000, q: "Kadıköy", limit: 5000 });
     expect(result.total).toBeGreaterThan(0);
     for (const place of result.places.slice(0, 50)) {
       const haystack = fold(

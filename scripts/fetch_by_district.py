@@ -196,6 +196,22 @@ def district_shapes(province: dict) -> list[dict]:
                 "edges": edges,
             }
         )
+
+    # An empty result is a FAILURE, never a fact. Overpass answers HTTP 200
+    # with zero elements during a 429/504 storm, and caching that is how
+    # Eskisehir and Van shipped with 0 district boundaries: 3.025 places lost
+    # their ilce, the file recorded `district_count: 0`, and --only-missing
+    # then skipped both forever because the snapshot already said
+    # `fetch_unit: province_boundary`. No Turkish province has zero
+    # districts, so refuse rather than freeze a hole into the cache. The
+    # admin-divisions fetcher learned this same lesson earlier; it did not
+    # travel with the code.
+    if not shapes:
+        raise RuntimeError(
+            f"{province['name']}: ilce sinir sorgusu bos dondu - "
+            "onbellege bos liste yazmak ili kalici olarak ilcesiz birakir"
+        )
+
     cache_file.write_text(json.dumps(shapes, ensure_ascii=False), encoding="utf-8")
     return shapes
 
@@ -243,6 +259,10 @@ def fetch_province(province: dict) -> list[dict]:
 
 
 def write_province(province: dict, places: list[dict], shapes: list[dict]) -> tuple[Path, int, int]:
+    # Same rule as district_shapes, one layer up: a province written with no
+    # boundaries is a province with no ilce, and it is silent.
+    if not shapes:
+        raise RuntimeError(f"{province['name']}: ilce siniri yok, dosya yazilmayacak")
     slug = slugify(province["name"])
     merged = merge_multi_category(places)
 

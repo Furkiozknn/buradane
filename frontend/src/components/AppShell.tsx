@@ -127,11 +127,31 @@ export function AppShell({
   const { favoriteIds, toggle: toggleFavorite, isFavorite, count: favoriteCount } = useFavorites();
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [sort, setSort] = useState<SortKey>("distance");
-  // Defaults to the pilot city, not whichever file sorts first alphabetically
-  // (which quietly made Ankara the default the moment it was added). Falls
-  // back to the largest dataset if İstanbul is ever dropped.
+  // A shared link's coordinates decide the city, not the default.
+  //
+  // MapCanvas honours the URL's y/x/z, so without this the map flew to the
+  // shared place while the QUERY origin stayed on the hardcoded default:
+  // opening a Sivas link showed a Sivas map with an İstanbul list reading
+  // "en yakın 42 m", and the first filter tap then answered with Sivas
+  // places labelled "694 km · yürüyerek 9259 dk". A UX audit found this as
+  // the third path of a bug whose other two paths (the city picker and the
+  // locate button) were already fixed - it is the same class, and this is
+  // the path a launch's traffic actually arrives on.
+  //
+  // Falls back to the pilot city, not to whichever file sorts first
+  // alphabetically (which quietly made Ankara the default the moment it was
+  // added), then to the largest dataset if İstanbul is ever dropped.
   const [activeCity, setActiveCity] = useState<string>(() => {
     const cities = datasetMeta.cities;
+    const shared = initial?.center;
+    if (shared) {
+      let best: { slug: string; d: number } | null = null;
+      for (const city of cities) {
+        const d = haversineMeters(shared, city.center);
+        if (!best || d < best.d) best = { slug: city.slug, d };
+      }
+      if (best) return best.slug;
+    }
     if (cities.some((c) => c.slug === "istanbul")) return "istanbul";
     return [...cities].sort((a, b) => b.count - a.count)[0]?.slug ?? "istanbul";
   });
@@ -146,7 +166,10 @@ export function AppShell({
    * across nine cities is not a real option. Planning a trip is an ordinary
    * reason to open a civic map.
    */
-  const [followUser, setFollowUser] = useState(true);
+  // A shared link is an explicit "show me here", which outranks the device
+  // until the user taps the locate button - otherwise a granted permission
+  // would silently drag them away from the place someone sent them.
+  const [followUser, setFollowUser] = useState(() => !initial?.center);
 
   // An explicit "take me here". The nonce is what makes re-picking the city
   // you already have selected work after you have panned away from it.
@@ -183,7 +206,11 @@ export function AppShell({
   const cityCenter =
     datasetMeta.cities.find((c) => c.slug === activeCity)?.center ?? FALLBACK_CENTER;
   const followingUser = followUser && location.status === "granted";
-  const center = followingUser ? { lat: location.lat, lon: location.lon } : cityCenter;
+  // A shared link's own coordinates win over the city centre until the user
+  // moves somewhere else: a link to a village must answer from the village,
+  // not from 60 km away at the provincial capital.
+  const [sharedCenter, setSharedCenter] = useState(() => initial?.center ?? null);
+  const center = followingUser ? { lat: location.lat, lon: location.lon } : (sharedCenter ?? cityCenter);
   /** Debounced free-text search: typing shouldn't fire a request per keystroke. */
   useEffect(() => {
     const timer = setTimeout(() => setQuery(searchInput), 320);
@@ -691,6 +718,7 @@ export function AppShell({
           // another city, which is why it re-centres even when we already
           // have a fix.
           setFollowUser(true);
+          setSharedCenter(null);
           if (location.status === "granted") {
             setViewport(null);
             setStaleViewport(false);
@@ -1043,6 +1071,11 @@ export function AppShell({
           nearestCity={nearestCity}
           onSelect={(city) => {
             setActiveCity(city.slug);
+            // The shared link's coordinates stop being the query origin the
+            // moment the user names somewhere else - otherwise picking a
+            // city would move the map and leave the results where the link
+            // pointed, which is the bug this pair of states exists to fix.
+            setSharedCenter(null);
             setCityPickerOpen(false);
             // Choosing a city means "show me there", which outranks a device
             // fix until the user taps the locate button again.

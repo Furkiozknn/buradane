@@ -19,6 +19,29 @@ import type { AmenityKey, CategorySlug } from "@/lib/types";
  * including a zoomed-out look at İstanbul or Konya - comfortably inside. */
 const MAX_BBOX_DEGREES = 3;
 
+/** Same ceiling the backend already enforces (`radius_m: le=50_000` in
+ * backend/app/api/places.py). Without it the radius path drove exactly the
+ * scan the bbox guard refuses: `radius_m=5000000` selected every province,
+ * answered 200 in 34 seconds, and blocked every other request for the
+ * duration - a security review measured an unrelated 15 ms query taking
+ * 18,8 s behind it. One door was guarded and the other was not. */
+const MAX_RADIUS_M = 50_000;
+
+/** A query with no radius and no bbox has no way to narrow which province
+ * files it must read, so it reads all of them: 167.829 records loaded,
+ * filtered, sorted and faceted to return sixty. Measured at 18 seconds cold
+ * on a bare `GET /api/places`. Geography is not an optional refinement in
+ * this product - "what is near me" is the question - so the honest answer
+ * is to require it rather than to serve a country-wide scan quietly. */
+const NEEDS_SCOPE =
+  "Arama için konum gerekli: lat+lon (+radius_m) ya da bbox gönderin.";
+
+/** A free-text query is matched against every candidate record, and the
+ * matcher splits it per candidate, so its length multiplies the whole
+ * scan. 1000 junk tokens turned a 25 ms query into 13,6 seconds. No real
+ * search is anywhere near this. */
+const MAX_QUERY_CHARS = 120;
+
 export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
 
@@ -66,6 +89,22 @@ export async function GET(request: Request) {
     }
   }
 
+  // Every query must name where it is looking. See NEEDS_SCOPE.
+  const radiusRaw = num("radius_m");
+  const hasCenter = lat !== undefined && lon !== undefined;
+  if (!bbox && !(hasCenter && radiusRaw !== undefined)) {
+    return NextResponse.json({ error: NEEDS_SCOPE }, { status: 400 });
+  }
+  const radius_m = radiusRaw === undefined ? undefined : Math.min(Math.max(1, radiusRaw), MAX_RADIUS_M);
+
+  const rawQuery = params.get("q") ?? undefined;
+  if (rawQuery !== undefined && rawQuery.length > MAX_QUERY_CHARS) {
+    return NextResponse.json(
+      { error: `Arama metni en fazla ${MAX_QUERY_CHARS} karakter olabilir.` },
+      { status: 400 },
+    );
+  }
+
   // Both ends clamped. The ceiling was always here; the FLOOR was not, and
   // without it `?limit=-1` reached `results.slice(offset, offset + limit)`
   // where slice(0, -1) means "everything but the last one" - one
@@ -87,13 +126,13 @@ export async function GET(request: Request) {
     sort: sortParam === "reliability" ? "reliability" : "distance",
     lat,
     lon,
-    radius_m: num("radius_m"),
+    radius_m,
     bbox,
     categories: params.getAll("category") as CategorySlug[],
     amenities: params.getAll("amenity") as AmenityKey[],
     freeOnly: params.get("free_only") === "true",
     openNow: params.get("open_now") === "true",
-    q: params.get("q") ?? undefined,
+    q: rawQuery,
     limit,
     offset,
   });

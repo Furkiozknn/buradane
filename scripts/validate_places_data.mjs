@@ -126,6 +126,25 @@ for (const file of files.sort()) {
     }
   }
 
+  // Per-province district floor. Eskişehir and Van shipped with ZERO
+  // districts - Overpass answered the boundary query with HTTP 200 and an
+  // empty element list during a 429 storm, the fetcher cached that, and
+  // 3.025 places lost their ilçe silently. Every gate was green: the file
+  // parsed, the schema held, the national district count was still in the
+  // hundreds of thousands. Only a per-province floor sees one province
+  // going dark.
+  if (data.fetch_unit === "province_boundary") {
+    const located = data.places.filter((p) => p.district_raw).length;
+    const share = located / data.places.length;
+    if (share < 0.9) {
+      problems.push(
+        `${file}: ilçesi bulunan kayıt oranı %${(100 * share).toFixed(1)} ` +
+          `(${located}/${data.places.length}). Sınır poligonları eksik olabilir - ` +
+          `.overpass-cache/provinces-full/<il>/boundaries.json silip yeniden çekin.`,
+      );
+    }
+  }
+
   total += data.places.length;
 }
 
@@ -221,6 +240,9 @@ if (legacyOverlaps.length) {
       `(ilçesi olan kopya kazanır):`,
   );
   for (const item of legacyOverlaps.slice(0, 5)) console.log("  ~ " + item);
+  if (legacyOverlaps.length > 5) {
+    console.log(`  ... ve ${legacyOverlaps.length - 5} tane daha`);
+  }
 }
 if (problems.length) {
   console.error(`\n${problems.length} sorun:`);
