@@ -685,6 +685,95 @@ function resolveNeedleLocation(
   return {};
 }
 
+/**
+ * Collapses stacks of indistinguishable generic places into one.
+ *
+ * OSM maps individual benches, individual parking bays and individual pitch
+ * segments, and the fetcher gives each of them the same synthesized label
+ * because none carries a name. Nationally that is 10.000 records (5,96%)
+ * whose only difference from a neighbour a few metres away is an id the
+ * user never sees: measured in one Balıkesir result page, 73 stacked rows
+ * with six "Otopark" on a single spot. Six identical pins on one point is
+ * not more information than one.
+ *
+ * Two deliberate limits keep this from losing anything real:
+ *
+ * 1. Only GENERIC names collapse. "Melike Eczanesi" and "Moda Parkı" are
+ *    never merged with anything, however close - a name is the evidence
+ *    that these are distinct places. 9.574 of the 10.000 redundant records
+ *    carry a synthesized label, so this covers the problem without
+ *    touching the cases where merging would be a guess.
+ * 2. Same category set and within ~30 m. A bench and a fountain at the same
+ *    spot stay two answers, because they answer different questions.
+ *
+ * Done here rather than in the data: the snapshot is re-importable OSM
+ * output and every id in it is real. This is a presentation rule, and the
+ * kept record is the most complete of the stack, so nothing a detail page
+ * could have shown is lost either.
+ */
+const GENERIC_PLACE_NAME =
+  /^(Umumi Tuvalet|Park|İçme Suyu Çeşmesi|Oturma Alanı|Çocuk Oyun Alanı|Spor Alanı|Otopark|Duş|Ücretsiz Wi-Fi Noktası|Cami|Eczane|Acil Toplanma Alanı|Kütüphane|Elektrikli Araç Şarj Noktası)$/;
+
+/** Metres. Two identically-named, identically-categorised records this
+ * close are the same thing to somebody standing there. */
+const STACK_RADIUS_M = 35;
+
+function completeness(place: Place): number {
+  return (
+    (place.opening_hours_raw ? 1 : 0) +
+    (place.address_line ? 1 : 0) +
+    (place.operator ? 1 : 0) +
+    (place.website || place.phone ? 1 : 0) +
+    (place.district ? 1 : 0) +
+    Object.values(place.amenities).filter((v) => v !== null).length
+  );
+}
+
+function collapseGenericStacks(places: Place[]): Place[] {
+  // Grouped by what makes two records indistinguishable, then clustered by
+  // real distance inside each group. A grid would be cheaper and wrong at
+  // the edges: two points 30 m apart routinely fall in different cells, and
+  // the stacks that survived a grid pass were exactly those.
+  const groups = new Map<string, Place[]>();
+  const passthrough: Place[] = [];
+  for (const place of places) {
+    if (!GENERIC_PLACE_NAME.test(place.name)) {
+      passthrough.push(place);
+      continue;
+    }
+    const key = `${place.name}|${[...place.categories].sort().join(",")}`;
+    const group = groups.get(key);
+    if (group) group.push(place);
+    else groups.set(key, [place]);
+  }
+
+  const kept: Place[] = [];
+  for (const group of groups.values()) {
+    if (group.length === 1) {
+      kept.push(group[0]);
+      continue;
+    }
+    // Greedy: each record either joins the first cluster it is close enough
+    // to, or starts one. Groups are small (a handful per result page), so
+    // the quadratic worst case never bites.
+    const clusters: Place[] = [];
+    for (const place of group) {
+      const near = clusters.find(
+        (leader) => haversineMeters(leader, place) <= STACK_RADIUS_M,
+      );
+      if (!near) {
+        clusters.push(place);
+      } else if (completeness(place) > completeness(near)) {
+        // Keep the better-documented record as the cluster's representative,
+        // so nothing a detail page could have shown is lost.
+        clusters[clusters.indexOf(near)] = place;
+      }
+    }
+    kept.push(...clusters);
+  }
+  return [...passthrough, ...kept];
+}
+
 /** Median coordinate of a city's places - resistant to a single node
  * mis-tagged on the other side of the country, which a mean is not. */
 function medianCenter(places: { lat: number; lon: number }[]): { lat: number; lon: number } {
@@ -1012,6 +1101,130 @@ export function queryPlaces(
   const hasStructure = effectiveCategories.length > 0 || effectiveAmenities.length > 0 || effectiveFreeOnly;
 
   /**
+   * Everything in range, with the stacks collapsed - computed ONCE.
+   *
+   * The collapse has to happen before any attribute filter, not after. It
+   * clusters by distance and greedy clustering depends on which records are
+   * present, so collapsing the amenity-filtered set and collapsing the
+   * unfiltered set could disagree by one - which showed up exactly where it
+   * matters: a facet chip read 17 while the filter it described returned
+   * 16. Collapsing the geographic candidates once and filtering that fixed
+   * set makes the chip and the filter arithmetically the same question.
+   *
+   * It is also cheaper: the geometry and the override merge now run once
+   * per query instead of once per relaxation round.
+   */
+  // Hoisted out of the closure below: TypeScript drops the narrowing of a
+  // captured parameter, and this is a plain boolean either way.
+  const overrideMap = overrides ?? {};
+  const hasOverrides = Object.keys(overrideMap).length > 0;
+
+  // Locals rather than the destructured parameters: narrowing a parameter
+  // does not survive into this block once a later closure captures it, and
+  // the alternative is a non-null assertion on every use.
+  const communityExtra: Place[] = communityPlaces ?? [];
+  // Bounds as plain numbers, not as nullable objects: the loop below runs
+  // once per candidate, and four number comparisons beat a property lookup
+  // through a reference the compiler has to keep re-proving is non-null.
+  const hasRadiusBox = box !== null;
+  const rMinLat = box?.minLat ?? 0;
+  const rMaxLat = box?.maxLat ?? 0;
+  const rMinLon = box?.minLon ?? 0;
+  const rMaxLon = box?.maxLon ?? 0;
+  const hasViewBox = bbox !== undefined;
+  const vMinLon = bbox?.[0] ?? 0;
+  const vMinLat = bbox?.[1] ?? 0;
+  const vMaxLon = bbox?.[2] ?? 0;
+  const vMaxLat = bbox?.[3] ?? 0;
+  const radiusMeters = radius_m ?? 0;
+  const centerLat = lat ?? 0;
+  const centerLon = lon ?? 0;
+
+  const geoFound: Place[] = [];
+  {
+
+    // Community places are searched on exactly the same terms as OSM ones -
+    // same filters, same radius, same status rules. A contributed place that
+    // only showed up under special conditions would be a second-class record,
+    // and the whole point of approving it is that it is now part of the map.
+    const candidates =
+      communityExtra.length > 0 ? [...scoped, ...communityExtra] : scoped;
+
+    for (const base of candidates) {
+      // Geometry BEFORE the override merge. An override never moves a place,
+      // so rejecting on coordinates first is exactly equivalent - and it is
+      // the difference between doing 47.474 dictionary lookups plus object
+      // spreads per query and doing a few hundred. Measured: one single
+      // community verification anywhere in Türkiye took a 2 km radius query
+      // from 8,8 ms to 28,3 ms, because `hasOverrides` is global and the
+      // merge ran before the cheap rejection. Every filter that legitimately
+      // needs the merged record (status, access, open-now, score) still runs
+      // after it, below.
+      // Cheap rejection before the trigonometry, same idea as PostGIS using
+      // the GiST index before ST_Distance.
+      if (
+        hasRadiusBox &&
+        (base.lat < rMinLat || base.lat > rMaxLat || base.lon < rMinLon || base.lon > rMaxLon)
+      ) {
+        continue;
+      }
+
+      if (
+        hasViewBox &&
+        (base.lon < vMinLon || base.lon > vMaxLon || base.lat < vMinLat || base.lat > vMaxLat)
+      ) {
+        continue;
+      }
+
+      const place = hasOverrides ? applyOverride(base, overrideMap[base.id]) : base;
+
+      if (place.status === "pending_review" || place.status === "permanently_closed") continue;
+
+      // A place tagged `access=private` is inside someone's property. Sending
+      // a person in a hurry to a door that will not open is the worst thing
+      // this app can do, so these never reach a result - 155 places in the
+      // national snapshot restrict access, and every one was being served as
+      // freely usable before this line. `customers` and `permit` DO reach
+      // results: they are usable under a condition a person can meet, and
+      // they carry a badge saying so.
+      if (place.access === "private") continue;
+
+
+      // Excludes places we KNOW are closed, not places we have no hours for.
+      //
+      // Only 2,45% of the national dataset carries `opening_hours` at all:
+      // across 47.474 places, 444 are known open, 603 known closed, and
+      // 46.309 unknown. Requiring "open" would therefore discard 46.309
+      // places to filter out 603. A park with no posted hours
+      // is almost certainly open; treating silence as "closed" is the same
+      // mistake as treating a null amenity as "no", and here it made the
+      // filter actively harmful.
+      //
+      // The chip is labelled "Kapalıları gizle" to match exactly this.
+      if (openNow && isOpenNow(place.opening_hours_raw) === "closed") continue;
+
+      // Matched against a precomputed, diacritic-free blob of name, address,
+      // district and province. Two things this fixes at once: "Kadıköy" now
+      // finds the places tagged "Kadikoy" (resolved district, not raw text),
+      // and "kadikoy" typed without a Turkish keyboard finds all of them
+      // rather than the two spelled that way.
+
+      // A number sentinel rather than a nullable local. queryPlaces has grown
+      // large enough that TypeScript's control-flow analysis gives up inside
+      // it and reports narrowed values as possibly-null; writing the hot loop
+      // in terms it does not have to narrow is both a fix and, marginally, a
+      // faster loop.
+      const distance = hasCenter
+        ? haversineMeters({ lat: centerLat, lon: centerLon }, { lat: place.lat, lon: place.lon })
+        : -1;
+      if (hasCenter && radiusMeters > 0 && distance > radiusMeters) continue;
+
+      geoFound.push({ ...place, distance_m: distance >= 0 ? distance : null });
+    }
+  }
+  const geoCandidates = collapseGenericStacks(geoFound);
+
+  /**
    * Graceful relaxation, in order of what costs the user least to lose.
    *
    * 1. The free-text needle. Residual text is matched against place names and
@@ -1127,95 +1340,44 @@ export function queryPlaces(
     },
   };
 
+
+  /** The attribute filters, over the fixed collapsed set above. */
   function collect(needle: string | null, activeAmenities: AmenityKey[]): Place[] {
     const found: Place[] = [];
-    const hasOverrides = overrides !== undefined && Object.keys(overrides).length > 0;
-
-    // Community places are searched on exactly the same terms as OSM ones -
-    // same filters, same radius, same status rules. A contributed place that
-    // only showed up under special conditions would be a second-class record,
-    // and the whole point of approving it is that it is now part of the map.
-    const candidates =
-      communityPlaces && communityPlaces.length > 0
-        ? [...scoped, ...communityPlaces]
-        : scoped;
-
-    for (const base of candidates) {
-      // Geometry BEFORE the override merge. An override never moves a place,
-      // so rejecting on coordinates first is exactly equivalent - and it is
-      // the difference between doing 47.474 dictionary lookups plus object
-      // spreads per query and doing a few hundred. Measured: one single
-      // community verification anywhere in Türkiye took a 2 km radius query
-      // from 8,8 ms to 28,3 ms, because `hasOverrides` is global and the
-      // merge ran before the cheap rejection. Every filter that legitimately
-      // needs the merged record (status, access, open-now, score) still runs
-      // after it, below.
-      if (box) {
-        // Cheap rejection before the trigonometry, same idea as PostGIS using
-        // the GiST index before ST_Distance.
-        if (base.lat < box.minLat || base.lat > box.maxLat || base.lon < box.minLon || base.lon > box.maxLon) {
-          continue;
-        }
+    for (const place of geoCandidates) {
+      if (
+        effectiveCategories.length > 0 &&
+        !place.categories.some((c) => effectiveCategories.includes(c))
+      ) {
+        continue;
       }
-
-      if (bbox) {
-        const [minLon, minLat, maxLon, maxLat] = bbox;
-        if (base.lon < minLon || base.lon > maxLon || base.lat < minLat || base.lat > maxLat) continue;
-      }
-
-      const place = hasOverrides ? applyOverride(base, overrides[base.id]) : base;
-
-      if (place.status === "pending_review" || place.status === "permanently_closed") continue;
-
-      // A place tagged `access=private` is inside someone's property. Sending
-      // a person in a hurry to a door that will not open is the worst thing
-      // this app can do, so these never reach a result - 155 places in the
-      // national snapshot restrict access, and every one was being served as
-      // freely usable before this line. `customers` and `permit` DO reach
-      // results: they are usable under a condition a person can meet, and
-      // they carry a badge saying so.
-      if (place.access === "private") continue;
-
-      if (effectiveCategories.length > 0 && !place.categories.some((c) => effectiveCategories.includes(c))) continue;
 
       // An amenity filter means "definitely yes" - `null` (unknown) must not
       // satisfy it, or the app would claim facilities it has no evidence for.
-      if (activeAmenities.length > 0 && !activeAmenities.every((key) => place.amenities[key] === true)) continue;
+      if (
+        activeAmenities.length > 0 &&
+        !activeAmenities.every((key) => place.amenities[key] === true)
+      ) {
+        continue;
+      }
 
       if (effectiveFreeOnly && place.price_type !== "free") continue;
 
       // Excludes places we KNOW are closed, not places we have no hours for.
-      //
-      // Only 2,45% of the national dataset carries `opening_hours` at all:
-      // across 47.474 places, 444 are known open, 603 known closed, and
-      // 46.309 unknown. Requiring "open" would therefore discard 46.309
-      // places to filter out 603. A park with no posted hours
-      // is almost certainly open; treating silence as "closed" is the same
-      // mistake as treating a null amenity as "no", and here it made the
-      // filter actively harmful.
-      //
-      // The chip is labelled "Kapalıları gizle" to match exactly this.
       if (openNow && isOpenNow(place.opening_hours_raw) === "closed") continue;
 
-      // Matched against a precomputed, diacritic-free blob of name, address,
-      // district and province. Two things this fixes at once: "Kadıköy" now
-      // finds the places tagged "Kadikoy" (resolved district, not raw text),
-      // and "kadikoy" typed without a Turkish keyboard finds all of them
-      // rather than the two spelled that way.
       if (needle) {
         const haystack =
           searchTextCache.get(place.id) ??
-          foldWords([place.name, place.address_line, place.district, place.province].filter(Boolean).join(" "));
+          foldWords(
+            [place.name, place.address_line, place.district, place.province]
+              .filter(Boolean)
+              .join(" "),
+          );
         if (!matchesWordPrefix(haystack, needle)) continue;
       }
 
-      let distance: number | null = null;
-      if (hasCenter) {
-        distance = haversineMeters({ lat: lat!, lon: lon! }, { lat: place.lat, lon: place.lon });
-        if (radius_m && distance > radius_m) continue;
-      }
-
-      found.push({ ...place, distance_m: distance });
+      found.push(place);
     }
     return found;
   }

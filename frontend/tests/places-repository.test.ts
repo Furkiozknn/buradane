@@ -534,6 +534,45 @@ describe("facets", () => {
     expect(shade).toBe(actual.total);
   });
 
+  it("collapses stacks of identical generic places, and never named ones", () => {
+    // OSM maps individual benches and parking bays; the fetcher gives each
+    // the same synthesized label, so a Balıkesir result page carried 73
+    // stacked rows with six "Otopark" on one point. Six identical pins is
+    // not more information than one.
+    const result = queryPlaces({ lat: 39.6484, lon: 27.8826, radius_m: 3000, limit: 300 });
+    const stacks = new Map<string, number>();
+    for (const place of result.places) {
+      const key = `${place.name}|${[...place.categories].sort().join(",")}|${place.lat.toFixed(4)},${place.lon.toFixed(4)}`;
+      stacks.set(key, (stacks.get(key) ?? 0) + 1);
+    }
+    // ~11 m apart at four decimals: nothing identical should survive that
+    // close together.
+    const worst = Math.max(...stacks.values());
+    expect(worst).toBe(1);
+
+    // Named places are never merged, however close - a name is the evidence
+    // that two records are different places.
+    const named = queryPlaces({ ...ISTANBUL, radius_m: 3000, q: "eczane", limit: 300 });
+    const namedIds = new Set(named.places.map((p) => p.id));
+    expect(namedIds.size).toBe(named.places.length);
+  });
+
+  it("keeps facet counts equal to what the filter returns", () => {
+    // The collapse clusters by distance, and greedy clustering depends on
+    // which records are present - so collapsing the amenity-filtered set
+    // and collapsing the unfiltered one disagreed by one, and a chip read
+    // 17 while its own filter returned 16. Collapsing the geographic
+    // candidates ONCE, before any attribute filter, is what makes the chip
+    // and the filter the same question.
+    const base = { ...ISTANBUL, radius_m: 20_000 } as const;
+    const facets = queryPlaces({ ...base, limit: 50 }).facets;
+    for (const key of ["has_shade", "wheelchair_accessible", "has_drinking_water"] as const) {
+      const claimed = facets.amenities[key] ?? 0;
+      const actual = queryPlaces({ ...base, amenities: [key], limit: 20_000 }).total;
+      expect(actual, `${key} çipi ${claimed} diyor, filtre ${actual} döndürüyor`).toBe(claimed);
+    }
+  });
+
   it("counts notClosed with the same rule the filter uses", () => {
     const result = queryPlaces({ ...ISTANBUL, radius_m: 20_000, limit: 5 });
     const filtered = queryPlaces({ ...ISTANBUL, radius_m: 20_000, openNow: true, limit: 5 });
