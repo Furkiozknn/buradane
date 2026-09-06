@@ -571,7 +571,14 @@ export function AppShell({
   }, [result?.applied.relaxedBy?.needleLocation, datasetMeta.cities, activeCity]);
 
   const filterCount = activeFilterCount(filters);
-  const hasAnyFilter = filterCount > 0 || category !== null || query.trim().length > 0;
+  // Kept apart because the empty state has to name the right culprit. Typing
+  // a name that is not in the snapshot used to be reported as "Filtrelere
+  // uyan yer yok - seçtiğin filtreleri gevşetmeyi dene", to a user who had
+  // set no filters at all, with a "Filtreleri temizle" button. Telling
+  // someone to undo something they never did is a dead end dressed as help.
+  const hasStructuralFilter = filterCount > 0 || category !== null;
+  const searchText = query.trim();
+  const hasAnyFilter = hasStructuralFilter || searchText.length > 0;
 
   // Where a suggested place would land: the map's own centre, which accounts
   // for the sheet/sidebar padding. The bbox midpoint would be the centre of
@@ -1060,7 +1067,7 @@ export function AppShell({
                   onAction={() => fetchPlaces(viewport ? { bbox: viewport.bbox } : {})}
                 />
               ) : places.length === 0 ? (
-                hasAnyFilter ? (
+                hasStructuralFilter ? (
                   <EmptyState
                     title="Filtrelere uyan yer yok"
                     body="Seçtiğin filtreleri gevşetmeyi ya da haritayı biraz kaydırmayı dene."
@@ -1073,6 +1080,20 @@ export function AppShell({
                     // A dead end is the worst possible outcome here: if we
                     // genuinely have nothing, the useful move is letting the
                     // user add what they know is there.
+                    secondaryLabel="Yer öner"
+                    onSecondary={() => setSuggestOpen(true)}
+                  />
+                ) : searchText ? (
+                  // A name the snapshot does not carry. Most Turkish POIs in
+                  // OSM are unnamed, so this is a common and honest outcome -
+                  // but it is not a filter problem, and the fix on offer must
+                  // be the one that applies. Quoting what they typed also
+                  // catches the everyday cause: a typo they can now see.
+                  <EmptyState
+                    title={`"${searchText.slice(0, 40)}" için sonuç yok`}
+                    body="Bu ad çevredeki kayıtlarda geçmiyor. Yazımı kontrol edebilir ya da ne aradığını yazabilirsin — örneğin “tuvalet”, “eczane”, “park”."
+                    actionLabel="Aramayı temizle"
+                    onAction={() => setSearchInput("")}
                     secondaryLabel="Yer öner"
                     onSecondary={() => setSuggestOpen(true)}
                   />
