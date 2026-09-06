@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { allPlaces, applyOverride, datasetMeta, parseQueryText, queryPlaces } from "@/lib/places-repository";
+import { foldAscii } from "@/lib/administrative";
 import { isOpenNow } from "@/lib/opening-hours";
 import type { Place } from "@/lib/types";
 
@@ -54,6 +55,66 @@ describe("dataset", () => {
       expect(Number.isFinite(place.lon)).toBe(true);
       expect(place.source.license).toBeTruthy();
     }
+  });
+
+  it("binds EVERY place to a province - the file itself knows it", () => {
+    // Found live at 48 provinces: records without addr:* tags loaded with
+    // province null, so "hakkari çeşme" matched nothing for "hakkari", the
+    // engine dropped the needle and served 520 nationwide fountains as the
+    // answer. The file IS the province fetch unit; its label resolves
+    // against the 81-province table and must fill the gap.
+    let unbound = 0;
+    for (const place of allPlaces()) {
+      if (!place.province) unbound += 1;
+    }
+    expect(unbound).toBe(0);
+  });
+});
+
+describe("province-scoped text search", () => {
+  it("keeps a province name in the query as a filter instead of dropping it", () => {
+    // Data-driven so it keeps testing something real as provinces land:
+    // pick a province that is NOT the most common one, and a category it
+    // actually has. Hardcoding "gümüşhane çeşme" tested a pair that does
+    // not exist in the data (Gümüşhane has no fountains), where relaxing
+    // IS the correct answer - the assertion would have been about the
+    // wrong thing.
+    const all = allPlaces();
+    const byProvince = new Map<string, Map<string, number>>();
+    for (const place of all) {
+      if (!place.province) continue;
+      const cats = byProvince.get(place.province) ?? new Map<string, number>();
+      for (const slug of place.categories) cats.set(slug, (cats.get(slug) ?? 0) + 1);
+      byProvince.set(place.province, cats);
+    }
+    // A small province with a category that also exists nationally, so the
+    // national count is strictly larger and scoping is observable.
+    const candidates = [...byProvince.entries()]
+      .map(([province, cats]) => {
+        const [slug, count] = [...cats.entries()].sort((a, b) => b[1] - a[1])[0] ?? [];
+        return { province, slug, count: count ?? 0 };
+      })
+      .filter((c) => c.slug && c.count >= 5)
+      .sort((a, b) => a.count - b.count);
+    const pick = candidates[Math.floor(candidates.length / 2)];
+    expect(pick).toBeDefined();
+
+    const scoped = queryPlaces({ q: `${pick.province} ${pick.slug}`, limit: 500 });
+    expect(scoped.total).toBeGreaterThan(0);
+    // Every hit is either IN that province, or legitimately carries the
+    // name in its own text - "Adıyaman Eczanesi" in Adana is a correct
+    // answer for a text search, not contamination, and asserting "all in
+    // province" would be asserting a bug. What must never come back is a
+    // place unrelated to the word, which is what happened while province
+    // was null: the needle matched nothing, got dropped, and the query
+    // answered with the whole country's pharmacies.
+    const folded = foldAscii(pick.province);
+    for (const place of scoped.places) {
+      const own = foldAscii([place.name, place.address_line].filter(Boolean).join(" "));
+      expect(place.province === pick.province || own.includes(folded)).toBe(true);
+    }
+    const national = queryPlaces({ q: pick.slug, limit: 1 });
+    expect(scoped.total).toBeLessThan(national.total);
   });
 });
 

@@ -31,8 +31,8 @@ import type {
 import { boundingBox, haversineMeters } from "./geo";
 import { isOpenNow } from "./opening-hours";
 import { QUERY_NOTICES, SEARCH_SYNONYMS, type QueryNotice } from "./categories";
-import { foldAscii, parseLocality, resolveDistrict } from "./administrative";
-import { officialDistrict } from "./admin-divisions";
+import { findProvince, foldAscii, parseLocality, resolveDistrict } from "./administrative";
+import { divisionCounts, officialDistrict } from "./admin-divisions";
 
 interface RawDataset {
   city?: string;
@@ -160,6 +160,9 @@ function deriveCommunitySignals(place: RawDataset["places"][number]) {
 function localityFromTags(
   tags: Record<string, string> | undefined,
   raw?: { district?: string | null; province?: string | null },
+  /** The province the snapshot file itself covers, when known. Only used to
+   * disambiguate names that are meaningless without it - see below. */
+  fileProvince?: string | null,
 ): {
   district: string | null;
   province: string | null;
@@ -174,7 +177,35 @@ function localityFromTags(
   const fromCity = parseLocality(provinceRaw);
   const explicitDistrict = resolveDistrict(districtRaw);
 
-  const heuristicDistrict = explicitDistrict?.name ?? fromCity.district?.name ?? null;
+  let heuristicDistrict = explicitDistrict?.name ?? fromCity.district?.name ?? null;
+  const knownProvince =
+    fromCity.province?.name ?? explicitDistrict?.province ?? fileProvince ?? null;
+
+  // `addr:district=Merkez` - 537 places nationally. "Merkez" is the central
+  // district of *some* province, which on a national map means nothing on
+  // its own, and it collapsed fifty-odd different districts onto one label.
+  // The official boundary list spells these "<İl> Merkez" (Gümüşhane
+  // Merkez, Bayburt Merkez), so with the province in hand the real district
+  // name is recoverable rather than guessed.
+  if (heuristicDistrict && knownProvince && foldAscii(heuristicDistrict) === "merkez") {
+    heuristicDistrict = officialDistrict(`${knownProvince} Merkez`)?.name ?? null;
+  }
+
+  // Anything the official 973-district list does not recognise is NOT
+  // reported as a district. At national scale the residue is 71 places
+  // across 34 names, every one an OSM artifact: province names in the
+  // district field (Gaziantep, Kocaeli (izmit)), misspellings (Gazianetp,
+  // Afyokkarahisar, Konyalatı, Osmanazi) and things that are not districts
+  // at all (Atatürk Bulvarı, Kumlubel Mahallesi). Showing those as the
+  // district claims knowledge we do not have - CLAUDE.md §6.2, "do not
+  // invent the unknown" - and it fragments district grouping and search.
+  // The province survives, which is what a user actually navigates by.
+  // Guarded on the list being present: without it (fresh clone, stripped
+  // deployment) every name would be "unrecognised" and this would wipe
+  // every district in the dataset.
+  if (heuristicDistrict && divisionCounts() && !officialDistrict(heuristicDistrict)) {
+    heuristicDistrict = null;
+  }
 
   // The official list (OSM admin boundaries, 973 districts) outranks the
   // heuristic when it recognises the name: its spelling is the boundary
@@ -250,11 +281,24 @@ function loadDataset() {
     const raw = JSON.parse(fs.readFileSync(path.join(dataDir, file), "utf-8")) as RawDataset;
     const slug = raw.city ?? file.replace(/^places\./, "").replace(/\.json$/, "");
 
+    // The file IS the province fetch unit, so its label is a province name
+    // and resolves against the 81-entry table. Used as the LAST fallback
+    // only: addr:* tags, when present, stay authoritative - a place tagged
+    // into a neighbouring province keeps that tag. Without this, every
+    // record lacking addr tags loaded with province null, which made
+    // "hakkari çeşme" match nothing for "hakkari"; the engine then dropped
+    // the needle and answered with every fountain in the country. Honest
+    // limit: a bbox sliver reaching into a neighbouring untagged area gets
+    // labelled with the fetch province - findable beats invisible, and the
+    // tagged path still wins wherever OSM actually says otherwise.
+    const fileProvince = findProvince(raw.city_label ?? slug)?.name ?? null;
+
     for (const place of raw.places) {
-      const locality = localityFromTags(place.raw_tags, {
-        district: place.district_raw,
-        province: place.province_raw,
-      });
+      const locality = localityFromTags(
+        place.raw_tags,
+        { district: place.district_raw, province: place.province_raw },
+        fileProvince,
+      );
       places.push({
         ...place,
         // Snapshots taken before the fetcher learned about these still carry
@@ -263,7 +307,7 @@ function loadDataset() {
         // New snapshots ship them directly and this is a no-op.
         access: place.access ?? accessFromTags(place.raw_tags),
         district: place.district ?? locality.district,
-        province: place.province ?? locality.province,
+        province: place.province ?? locality.province ?? fileProvince,
         ...deriveCommunitySignals(place),
       });
     }
