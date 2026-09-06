@@ -82,6 +82,23 @@ kovasını paylaşır: katkı gönderimi tüm site için 10 istek/10 dakika ile
 sınırlanır. Bu bilinen ve belgelenmiş bir sınırdır
 (`frontend/src/lib/rate-limit.ts` dosya başında yazılıdır).
 
+### HSTS — burada eklenir, uygulamada değil
+
+Uygulama kendi güvenlik başlıklarını gönderir (CSP `frontend/src/proxy.ts`,
+diğerleri `frontend/next.config.ts`), ama **HSTS'i göndermez**. HSTS bir alan
+adı hakkında verilmiş bir sözdür: "bu host'a bir daha asla HTTP'yle bağlanma."
+Gerçek bir hostname ve çalışan bir sertifika olmadan bu söz verilemez, ve
+yanlış verilirse geri alması `max-age` süresi kadar sürer. Bu yüzden TLS'i
+sonlandıran yere aittir:
+
+```nginx
+add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+```
+
+`preload` direktifini **ilk gün eklemeyin**. Tarayıcı preload listesinden
+çıkmak aylar sürer; alt alan adlarının tamamının HTTPS olduğundan emin
+olduktan sonra eklenir.
+
 ## 5. Service worker sürümü
 
 `frontend/public/sw.js` içindeki `VERSION` sabiti, **önbellekteki bir kaydın
@@ -98,7 +115,18 @@ curl -sf "$SITE/api/places?lat=41.0082&lon=28.9784&radius_m=2000&limit=5" >/dev/
 curl -s -o /dev/null -w "%{http_code}\n" "$SITE/api/admin/auth"          # token'sız: 401 bekleniyor
 curl -s -o /dev/null -w "%{http_code}\n" "$SITE/yer/node%2F123456"        # 200 ya da 404, 500 değil
 curl -sI "$SITE/sitemap.xml" | head -1                                    # 200
+
+# CSP her belgede nonce taşımalı; iki istek iki FARKLI nonce vermeli.
+curl -sI "$SITE/" | grep -i content-security-policy
+curl -sI "$SITE/" | grep -io "nonce-[^']*"
 ```
+
+**Ayrıca tarayıcı konsolunu aç ve boş olduğunu gör.** Bu adım isteğe bağlı
+değil: CSP'nin bozduğu bir sayfa sunucu tarafında hatasızdır — HTML 200
+döner, içerik render olur, yalnızca hiçbir script çalışmaz. Bu depoda tam
+olarak bu oldu; `curl` temiz görünürken uygulama ölü bir kabuktu ve durumu
+yalnızca konsol söyledi. Harita canvas'ı çiziliyorsa ve konsol sessizse CSP
+doğrudur.
 
 Ayrıca elle: konum izni vermeden ana sayfayı aç, şehir seçiciden başka bir il
 seç, sonuçların **o ile** ait olduğunu ve mesafelerin makul olduğunu gör.

@@ -29,6 +29,11 @@ frontend/public/maplibre/
 # is the OSM snapshot; runtime user submissions are local state.
 frontend/data/contributions.json
 
+# Run logs from the data pipeline. scripts/fetch_by_district.py writes one per
+# run (district-fetch.log) and it is a record of one machine's Overpass
+# session, not source - the dataset it produced is what belongs in the repo.
+*.log
+
 # OS
 .DS_Store
 Thumbs.db

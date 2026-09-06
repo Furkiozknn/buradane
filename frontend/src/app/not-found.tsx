@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { connection } from "next/server";
 import { MapPin } from "lucide-react";
 
 /**
@@ -6,8 +7,18 @@ import { MapPin } from "lucide-react";
  * than listing what went wrong: in this app a dead URL is almost always a
  * mistyped or truncated share link, and "here is the map, find it again" is
  * more useful than an anatomy of the failure.
+ *
+ * `await connection()` makes this render per request instead of being baked
+ * at build time. That is not a preference: src/proxy.ts sends a CSP with a
+ * fresh nonce on every response, and a prebuilt page carries build-time
+ * script tags that no longer match it - the browser blocked both of Next's
+ * inline scripts here while every other route was clean. A 404 is rare
+ * enough that one render costs nothing, and the alternative is a page that
+ * logs CSP violations and never hydrates.
  */
-export default function NotFound() {
+export default async function NotFound() {
+  await connection();
+
   return (
     <main className="flex min-h-[100dvh] items-center justify-center bg-bg px-6">
       <div className="w-full max-w-sm text-center">
