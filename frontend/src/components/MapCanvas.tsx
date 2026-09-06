@@ -7,6 +7,7 @@ import {
   Marker,
   NavigationControl,
   setWorkerUrl,
+  type ExpressionSpecification,
   type GeoJSONSource,
   type MapLayerMouseEvent,
   type MapMouseEvent,
@@ -40,6 +41,57 @@ import { buildPinImage } from "@/lib/pin-image";
 function prefersReducedMotion(): boolean {
   return typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
+
+/**
+ * Cluster colours.
+ *
+ * These are hex literals rather than the `globals.css` tokens the rest of the
+ * app uses, because MapLibre paint properties are evaluated on the GPU and
+ * cannot read CSS custom properties. They also stay fixed across light and
+ * dark mode on purpose: the basemap underneath does not change with the OS
+ * theme, so a colour that reads well on pale grey reads well in both.
+ *
+ * The old design painted every cluster near-black. That was honest - a
+ * cluster holds several categories and claiming one of them would be a lie -
+ * but at the default zoom it made the map a field of identical ink blots
+ * (measured: ~30 of them filling the İstanbul view), which told the user
+ * nothing about what was around them and buried the map itself.
+ *
+ * The honest half of the idea survives, and the useful half is recovered:
+ * a cluster whose members ALL share a category is painted that category's
+ * colour, because that is simply a fact about it. Mixed clusters keep a
+ * neutral fill - now the brand teal instead of near-black, which carries the
+ * product's own colour onto its centrepiece without claiming a category.
+ */
+const CLUSTER_MIXED = "#0B6E5F";
+
+/** Category slug -> position in CATEGORIES. Written onto every feature so the
+ * clusterer can aggregate it; the paint expression below reverses it. */
+const CATEGORY_INDEX = new Map(CATEGORIES.map((category, index) => [category.slug, index]));
+
+/**
+ * `catMin === catMax` means every member of the cluster shares one category,
+ * and only then is that category's colour used. Built from CATEGORIES rather
+ * than written out, so adding a category cannot leave the map behind.
+ */
+/** `match` takes its label/value pairs inline - index, colour, index,
+ * colour... - so the list is flattened, with CLUSTER_MIXED as the fallback
+ * for an index no category claims. The cast is unavoidable: the spec types
+ * this as a fixed-length tuple, and a list built from CATEGORIES at runtime
+ * cannot satisfy that however correct it is. */
+const CLUSTER_BY_CATEGORY = [
+  "match",
+  ["get", "catMin"],
+  ...CATEGORIES.flatMap((category, index) => [index, category.pin]),
+  CLUSTER_MIXED,
+] as unknown as ExpressionSpecification;
+
+const CLUSTER_FILL: ExpressionSpecification = [
+  "case",
+  ["==", ["get", "catMin"], ["get", "catMax"]],
+  CLUSTER_BY_CATEGORY,
+  CLUSTER_MIXED,
+];
 
 const SOURCE_ID = "places";
 const CLUSTER_LAYER = "clusters";
@@ -135,6 +187,9 @@ export default function MapCanvas({
           id: place.id,
           name: place.name,
           category: place.categories[0] ?? "park",
+          // Numeric twin of `category`, purely so the clusterer can take a
+          // min and a max of it - see clusterProperties.
+          catIndex: CATEGORY_INDEX.get(place.categories[0] ?? "park") ?? -1,
           reliable: place.reliability_score >= 0.5 ? 1 : 0,
         },
       })),
@@ -211,6 +266,15 @@ export default function MapCanvas({
         cluster: true,
         clusterRadius: 52,
         clusterMaxZoom: 15,
+        // Carries enough information up to the cluster to tell a pure group
+        // from a mixed one WITHOUT listing its contents: if the smallest and
+        // largest category index in a cluster are equal, every member shares
+        // that category. Two numbers, aggregated by the clusterer itself, so
+        // this costs nothing per frame.
+        clusterProperties: {
+          catMin: ["min", ["get", "catIndex"]],
+          catMax: ["max", ["get", "catIndex"]],
+        },
       });
 
       map.addLayer({
@@ -219,9 +283,10 @@ export default function MapCanvas({
         source: SOURCE_ID,
         filter: ["has", "point_count"],
         paint: {
-          // Neutral clusters on purpose: a cluster has no single category, so
-          // coloring it with one would be a lie.
-          "circle-color": "#1C1917",
+          // Pure clusters wear their category; mixed ones stay neutral. See
+          // CLUSTER_MIXED above for why this is a statement of fact rather
+          // than the lie the previous single-colour comment guarded against.
+          "circle-color": CLUSTER_FILL,
           "circle-opacity": 0.92,
           "circle-radius": ["step", ["get", "point_count"], 18, 10, 22, 50, 27, 200, 33],
           "circle-stroke-width": 3,
@@ -240,7 +305,17 @@ export default function MapCanvas({
           "text-size": 13,
           "text-allow-overlap": true,
         },
-        paint: { "text-color": "#FFFFFF" },
+        paint: {
+          "text-color": "#FFFFFF",
+          // White alone was enough while every cluster was near-black. Now a
+          // cluster can be any of fourteen category colours, and the lighter
+          // ones do not carry white text: measured, white on the amber used
+          // for "Acil Toplanma Alanı" (#CA8A04) is 2.94:1. A thin dark halo
+          // costs nothing, is invisible on the dark fills, and puts every
+          // colour comfortably over the line.
+          "text-halo-color": "rgba(0, 0, 0, 0.4)",
+          "text-halo-width": 1,
+        },
       });
 
       map.addLayer({

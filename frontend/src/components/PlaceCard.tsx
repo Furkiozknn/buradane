@@ -1,9 +1,9 @@
 "use client";
 
-import { BadgeCheck, ChevronRight, CircleAlert, Info, Navigation } from "lucide-react";
+import { BadgeCheck, ChevronRight, CircleAlert, Navigation } from "lucide-react";
 
 import { AMENITY_BY_KEY, categoryMeta } from "@/lib/categories";
-import { bearingDegrees, bearingLabel, formatDistance, walkingMinutes, type LatLon } from "@/lib/geo";
+import { bearingDegrees, bearingLabel, formatDistance, type LatLon } from "@/lib/geo";
 import { DirectionArrow } from "./DirectionArrow";
 import { isOpenNow } from "@/lib/opening-hours";
 import type { AmenityKey, Place } from "@/lib/types";
@@ -89,9 +89,15 @@ export function PlaceCard({
           )}
         </div>
 
+        {/* Walking minutes used to sit between the category and the price.
+            It is the same fact as the distance already shown in brand colour
+            two lines up, derived from it, and it cost the line enough width
+            that the price fell off the end: at 390px the row read "Ücretsiz
+            Wi-Fi · yürüyerek 1 dk · Ücr…". Price is what decides whether
+            someone walks there; the duplicate is what had to go. Walking
+            time is still on the detail panel, where there is room for it. */}
         <p className="mt-0.5 truncate text-[12.5px] text-text-secondary">
           {primary.label}
-          {place.distance_m != null && <> · yürüyerek {walkingMinutes(place.distance_m)} dk</>}
           {place.price_type === "free" && <> · Ücretsiz</>}
           {place.price_type === "paid" && <> · Ücretli</>}
         </p>
@@ -132,22 +138,42 @@ export function PlaceCard({
             </Badge>
           ))}
 
+          {/* Status, but only when there is a status.
+
+              This used to be an either/or that always fired: a warning when
+              the record scored low, and otherwise a neutral badge carrying
+              `freshness_label`. That label is a constant - every OSM record
+              in the snapshot is built with the literal string "Topluluk
+              doğrulaması yok" and verification_count 0 - so half the list
+              ended every card with the same sentence. Measured on İstanbul:
+              100% of cards carried one of the two, and the neutral half
+              could not distinguish anything from anything.
+
+              A badge that appears on every row is not information, it is
+              texture. Now the card speaks only when it has something to say:
+              a caution when the record is weak, a count when someone has
+              actually verified it, and nothing when neither is true - which
+              finally lets the absence of a badge mean "nothing known against
+              this". The full freshness wording still appears on the detail
+              panel, where it sits next to the button that can change it. */}
           {lowConfidence ? (
-            <Badge tone="warning" icon={<CircleAlert size={12} />}>
+            // Neutral, not amber. On this card amber means "this will stop
+            // you getting in" - kapalı, müşterilere açık, izinle girilir -
+            // and it earns its alarm by being rare. Data freshness is not
+            // that: measured on İstanbul, 50,7% of records fall under the
+            // threshold, so an amber warning here paints half the list as
+            // hazardous and the colour stops meaning anything on the half
+            // where it matters. Same words, same visibility, honest weight.
+            <Badge tone="neutral" icon={<CircleAlert size={12} />}>
               Bilgi güncelliği düşük
             </Badge>
-          ) : (
-            <Badge
-              tone="neutral"
-              // A check mark is a claim that someone confirmed this. Show it
-              // only when someone actually did; an unverified record gets an
-              // informational mark, because "Topluluk doğrulaması yok" under
-              // a green tick reads as the opposite of what it says.
-              icon={place.verification_count > 0 ? <BadgeCheck size={12} /> : <Info size={12} />}
-            >
-              {place.freshness_label}
+          ) : place.verification_count > 0 ? (
+            // A check mark is a claim that someone confirmed this, so it is
+            // shown only when someone actually did.
+            <Badge tone="success" icon={<BadgeCheck size={12} />}>
+              {place.verification_count} kişi doğruladı
             </Badge>
-          )}
+          ) : null}
         </div>
       </div>
 

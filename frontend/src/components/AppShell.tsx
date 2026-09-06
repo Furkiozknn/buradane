@@ -977,11 +977,17 @@ export function AppShell({
                         // over 200 cards is a 236x disagreement the reader
                         // cannot see. formatDistance, not raw metres: the
                         // header used to read "en yakın 692778 m".
+                        //
+                        // Phrased as a sentence rather than "200 / 722": the
+                        // slash reads as a page indicator or a fraction, and
+                        // the first number is neither - it is how many of the
+                        // matches are in the list. Same fact, same honesty,
+                        // no decoding.
                         `${
                           result && result.total > places.length
-                            ? `${places.length} / ${result.total}`
-                            : (result?.total ?? 0)
-                        } sonuç${
+                            ? `${result.total.toLocaleString("tr-TR")} sonuçtan ${places.length}'i`
+                            : `${(result?.total ?? 0).toLocaleString("tr-TR")} sonuç`
+                        }${
                           places[0]?.distance_m != null
                             ? ` · en yakın ${formatDistance(places[0].distance_m)}`
                             : ""
