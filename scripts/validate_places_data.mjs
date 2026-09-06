@@ -194,6 +194,24 @@ try {
   console.log(`ilçe kapsamı ölçülemedi: ${err.message}`);
 }
 
+// meta.json is derived from these files and is what the app reads instead
+// of parsing all of them. Derived data that silently disagrees with its
+// source is worse than no derived data: the UI would show one count while
+// the map showed another, and a stale extent would make a province
+// invisible to a query that should have matched it.
+try {
+  const meta = JSON.parse(fs.readFileSync(path.join(DATA_DIR, "meta.json"), "utf-8"));
+  if (meta.count !== seenIds.size || meta.provinces.length !== files.length) {
+    problems.push(
+      `meta.json bayat: ${meta.provinces.length} il / ${meta.count} mekan diyor, ` +
+        `dosyalarda ${files.length} il / ${seenIds.size} benzersiz mekan var. ` +
+        `Çözüm: node scripts/build_dataset_meta.mjs`,
+    );
+  }
+} catch {
+  problems.push("meta.json yok ya da okunamıyor - node scripts/build_dataset_meta.mjs");
+}
+
 console.log(`${files.length} il dosyası, ${total} mekan, ${seenIds.size} benzersiz id`);
 const boundaryCount = [...fetchUnits.values()].filter((u) => u === "province_boundary").length;
 console.log(`gerçek il sınırından çekilen: ${boundaryCount}/${files.length}`);

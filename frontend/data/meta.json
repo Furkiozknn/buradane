@@ -1,0 +1,981 @@
+{
+ "generated_at": "2026-09-06T04:40:24Z",
+ "source": "OpenStreetMap via Overpass API",
+ "license": "ODbL 1.0",
+ "attribution": "© OpenStreetMap katkıda bulunanları",
+ "count": 132475,
+ "provinces": [
+  {
+   "slug": "adana",
+   "label": "Adana",
+   "count": 3357,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 36.5428289,
+    "minLon": 34.7899063,
+    "maxLat": 38.349062,
+    "maxLon": 36.3830267
+   }
+  },
+  {
+   "slug": "adiyaman",
+   "label": "Adıyaman",
+   "count": 789,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 37.422593,
+    "minLon": 37.5363996,
+    "maxLat": 38.158462,
+    "maxLon": 39.1581157
+   }
+  },
+  {
+   "slug": "afyonkarahisar",
+   "label": "Afyonkarahisar",
+   "count": 1487,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 37.8158016,
+    "minLon": 29.7013088,
+    "maxLat": 39.2265546,
+    "maxLon": 31.7062325
+   }
+  },
+  {
+   "slug": "agri",
+   "label": "Ağrı",
+   "count": 441,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 39.0069335,
+    "minLon": 42.3044103,
+    "maxLat": 39.9468358,
+    "maxLon": 44.4099509
+   }
+  },
+  {
+   "slug": "aksaray",
+   "label": "Aksaray",
+   "count": 962,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 38.0545145,
+    "minLon": 33.188625,
+    "maxLat": 39.0259316,
+    "maxLon": 34.4300964
+   }
+  },
+  {
+   "slug": "amasya",
+   "label": "Amasya",
+   "count": 768,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 40.2624832,
+    "minLon": 35.0096149,
+    "maxLat": 41.0462889,
+    "maxLon": 36.4678972
+   }
+  },
+  {
+   "slug": "ankara",
+   "label": "Ankara",
+   "count": 13704,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 38.727745,
+    "minLon": 30.8583724,
+    "maxLat": 40.7235215,
+    "maxLon": 33.8069289
+   }
+  },
+  {
+   "slug": "antalya",
+   "label": "Antalya",
+   "count": 10984,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 36.1055946,
+    "minLon": 29.2637862,
+    "maxLat": 37.4484439,
+    "maxLon": 32.6103699
+   }
+  },
+  {
+   "slug": "ardahan",
+   "label": "Ardahan",
+   "count": 159,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 40.7020095,
+    "minLon": 42.346889,
+    "maxLat": 41.5797992,
+    "maxLon": 43.2964104
+   }
+  },
+  {
+   "slug": "artvin",
+   "label": "Artvin",
+   "count": 382,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 40.6047208,
+    "minLon": 41.1755534,
+    "maxLat": 41.5196487,
+    "maxLon": 42.5115668
+   }
+  },
+  {
+   "slug": "aydin",
+   "label": "Aydın",
+   "count": 2238,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 37.3387615,
+    "minLon": 27.1297503,
+    "maxLat": 38.0981762,
+    "maxLon": 28.8096241
+   }
+  },
+  {
+   "slug": "balikesir",
+   "label": "Balıkesir",
+   "count": 4906,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 39.1036801,
+    "minLon": 26.6271946,
+    "maxLat": 40.6561489,
+    "maxLon": 28.9409902
+   }
+  },
+  {
+   "slug": "bartin",
+   "label": "Bartın",
+   "count": 470,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 41.3245472,
+    "minLon": 32.126992,
+    "maxLat": 41.8446794,
+    "maxLon": 32.905626
+   }
+  },
+  {
+   "slug": "batman",
+   "label": "Batman",
+   "count": 1599,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 37.5093664,
+    "minLon": 41.0218941,
+    "maxLat": 38.476212,
+    "maxLon": 41.7928012
+   }
+  },
+  {
+   "slug": "bayburt",
+   "label": "Bayburt",
+   "count": 229,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 39.9855096,
+    "minLon": 39.7269584,
+    "maxLat": 40.5489204,
+    "maxLon": 40.6791598
+   }
+  },
+  {
+   "slug": "bilecik",
+   "label": "Bilecik",
+   "count": 509,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 39.6689019,
+    "minLon": 29.7348306,
+    "maxLat": 40.4933779,
+    "maxLon": 30.6238535
+   }
+  },
+  {
+   "slug": "bingol",
+   "label": "Bingöl",
+   "count": 279,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 38.5684501,
+    "minLon": 40.010297,
+    "maxLat": 39.4333865,
+    "maxLon": 41.1846393
+   }
+  },
+  {
+   "slug": "bitlis",
+   "label": "Bitlis",
+   "count": 455,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 38.1244207,
+    "minLon": 41.6884535,
+    "maxLat": 38.985199,
+    "maxLon": 43.063592
+   }
+  },
+  {
+   "slug": "bolu",
+   "label": "Bolu",
+   "count": 926,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 40.1700464,
+    "minLon": 30.5849702,
+    "maxLat": 41.002258,
+    "maxLon": 32.5231365
+   }
+  },
+  {
+   "slug": "burdur",
+   "label": "Burdur",
+   "count": 548,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 36.880722,
+    "minLon": 29.3833651,
+    "maxLat": 37.7865293,
+    "maxLon": 30.9673753
+   }
+  },
+  {
+   "slug": "bursa",
+   "label": "Bursa",
+   "count": 4431,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 39.6153393,
+    "minLon": 28.1118891,
+    "maxLat": 40.6011278,
+    "maxLon": 29.8882317
+   }
+  },
+  {
+   "slug": "canakkale",
+   "label": "Çanakkale",
+   "count": 390,
+   "fetch_unit": "legacy_bbox",
+   "bbox": {
+    "minLat": 40.093552,
+    "minLon": 26.3578521,
+    "maxLat": 40.1853909,
+    "maxLon": 26.4709353
+   }
+  },
+  {
+   "slug": "cankiri",
+   "label": "Çankırı",
+   "count": 114,
+   "fetch_unit": "legacy_bbox",
+   "bbox": {
+    "minLat": 40.5428945,
+    "minLon": 33.5968115,
+    "maxLat": 40.6509218,
+    "maxLon": 33.6849307
+   }
+  },
+  {
+   "slug": "corum",
+   "label": "Çorum",
+   "count": 394,
+   "fetch_unit": "legacy_bbox",
+   "bbox": {
+    "minLat": 40.4952093,
+    "minLon": 34.8846052,
+    "maxLat": 40.6045464,
+    "maxLon": 34.9970578
+   }
+  },
+  {
+   "slug": "denizli",
+   "label": "Denizli",
+   "count": 2312,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 36.9359322,
+    "minLon": 28.6471455,
+    "maxLat": 38.4244913,
+    "maxLon": 30.0311778
+   }
+  },
+  {
+   "slug": "diyarbakir",
+   "label": "Diyarbakır",
+   "count": 2192,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 37.5551643,
+    "minLon": 39.2599953,
+    "maxLat": 38.6484779,
+    "maxLon": 41.2267649
+   }
+  },
+  {
+   "slug": "duzce",
+   "label": "Düzce",
+   "count": 1192,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 40.6796614,
+    "minLon": 30.8457692,
+    "maxLat": 41.0974388,
+    "maxLon": 31.8208685
+   }
+  },
+  {
+   "slug": "edirne",
+   "label": "Edirne",
+   "count": 1103,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 40.5925114,
+    "minLon": 26.0659915,
+    "maxLat": 41.964343,
+    "maxLon": 26.9766597
+   }
+  },
+  {
+   "slug": "elazig",
+   "label": "Elâzığ",
+   "count": 750,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 38.3722491,
+    "minLon": 38.6432305,
+    "maxLat": 39.1309704,
+    "maxLon": 40.2994882
+   }
+  },
+  {
+   "slug": "erzincan",
+   "label": "Erzincan",
+   "count": 501,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 39.1112166,
+    "minLon": 38.3792739,
+    "maxLat": 40.0428907,
+    "maxLon": 40.5583139
+   }
+  },
+  {
+   "slug": "erzurum",
+   "label": "Erzurum",
+   "count": 1241,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 39.1671581,
+    "minLon": 40.5398458,
+    "maxLat": 40.889459,
+    "maxLon": 42.513878
+   }
+  },
+  {
+   "slug": "eskisehir",
+   "label": "Eskişehir",
+   "count": 2045,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 39.1237927,
+    "minLon": 30.0062656,
+    "maxLat": 40.1425372,
+    "maxLon": 31.9918441
+   }
+  },
+  {
+   "slug": "gaziantep",
+   "label": "Gaziantep",
+   "count": 2321,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 36.7269719,
+    "minLon": 36.5134879,
+    "maxLat": 37.50683,
+    "maxLon": 38.0296316
+   }
+  },
+  {
+   "slug": "giresun",
+   "label": "Giresun",
+   "count": 1027,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 40.0793285,
+    "minLon": 37.9932985,
+    "maxLat": 41.0714533,
+    "maxLon": 39.1682104
+   }
+  },
+  {
+   "slug": "gumushane",
+   "label": "Gümüşhane",
+   "count": 393,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 39.8790647,
+    "minLon": 38.8414793,
+    "maxLat": 40.7467616,
+    "maxLon": 40.0590155
+   }
+  },
+  {
+   "slug": "hakkari",
+   "label": "Hakkâri",
+   "count": 163,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 37.0484669,
+    "minLon": 43.4686048,
+    "maxLat": 37.7208651,
+    "maxLon": 44.7556757
+   }
+  },
+  {
+   "slug": "hatay",
+   "label": "Hatay",
+   "count": 1486,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 35.8587741,
+    "minLon": 35.7873481,
+    "maxLat": 36.9963863,
+    "maxLon": 36.6958001
+   }
+  },
+  {
+   "slug": "igdir",
+   "label": "Iğdır",
+   "count": 171,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 39.6544449,
+    "minLon": 43.4368724,
+    "maxLat": 40.0536852,
+    "maxLon": 44.7979395
+   }
+  },
+  {
+   "slug": "isparta",
+   "label": "Isparta",
+   "count": 1667,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 37.3480972,
+    "minLon": 30.1536666,
+    "maxLat": 38.4984861,
+    "maxLon": 31.4818401
+   }
+  },
+  {
+   "slug": "istanbul",
+   "label": "İstanbul",
+   "count": 6481,
+   "fetch_unit": "legacy_bbox",
+   "bbox": {
+    "minLat": 40.8500432,
+    "minLon": 28.5564135,
+    "maxLat": 41.2479331,
+    "maxLon": 29.439442
+   }
+  },
+  {
+   "slug": "izmir",
+   "label": "İzmir",
+   "count": 2271,
+   "fetch_unit": "legacy_bbox",
+   "bbox": {
+    "minLat": 38.3205181,
+    "minLon": 26.9800488,
+    "maxLat": 38.5295651,
+    "maxLon": 27.2502476
+   }
+  },
+  {
+   "slug": "kahramanmaras",
+   "label": "Kahramanmaraş",
+   "count": 1533,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 37.2433455,
+    "minLon": 36.2553522,
+    "maxLat": 38.5143479,
+    "maxLon": 37.5471751
+   }
+  },
+  {
+   "slug": "karabuk",
+   "label": "Karabük",
+   "count": 474,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 40.8479572,
+    "minLon": 32.2578573,
+    "maxLat": 41.5181749,
+    "maxLon": 33.1083014
+   }
+  },
+  {
+   "slug": "karaman",
+   "label": "Karaman",
+   "count": 551,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 36.466221,
+    "minLon": 32.5373578,
+    "maxLat": 37.527788,
+    "maxLon": 33.9662968
+   }
+  },
+  {
+   "slug": "kars",
+   "label": "Kars",
+   "count": 305,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 40.0517359,
+    "minLon": 42.1873619,
+    "maxLat": 41.0619737,
+    "maxLon": 43.7363916
+   }
+  },
+  {
+   "slug": "kastamonu",
+   "label": "Kastamonu",
+   "count": 1113,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 40.8921355,
+    "minLon": 32.7665831,
+    "maxLat": 42.011959,
+    "maxLon": 34.5517943
+   }
+  },
+  {
+   "slug": "kayseri",
+   "label": "Kayseri",
+   "count": 3065,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 37.7009673,
+    "minLon": 34.9174028,
+    "maxLat": 39.2631417,
+    "maxLon": 36.8508607
+   }
+  },
+  {
+   "slug": "kilis",
+   "label": "Kilis",
+   "count": 277,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 36.6367837,
+    "minLon": 36.7950899,
+    "maxLat": 37.0109492,
+    "maxLon": 37.5525223
+   }
+  },
+  {
+   "slug": "kirikkale",
+   "label": "Kırıkkale",
+   "count": 469,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 39.4616371,
+    "minLon": 33.3322651,
+    "maxLat": 40.279809,
+    "maxLon": 34.1549898
+   }
+  },
+  {
+   "slug": "kirklareli",
+   "label": "Kırklareli",
+   "count": 1311,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 41.2336906,
+    "minLon": 26.9155858,
+    "maxLat": 42.0853934,
+    "maxLon": 28.1043847
+   }
+  },
+  {
+   "slug": "kirsehir",
+   "label": "Kırşehir",
+   "count": 516,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 38.8486318,
+    "minLon": 33.4497752,
+    "maxLat": 39.7876303,
+    "maxLon": 34.6802853
+   }
+  },
+  {
+   "slug": "kocaeli",
+   "label": "Kocaeli",
+   "count": 5180,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 40.5401565,
+    "minLon": 29.3386321,
+    "maxLat": 41.2024023,
+    "maxLon": 30.3501739
+   }
+  },
+  {
+   "slug": "konya",
+   "label": "Konya",
+   "count": 5615,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 36.7594375,
+    "minLon": 31.3018104,
+    "maxLat": 39.2582246,
+    "maxLon": 34.3884543
+   }
+  },
+  {
+   "slug": "kutahya",
+   "label": "Kütahya",
+   "count": 1476,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 38.8033064,
+    "minLon": 28.6347929,
+    "maxLat": 39.8193685,
+    "maxLon": 30.4250189
+   }
+  },
+  {
+   "slug": "malatya",
+   "label": "Malatya",
+   "count": 1001,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 37.9284001,
+    "minLon": 37.3026314,
+    "maxLat": 39.1038055,
+    "maxLon": 39.1109162
+   }
+  },
+  {
+   "slug": "manisa",
+   "label": "Manisa",
+   "count": 2302,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 38.1196508,
+    "minLon": 27.1563685,
+    "maxLat": 39.3810006,
+    "maxLon": 29.000897
+   }
+  },
+  {
+   "slug": "mardin",
+   "label": "Mardin",
+   "count": 1327,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 36.9454008,
+    "minLon": 39.9516446,
+    "maxLat": 37.7014675,
+    "maxLon": 41.8785759
+   }
+  },
+  {
+   "slug": "mersin",
+   "label": "Mersin",
+   "count": 2657,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 36.0236825,
+    "minLon": 32.574823,
+    "maxLat": 37.2990813,
+    "maxLon": 35.1150533
+   }
+  },
+  {
+   "slug": "mugla",
+   "label": "Muğla",
+   "count": 3928,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 36.2942157,
+    "minLon": 27.2356527,
+    "maxLat": 37.5214411,
+    "maxLon": 29.7407275
+   }
+  },
+  {
+   "slug": "mus",
+   "label": "Muş",
+   "count": 322,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 38.6339896,
+    "minLon": 41.1907724,
+    "maxLat": 39.4406304,
+    "maxLon": 42.6627513
+   }
+  },
+  {
+   "slug": "nevsehir",
+   "label": "Nevşehir",
+   "count": 1177,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 38.3429026,
+    "minLon": 34.2722611,
+    "maxLat": 39.3344004,
+    "maxLon": 35.1136188
+   }
+  },
+  {
+   "slug": "nigde",
+   "label": "Niğde",
+   "count": 577,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 37.4217958,
+    "minLon": 34.0137378,
+    "maxLat": 38.3521708,
+    "maxLon": 35.1906668
+   }
+  },
+  {
+   "slug": "ordu",
+   "label": "Ordu",
+   "count": 1758,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 40.3839011,
+    "minLon": 36.7128568,
+    "maxLat": 41.1441128,
+    "maxLon": 38.1081702
+   }
+  },
+  {
+   "slug": "osmaniye",
+   "label": "Osmaniye",
+   "count": 691,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 36.9701018,
+    "minLon": 35.9224234,
+    "maxLat": 37.7104236,
+    "maxLon": 36.652725
+   }
+  },
+  {
+   "slug": "rize",
+   "label": "Rize",
+   "count": 761,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 40.5910404,
+    "minLon": 40.3318961,
+    "maxLat": 41.3204599,
+    "maxLon": 41.2638061
+   }
+  },
+  {
+   "slug": "sakarya",
+   "label": "Sakarya",
+   "count": 1854,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 40.3002151,
+    "minLon": 30.0042561,
+    "maxLat": 41.1312363,
+    "maxLon": 31.0020852
+   }
+  },
+  {
+   "slug": "samsun",
+   "label": "Samsun",
+   "count": 3016,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 40.8736734,
+    "minLon": 34.9259009,
+    "maxLat": 41.7117117,
+    "maxLon": 37.1530449
+   }
+  },
+  {
+   "slug": "sanliurfa",
+   "label": "Şanlıurfa",
+   "count": 810,
+   "fetch_unit": "legacy_bbox",
+   "bbox": {
+    "minLat": 37.1021824,
+    "minLon": 38.7237058,
+    "maxLat": 37.2200965,
+    "maxLon": 38.8692692
+   }
+  },
+  {
+   "slug": "siirt",
+   "label": "Siirt",
+   "count": 348,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 37.6645233,
+    "minLon": 41.4124556,
+    "maxLat": 38.1914446,
+    "maxLon": 42.6445672
+   }
+  },
+  {
+   "slug": "sinop",
+   "label": "Sinop",
+   "count": 543,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 41.2415418,
+    "minLon": 34.2580482,
+    "maxLat": 42.0607962,
+    "maxLon": 35.4015775
+   }
+  },
+  {
+   "slug": "sirnak",
+   "label": "Şırnak",
+   "count": 68,
+   "fetch_unit": "legacy_bbox",
+   "bbox": {
+    "minLat": 37.4920899,
+    "minLon": 42.4245473,
+    "maxLat": 37.5309091,
+    "maxLon": 42.5175259
+   }
+  },
+  {
+   "slug": "sivas",
+   "label": "Sivas",
+   "count": 1705,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 38.6564233,
+    "minLon": 35.8990618,
+    "maxLat": 40.4707302,
+    "maxLon": 38.741611
+   }
+  },
+  {
+   "slug": "tekirdag",
+   "label": "Tekirdağ",
+   "count": 3929,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 40.5856525,
+    "minLon": 26.71635,
+    "maxLat": 41.5474007,
+    "maxLon": 28.1134227
+   }
+  },
+  {
+   "slug": "tokat",
+   "label": "Tokat",
+   "count": 1201,
+   "fetch_unit": "province_boundary",
+   "bbox": {
+    "minLat": 39.8974872,
+    "minLon": 35.4949625,
+    "maxLat": 40.8793412,
+    "maxLon": 37.5942015
+   }
+  },
+  {
+   "slug": "trabzon",
+   "label": "Trabzon",
+   "count": 898,
+   "fetch_unit": "legacy_bbox",
+   "bbox": {
+    "minLat": 40.9609586,
+    "minLon": 39.6378819,
+    "maxLat": 41.0126333,
+    "maxLon": 39.8298627
+   }
+  },
+  {
+   "slug": "tunceli",
+   "label": "Tunceli",
+   "count": 45,
+   "fetch_unit": "legacy_bbox",
+   "bbox": {
+    "minLat": 39.0706077,
+    "minLon": 39.4952716,
+    "maxLat": 39.1318627,
+    "maxLon": 39.5556373
+   }
+  },
+  {
+   "slug": "usak",
+   "label": "Uşak",
+   "count": 574,
+   "fetch_unit": "legacy_bbox",
+   "bbox": {
+    "minLat": 38.6204531,
+    "minLon": 29.3516979,
+    "maxLat": 38.7256599,
+    "maxLon": 29.4747313
+   }
+  },
+  {
+   "slug": "van",
+   "label": "Van",
+   "count": 576,
+   "fetch_unit": "legacy_bbox",
+   "bbox": {
+    "minLat": 38.4403,
+    "minLon": 43.3138095,
+    "maxLat": 38.5574724,
+    "maxLon": 43.4480456
+   }
+  },
+  {
+   "slug": "yalova",
+   "label": "Yalova",
+   "count": 273,
+   "fetch_unit": "legacy_bbox",
+   "bbox": {
+    "minLat": 40.6043009,
+    "minLon": 29.20601,
+    "maxLat": 40.6707781,
+    "maxLon": 29.3366986
+   }
+  },
+  {
+   "slug": "yozgat",
+   "label": "Yozgat",
+   "count": 176,
+   "fetch_unit": "legacy_bbox",
+   "bbox": {
+    "minLat": 39.7698629,
+    "minLon": 34.7627021,
+    "maxLat": 39.8399354,
+    "maxLon": 34.8664479
+   }
+  },
+  {
+   "slug": "zonguldak",
+   "label": "Zonguldak",
+   "count": 253,
+   "fetch_unit": "legacy_bbox",
+   "bbox": {
+    "minLat": 41.4234997,
+    "minLon": 31.7195161,
+    "maxLat": 41.4935284,
+    "maxLon": 31.8518208
+   }
+  }
+ ]
+}

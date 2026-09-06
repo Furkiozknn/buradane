@@ -102,7 +102,35 @@ export interface DatasetMeta {
   }[];
 }
 
-let cache: { places: Place[]; meta: DatasetMeta; searchText: Map<string, string> } | null = null;
+/**
+ * Lazy, per-province. The eager version read all 81 snapshots on first
+ * touch, which measured **7,4 seconds and 433 MB of RSS** at 122.558 places
+ * - paid twice, because Next.js gives the route handlers and the RSC tree
+ * separate module registries with separate caches. A visitor arriving on a
+ * cold process waited for the whole country to be parsed so the app could
+ * put a city name in a chip.
+ *
+ * The data was always partitioned by province and the dominant query is
+ * geographic, so the fix is to read only the files a query can actually
+ * match: `meta.json` (18 KB) carries each province's extent, and a radius
+ * or viewport search touches one to three files. A query with no
+ * geographic constraint still loads everything - it genuinely needs to -
+ * but the API refuses a country-wide bbox for its own reasons, so that path
+ * is the rare one.
+ */
+const provinceCache = new Map<string, Place[]>();
+let metaCache: DatasetMeta | null = null;
+let provinceIndex: ProvinceIndexRow[] | null = null;
+const searchTextCache = new Map<string, string>();
+let allLoaded = false;
+
+interface ProvinceIndexRow {
+  slug: string;
+  label: string;
+  count: number;
+  fetch_unit: string;
+  bbox: { minLat: number; minLon: number; maxLat: number; maxLon: number };
+}
 
 /** Hoisted once: the facet pass runs this over every match in the result
  * set, and rebuilding it per place was the single most expensive line in a
@@ -247,184 +275,230 @@ function accessFromTags(tags: Record<string, string> | undefined): AccessType {
   return "public";
 }
 
-/**
- * Loads every city snapshot in data/, not one hardcoded file.
- *
- * Each city is its own `places.<city>.json` so a city can be re-pulled,
- * added or dropped without touching the others - which is the whole point of
- * a pilot that is supposed to grow to 81 provinces. Adding Ankara meant
- * dropping a file in; no code here changed.
- */
-function loadDataset() {
-  if (cache) return cache;
+const DATA_DIR = () => path.join(process.cwd(), "data");
 
-  const dataDir = path.join(process.cwd(), "data");
+/** Reads the province index once. Falls back to scanning the snapshots when
+ * meta.json is missing (a clone made before it existed, or a fetch that has
+ * not been followed by `node scripts/build_dataset_meta.mjs`) - slower, but
+ * the app must never simply fail to start over a derived file. */
+function loadIndex(): ProvinceIndexRow[] {
+  if (provinceIndex) return provinceIndex;
+  const metaPath = path.join(DATA_DIR(), "meta.json");
+  try {
+    const raw = JSON.parse(fs.readFileSync(metaPath, "utf-8")) as {
+      generated_at: string;
+      source: string;
+      license: string;
+      attribution: string;
+      count: number;
+      provinces: ProvinceIndexRow[];
+    };
+    metaCache = {
+      generated_at: raw.generated_at,
+      source: raw.source,
+      license: raw.license,
+      attribution: raw.attribution,
+      count: raw.count,
+      cities: raw.provinces.map((row) => ({
+        slug: row.slug,
+        label: row.label,
+        count: row.count,
+        center: officialProvinceCenter(row.label) ?? {
+          lat: (row.bbox.minLat + row.bbox.maxLat) / 2,
+          lon: (row.bbox.minLon + row.bbox.maxLon) / 2,
+        },
+        fetchUnit: row.fetch_unit === "province_boundary" ? "province_boundary" : "legacy_bbox",
+      })),
+    };
+    provinceIndex = raw.provinces;
+    return provinceIndex;
+  } catch {
+    return rebuildIndexFromSnapshots();
+  }
+}
+
+function snapshotFiles(): string[] {
   const files = fs
-    .readdirSync(dataDir)
+    .readdirSync(DATA_DIR())
     .filter((name) => name.startsWith("places.") && name.endsWith(".json"))
     .sort();
-
   if (files.length === 0) {
     throw new Error(
-      `data/ içinde places.*.json bulunamadı. Önce scripts/fetch_demo_data.py çalıştırın.`,
+      "data/ icinde places.*.json bulunamadi. Once scripts/fetch_by_district.py calistirin.",
     );
   }
+  return files;
+}
 
-  const places: Place[] = [];
-  /** id -> index in `places`, so a second sighting can replace the first in
-   * place rather than searching the array. See the dedupe rule below. */
-  const seenPlaceIndex = new Map<string, number>();
+/** The meta.json-less path: read every snapshot to derive what the index
+ * would have said. Correct, just expensive - which is the entire reason
+ * meta.json exists. */
+function rebuildIndexFromSnapshots(): ProvinceIndexRow[] {
+  const rows: ProvinceIndexRow[] = [];
   const cities: DatasetMeta["cities"] = [];
   let newest = "";
-  let attribution = "© OpenStreetMap katkıda bulunanları";
+  let attribution = "\u00a9 OpenStreetMap katkida bulunanlari";
   let license = "ODbL 1.0";
   let source = "OpenStreetMap via Overpass API";
+  let count = 0;
 
-  for (const file of files) {
-    const raw = JSON.parse(fs.readFileSync(path.join(dataDir, file), "utf-8")) as RawDataset;
+  for (const file of snapshotFiles()) {
+    const raw = JSON.parse(fs.readFileSync(path.join(DATA_DIR(), file), "utf-8")) as RawDataset;
     const slug = raw.city ?? file.replace(/^places\./, "").replace(/\.json$/, "");
-
-    // The file IS the province fetch unit, so its label is a province name
-    // and resolves against the 81-entry table. Used as the LAST fallback
-    // only: addr:* tags, when present, stay authoritative - a place tagged
-    // into a neighbouring province keeps that tag. Without this, every
-    // record lacking addr tags loaded with province null, which made
-    // "hakkari çeşme" match nothing for "hakkari"; the engine then dropped
-    // the needle and answered with every fountain in the country. Honest
-    // limit: a bbox sliver reaching into a neighbouring untagged area gets
-    // labelled with the fetch province - findable beats invisible, and the
-    // tagged path still wins wherever OSM actually says otherwise.
-    const fileProvince = findProvince(raw.city_label ?? slug)?.name ?? null;
-
+    let minLat = Infinity;
+    let maxLat = -Infinity;
+    let minLon = Infinity;
+    let maxLon = -Infinity;
     for (const place of raw.places) {
-      const locality = localityFromTags(
-        place.raw_tags,
-        { district: place.district_raw, province: place.province_raw },
-        fileProvince,
-      );
-      const resolved: Place = {
-        ...place,
-        // Snapshots taken before the fetcher learned about these still carry
-        // the raw OSM tags, so the fields are derived here rather than
-        // requiring a full re-pull through a rate-limited Overpass mirror.
-        // New snapshots ship them directly and this is a no-op.
-        access: place.access ?? accessFromTags(place.raw_tags),
-        district: place.district ?? locality.district,
-        province: place.province ?? locality.province ?? fileProvince,
-        ...deriveCommunitySignals(place),
-      };
-
-      // One OSM id, one place - decided by geometry, not by file order.
-      //
-      // Overpass' `(area:...)` returns a way that CROSSES a boundary to both
-      // provinces' queries, so a picnic area on the Batman/Diyarbakır border
-      // came back in both files and the map drew two pins on one spot. The
-      // tie-break is the district: districts tile a province exactly, so a
-      // record that landed inside one of them is geometrically confirmed to
-      // be in that province, while a record with no district was merely
-      // returned by the query. Batman said "Kozluk", Diyarbakır said null -
-      // and Batman is where it is.
-      //
-      // The same rule cleans up the legacy overlap while the national
-      // re-fetch is in flight: the old İstanbul bounding box reaches into
-      // real Kocaeli, and its records have no district.
-      const existingIndex = seenPlaceIndex.get(resolved.id);
-      if (existingIndex === undefined) {
-        seenPlaceIndex.set(resolved.id, places.length);
-        places.push(resolved);
-      } else if (!places[existingIndex].district && resolved.district) {
-        places[existingIndex] = resolved;
-      }
+      if (place.lat < minLat) minLat = place.lat;
+      if (place.lat > maxLat) maxLat = place.lat;
+      if (place.lon < minLon) minLon = place.lon;
+      if (place.lon > maxLon) maxLon = place.lon;
     }
-
+    rows.push({
+      slug,
+      label: raw.city_label ?? slug,
+      count: raw.places.length,
+      fetch_unit: raw.fetch_unit ?? "legacy_bbox",
+      bbox: { minLat, minLon, maxLat, maxLon },
+    });
     cities.push({
       slug,
       label: raw.city_label ?? slug,
       count: raw.places.length,
-      // The provincial capital when we know it, the median otherwise.
-      //
-      // The median was right when a file WAS a city box: the middle of the
-      // data was the middle of the city. Once files became whole provinces
-      // it stopped being: Kütahya's median landed in open country with zero
-      // places within 5 km, so picking Kütahya opened the map on emptiness
-      // while its actual centre holds 380. The capital anchor comes from the
-      // official list and is the `admin_centre` member node - the city
-      // itself, not the polygon's centroid, which for oddly shaped provinces
-      // is in the mountains. Median stays as the fallback for any file whose
-      // label does not resolve, which is what the app shipped with.
       center: officialProvinceCenter(raw.city_label ?? slug) ?? medianCenter(raw.places),
       fetchUnit: raw.fetch_unit === "province_boundary" ? "province_boundary" : "legacy_bbox",
     });
+    count += raw.places.length;
     if (raw.generated_at > newest) newest = raw.generated_at;
     attribution = raw.attribution ?? attribution;
     license = raw.license ?? license;
     source = raw.source ?? source;
   }
 
-  // One canonical spelling per district.
-  //
-  // Folding already groups "Kadıköy", "Kadiköy" and "Kadikoy" onto one key,
-  // but each place kept whatever the tag said, so the same district still
-  // *displayed* three ways and a filter built on the label would fragment.
-  // The winner is the variant carrying the most Turkish-specific characters,
-  // because a spelling with ı/ğ/ü/ş/ö/ç is strictly more informative than one
-  // that lost them - an ASCII form can only be a degraded copy, never the
-  // other way round. Frequency breaks ties.
-  //
-  // Derived from the data rather than from a hardcoded list of 973 districts:
-  // a list written from memory is one nobody can check.
-  const variants = new Map<string, Map<string, number>>();
-  for (const place of places) {
-    if (!place.district) continue;
-    const key = foldAscii(place.district);
-    const forms = variants.get(key) ?? new Map<string, number>();
-    forms.set(place.district, (forms.get(place.district) ?? 0) + 1);
-    variants.set(key, forms);
+  metaCache = { generated_at: newest, source, license, attribution, count, cities };
+  provinceIndex = rows;
+  return rows;
+}
+
+/**
+ * Resolves one province's snapshot into Place records, once.
+ *
+ * Everything that used to happen in the single national pass happens here
+ * per file: access/district/province resolution, the community-signal
+ * defaults, and the folded search text. The one thing that CANNOT be done
+ * per file is cross-province duplicate resolution, which is why callers go
+ * through `placesFor()` rather than calling this directly.
+ */
+function loadProvince(slug: string): Place[] {
+  const cached = provinceCache.get(slug);
+  if (cached) return cached;
+
+  const file = path.join(DATA_DIR(), `places.${slug}.json`);
+  let raw: RawDataset;
+  try {
+    raw = JSON.parse(fs.readFileSync(file, "utf-8")) as RawDataset;
+  } catch {
+    provinceCache.set(slug, []);
+    return [];
   }
 
-  const canonical = new Map<string, string>();
-  for (const [key, forms] of variants) {
-    let best: { name: string; marks: number; count: number } | null = null;
-    for (const [name, count] of forms) {
-      const marks = (name.match(/[ıİğĞüÜşŞöÖçÇâîû]/gu) ?? []).length;
-      if (
-        !best ||
-        marks > best.marks ||
-        (marks === best.marks && count > best.count) ||
-        (marks === best.marks && count === best.count && name.localeCompare(best.name, "tr") < 0)
-      ) {
-        best = { name, marks, count };
-      }
-    }
-    if (best) canonical.set(key, best.name);
-  }
+  // The file IS the province fetch unit, so its label is a province name and
+  // resolves against the 81-entry table. Used as the LAST fallback only:
+  // addr:* tags, when present, stay authoritative - a place tagged into a
+  // neighbouring province keeps that tag. Without this, every record lacking
+  // addr tags loaded with province null, which made "hakkari cesme" match
+  // nothing for "hakkari"; the engine then dropped the needle and answered
+  // with every fountain in the country.
+  const fileProvince = findProvince(raw.city_label ?? slug)?.name ?? null;
 
-  for (const place of places) {
-    if (!place.district) continue;
-    place.district = canonical.get(foldAscii(place.district)) ?? place.district;
-  }
-
-  // Precomputed once, not per query: folding 17,000 names on every keystroke
-  // would be the most expensive thing in the request. Diacritic-free, so
-  // someone typing "kadikoy" on a phone keyboard without a Turkish layout
-  // finds the 32 places tagged "Kadıköy" instead of the 2 that happen to be
-  // spelled without them.
-  const searchText = new Map<string, string>();
-  for (const place of places) {
-    searchText.set(
-      place.id,
+  const places: Place[] = [];
+  for (const place of raw.places) {
+    const locality = localityFromTags(
+      place.raw_tags,
+      { district: place.district_raw, province: place.province_raw },
+      fileProvince,
+    );
+    const resolved: Place = {
+      ...place,
+      // Snapshots taken before the fetcher learned about these still carry
+      // the raw OSM tags, so the fields are derived here rather than
+      // requiring a full re-pull through a rate-limited Overpass mirror.
+      access: place.access ?? accessFromTags(place.raw_tags),
+      district: place.district ?? locality.district,
+      province: place.province ?? locality.province ?? fileProvince,
+      ...deriveCommunitySignals(place),
+    };
+    places.push(resolved);
+    // Precomputed, not per query: folding 120.000 names on every keystroke
+    // would be the most expensive thing in the request. Diacritic-free, so
+    // someone typing "kadikoy" without a Turkish layout finds the places
+    // tagged "Kadikoy" rather than the two spelled without them.
+    searchTextCache.set(
+      resolved.id,
       foldAscii(
-        [place.name, place.address_line, place.district, place.province].filter(Boolean).join(" "),
+        [resolved.name, resolved.address_line, resolved.district, resolved.province]
+          .filter(Boolean)
+          .join(" "),
       ),
     );
   }
 
-  cache = {
-    places,
-    meta: { generated_at: newest, source, license, attribution, count: places.length, cities },
-    searchText,
-  };
-  return cache;
+  provinceCache.set(slug, places);
+  return places;
+}
+
+/**
+ * The records for a set of provinces, with cross-province duplicates
+ * resolved.
+ *
+ * One OSM id, one place - decided by geometry, not by file order. Overpass'
+ * `(area:...)` returns a way that CROSSES a boundary to both provinces'
+ * queries, so a picnic area on the Batman/Diyarbakir border comes back in
+ * both files and the map would draw two pins on one spot. Districts tile a
+ * province exactly, so the copy that landed inside one is geometrically in
+ * that province while the copy with no district was merely returned by the
+ * query: Batman said "Kozluk", Diyarbakir said null, and Batman is where it
+ * is. The same rule cleans up the legacy overlap while the national
+ * re-fetch is in flight - the old Istanbul box reaches into real Kocaeli.
+ */
+function placesFor(slugs: string[]): Place[] {
+  if (slugs.length === 1) return loadProvince(slugs[0]);
+  const byId = new Map<string, Place>();
+  for (const slug of slugs) {
+    for (const place of loadProvince(slug)) {
+      const existing = byId.get(place.id);
+      if (!existing || (!existing.district && place.district)) byId.set(place.id, place);
+    }
+  }
+  return [...byId.values()];
+}
+
+/** Every province whose own extent overlaps the search box, or all of them
+ * when a query carries no geographic constraint. This is the whole saving:
+ * a radius search in Sivas reads one file, not eighty-one. */
+function provincesFor(
+  box: { minLat: number; minLon: number; maxLat: number; maxLon: number } | null,
+): string[] {
+  const index = loadIndex();
+  if (!box) return index.map((row) => row.slug);
+  return index
+    .filter(
+      (row) =>
+        row.bbox.minLat <= box.maxLat &&
+        row.bbox.maxLat >= box.minLat &&
+        row.bbox.minLon <= box.maxLon &&
+        row.bbox.maxLon >= box.minLon,
+    )
+    .map((row) => row.slug);
+}
+
+/** Every province. Used by the sitemap (build time), the tests, and any
+ * query with no geographic constraint. */
+function loadAll(): Place[] {
+  const all = placesFor(loadIndex().map((row) => row.slug));
+  allLoaded = true;
+  return all;
 }
 
 /** Median coordinate of a city's places - resistant to a single node
@@ -437,19 +511,33 @@ function medianCenter(places: { lat: number; lon: number }[]): { lat: number; lo
   return { lat: lats[mid], lon: lons[mid] };
 }
 
-export function datasetMeta() {
-  return loadDataset().meta;
+export function datasetMeta(): DatasetMeta {
+  loadIndex();
+  return metaCache!;
 }
 
 export function allPlaces(): Place[] {
-  return loadDataset().places;
+  return loadAll();
 }
 
+/**
+ * One place by OSM id.
+ *
+ * The id carries no province, so this is the one lookup lazy loading cannot
+ * narrow: it searches what is already in memory first - which on a warm
+ * process is usually the province the user is browsing - and only falls
+ * back to reading the rest of the country when that misses. A detail page
+ * for a place nobody has queried therefore costs one full load, once.
+ */
 export function getPlaceById(id: string, communityPlaces?: Place[]): Place | undefined {
-  return (
-    loadDataset().places.find((p) => p.id === id) ??
-    communityPlaces?.find((p) => p.id === id)
-  );
+  for (const loaded of provinceCache.values()) {
+    const hit = loaded.find((p) => p.id === id);
+    if (hit) return hit;
+  }
+  const fromCommunity = communityPlaces?.find((p) => p.id === id);
+  if (fromCommunity) return fromCommunity;
+  if (allLoaded) return undefined;
+  return loadAll().find((p) => p.id === id);
 }
 
 /**
@@ -688,6 +776,18 @@ export function queryPlaces(
   const hasCenter = typeof lat === "number" && typeof lon === "number";
   const box = hasCenter && radius_m ? boundingBox({ lat: lat!, lon: lon! }, radius_m) : null;
 
+  // Which snapshots this query can possibly match, and therefore which ones
+  // get read off disk. A radius search in Sivas touches one file; a viewport
+  // straddling two provinces touches two. Only a query with no geographic
+  // constraint at all reads the country - and the API refuses a
+  // country-wide bbox on its own account, so that is the rare path.
+  const searchBox = box
+    ? { minLat: box.minLat, minLon: box.minLon, maxLat: box.maxLat, maxLon: box.maxLon }
+    : bbox
+      ? { minLon: bbox[0], minLat: bbox[1], maxLon: bbox[2], maxLat: bbox[3] }
+      : null;
+  const scoped = placesFor(provincesFor(searchBox));
+
   const hasStructure = effectiveCategories.length > 0 || effectiveAmenities.length > 0 || effectiveFreeOnly;
 
   /**
@@ -815,8 +915,8 @@ export function queryPlaces(
     // and the whole point of approving it is that it is now part of the map.
     const candidates =
       communityPlaces && communityPlaces.length > 0
-        ? [...loadDataset().places, ...communityPlaces]
-        : loadDataset().places;
+        ? [...scoped, ...communityPlaces]
+        : scoped;
 
     for (const base of candidates) {
       // Geometry BEFORE the override merge. An override never moves a place,
@@ -882,7 +982,7 @@ export function queryPlaces(
       // rather than the two spelled that way.
       if (needle) {
         const haystack =
-          loadDataset().searchText.get(place.id) ??
+          searchTextCache.get(place.id) ??
           foldAscii([place.name, place.address_line, place.district, place.province].filter(Boolean).join(" "));
         if (!haystack.includes(needle)) continue;
       }

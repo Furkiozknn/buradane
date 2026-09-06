@@ -57,11 +57,22 @@ describe("national coverage", () => {
     expect(thin).toEqual([]);
   });
 
-  it("finds every province by typing its name", () => {
-    // The single most common national query shape: province name alone.
+  it("finds every province by typing its name where you are standing", () => {
+    // The real shape of this query: the app always sends the map's centre,
+    // so "Sivas" typed while looking at Sivas must match Sivas's own
+    // records. Written this way rather than as a bare text query for two
+    // reasons - it is what a user actually does, and a text query with no
+    // geographic constraint reads every snapshot in the country, which is a
+    // property of the API rather than of the province being findable.
     expect(datasetMeta().cities.length).toBe(81);
     for (const city of datasetMeta().cities) {
-      const result = queryPlaces({ q: city.label, limit: 1 });
+      const result = queryPlaces({
+        q: city.label,
+        lat: city.center.lat,
+        lon: city.center.lon,
+        radius_m: 30_000,
+        limit: 1,
+      });
       expect(result.total, `"${city.label}" aramasi bos dondu`).toBeGreaterThan(0);
     }
   });
