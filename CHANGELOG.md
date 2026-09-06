@@ -71,6 +71,29 @@ havuzu bu tavana sabitleniyor. Böylece bekleme, bedelsiz olduğu yere
 taşınıyor: bir istek iş parçacığı bekliyor, bir iş parçacığı bağlantı
 beklemiyor.
 
+### Sorgu maliyeti
+
+**Mekan detayı artık kategori sayısından bağımsız.** Serileştirici
+`categories`'i `place.place_categories[*].category` üzerinden kuruyor — iki
+ilişki adımı. Arama yolu bunları yazıldığından beri tek seferde yüklüyordu
+(`services/search.py`); `GET /places/{id}` ise düz bir `db.get()` kullanıyor
+ve iki adımı da tembel bırakıyordu.
+
+Gerçek PostGIS'e karşı ölçüldü (uçtan uca, `TestClient`):
+
+| Mekandaki kategori | `GET /places/{id}` önce | sonra | `GET /places` |
+|---|---|---|---|
+| 1 | 3 sorgu | 3 | 3 |
+| 3 | 5 sorgu | 3 | 3 |
+| 8 | 10 sorgu | 3 | 3 |
+| 14 | **16 sorgu** | 3 | 3 |
+
+Maliyet `2 + N`'di. 14 uydurma bir tavan değil, uygulamanın tanımladığı
+kategori sayısı. Bu boşluğun fark edilmemesinin sebebi de tam olarak bu
+asimetri: herkesin baktığı liste zaten 3'te sabitti.
+
+`test_query_counts.py` her iki ucu da kilitliyor.
+
 ### Güvenlik
 
 Bağımsız incelemelerin bulduğu ve kapatılan açıklar:

@@ -10,6 +10,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from app.api.deps import DbSession, DeviceTokenHash, OptionalUser
 from app.core.ratelimit import limit_reports, limit_verifications, limit_writes
@@ -83,7 +84,18 @@ def list_places(
 
 @router.get("/{place_id}", response_model=PlaceDetail)
 def get_place(place_id: uuid.UUID, db: DbSession) -> PlaceDetail:
-    place = db.get(Place, place_id)
+    # Eager-load exactly what the serializer reads. PlaceListItem builds its
+    # `categories` from `place.place_categories[*].category`, so a plain
+    # db.get() leaves both hops lazy and one detail page costs 2 + N queries
+    # for N categories - measured 16 at N=14. The search path has loaded
+    # these since it was written (services/search.py); this endpoint simply
+    # never got the same treatment, which is why the gap survived: the list
+    # everyone looks at was already flat at 3.
+    place = db.get(
+        Place,
+        place_id,
+        options=(selectinload(Place.place_categories).selectinload(PlaceCategory.category),),
+    )
     if place is None or place.status == PlaceStatus.pending_review:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "place not found")
     return PlaceDetail.from_orm_with_distance(place)
