@@ -78,6 +78,16 @@ Bağımsız incelemelerin bulduğu ve kapatılan açıklar:
 - OpenStreetMap atfı (ODbL yükümlülüğü) her durumda görünür yerde; önceden
   200 kartın altında kalıyor ve boş/hata durumlarında hiç görünmüyordu.
 
+### Gezinme
+
+- **İlçe seçimi.** Şehir seçici artık iki aşamalı: il seçilince o ilin
+  ilçeleri, her birinin kaç kayıt taşıdığıyla listeleniyor. İstanbul 39
+  ilçede 25.916 mekan tutuyor; il merkezinde açmak Kadıköy'deki birini elle
+  kaydırmaya zorluyordu. İlçe listesi kayıtlardan üretiliyor (verisi olmayan
+  ilçe listelenmiyor) ve seçildiğinde açılınca istendiği yer görünüyor.
+- Ülke genelinde **973 ilçenin 973'ü** listede — kapsam iddiası, kırmızıya
+  dönebileceği yerde.
+
 ### Arama
 
 - **Kelime-başı eşleşmesi.** Arama indeksi boşlukları koruyor; "Bolu" artık
@@ -85,8 +95,13 @@ Bağımsız incelemelerin bulduğu ve kapatılan açıklar:
   Kadıköy).
 - Sorgu haritanın merkezine bağlandı: şehir değiştirmek sonuçları da
   değiştiriyor.
-- Sorgudan düşürülen bir **il adı** varsa uygulama bunu bir eylemle söylüyor
-  ("Sonuçlar İstanbul çevresinden — Sivas'a git").
+- Sorgudan düşürülen bir **yer adı** varsa uygulama bunu bir eylemle
+  söylüyor ("Sonuçlar İstanbul çevresinden — Alanya'ya git"). 81 il ve 973
+  ilçe sunucuda çözülüyor; istemci yalnız illeri tanıyabildiği için
+  "Alanya tuvalet" sessizce yerel sonuç döndürüyordu.
+- **Sitemap 81 parçaya bölündü.** Tek dosya 60.875 URL ile protokol
+  sınırını (50.000) aşıyordu; arama motorları böyle bir dosyayı kısaltmaz,
+  reddeder — yani hiçbir `/yer` sayfası sitemap'ten yararlanmıyordu.
 
 ### Altyapı
 
@@ -98,7 +113,7 @@ Bağımsız incelemelerin bulduğu ve kapatılan açıklar:
 - `scripts/validate_places_data.mjs` — şema, Türkiye sınırları, mükerrer OSM
   id, yayılım **ve ilçe kapsamı**. Kapsam ölçümünün yokluğu, "81 il"in
   ülkenin %2,2'si demek olmasına izin veren şeydi.
-- CI iki iş akışı: frontend (lint, tip, 161 test, build) ve backend (85 test,
+- CI iki iş akışı: frontend (lint, tip, 165 test, build) ve backend (85 test,
   gerçek Postgres+PostGIS). Backend işinde **herhangi bir testin skip olması
   build'i kırar** — "yeşil ama koşmadı" tuzağı bir kez gerçekten yaşandı.
 - Migration zinciri artık sütun düzeyinde de doğrulanıyor (migration'ın

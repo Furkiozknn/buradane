@@ -323,7 +323,7 @@ export function CityPicker({
               ever hold as coverage grows from 1 to 81. */}
           Türkiye&apos;deki {TOTALS.provinces} ilin{" "}
           <strong className="font-semibold text-text-secondary">{coveredProvinces}</strong> tanesi
-          kapsanıyor — veri il il ekleniyor.
+          kapsanıyor.
         </p>
       </div>
     </div>

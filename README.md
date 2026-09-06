@@ -228,7 +228,8 @@ buradane/
 │   ├── data/
 │   │   ├── places.<il>.json                   # 81 il dosyası, 167.829 gerçek OSM mekanı
 │   │   ├── meta.json                          # Üretim damgası, lisans, il ve kategori sayıları
-│   │   ├── place-index.json                   # Şehir seçici + arama için hafif indeks
+│   │   ├── meta.json                          # İl indeksi + 973 ilçe (seçici bunu okur)
+│   │   ├── place-index.json                   # id → il eşlemesi (yalnız id aramasında)
 │   │   └── contributions.json                 # Kullanıcı katkıları + admin override'ları (git'te değil)
 │   ├── public/maplibre/                        # MapLibre worker dosyaları (bkz. "Bilinen Tuhaflıklar")
 │   └── scripts/copy-maplibre-worker.mjs        # predev/prebuild'de otomatik çalışır
@@ -623,7 +624,7 @@ dev sunucusunun önünde HMR'ı keser. Test etmek için: `npm run build && npm r
 Türkçe doğal-dil araması, dinamik filtreler, sıralama (en yakın / en
 güvenilir), yön göstergesi, yol tarifi, tek dokunuşla yerinde doğrulama,
 kullanıcı önerisi ve sorun bildirimi, moderasyon + mekan düzenleme paneli,
-şehir seçici, paylaşılabilir derin bağlantılar, kayıtlı yerler, **çevrimdışı
+il **ve ilçe** seçici, paylaşılabilir derin bağlantılar, kayıtlı yerler, **çevrimdışı
 çalışma** (PWA + service worker), mobil sheet + masaüstü sidebar düzeni.
 Erişilebilirlik: Lighthouse 100.
 
