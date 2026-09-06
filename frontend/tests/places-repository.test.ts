@@ -438,9 +438,16 @@ describe("open-now filter", () => {
   });
 
   it("still excludes something - the filter is not a no-op", () => {
-    const all = queryPlaces({ ...ISTANBUL, radius_m: 40_000, limit: 20_000 });
-    const filtered = queryPlaces({ ...ISTANBUL, radius_m: 40_000, openNow: true, limit: 20_000 });
+    // The limit has to exceed the match set, or the closed places counted
+    // below come from a truncated page while the totals do not - which is
+    // exactly how this drifted when İstanbul's 40 km radius grew past
+    // 20.000 records at national scale.
+    const LIMIT = 100_000;
+    const all = queryPlaces({ ...ISTANBUL, radius_m: 40_000, limit: LIMIT });
+    const filtered = queryPlaces({ ...ISTANBUL, radius_m: 40_000, openNow: true, limit: LIMIT });
+    expect(all.places.length).toBe(all.total);
     const closed = all.places.filter((p) => isOpenNow(p.opening_hours_raw) === "closed").length;
+    expect(closed).toBeGreaterThan(0);
     expect(all.total - filtered.total).toBe(closed);
   });
 });

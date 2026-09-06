@@ -5,7 +5,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { POST as contributionsPOST } from "@/app/api/contributions/route";
-import { allPlaces } from "@/lib/places-repository";
+import { queryPlaces } from "@/lib/places-repository";
 import { getPlaceOverrides, setPlaceOverride } from "@/lib/contributions-store";
 
 /**
@@ -24,7 +24,10 @@ let realPlaceId: string;
 beforeEach(async () => {
   tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "buradane-abuse-"));
   process.env.BURADANE_DATA_DIR = tempDir;
-  realPlaceId = allPlaces()[0].id;
+  // A scoped query, not allPlaces(): the reader is lazy per province now,
+  // so asking for every record just to get one id would read all 81
+  // snapshots on every test in this file.
+  realPlaceId = queryPlaces({ lat: 41.0082, lon: 28.9784, radius_m: 2000, limit: 1 }).places[0].id;
 });
 
 afterEach(async () => {

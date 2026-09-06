@@ -31,7 +31,7 @@ import type {
 import { boundingBox, haversineMeters } from "./geo";
 import { isOpenNow } from "./opening-hours";
 import { AMENITIES, QUERY_NOTICES, SEARCH_SYNONYMS, type QueryNotice } from "./categories";
-import { findProvince, foldAscii, parseLocality, resolveDistrict } from "./administrative";
+import { findProvince, foldAscii, foldWords, parseLocality, resolveDistrict } from "./administrative";
 import { divisionCounts, officialDistrict, officialProvinceCenter } from "./admin-divisions";
 
 interface RawDataset {
@@ -130,6 +130,41 @@ interface ProvinceIndexRow {
   count: number;
   fetch_unit: string;
   bbox: { minLat: number; minLon: number; maxLat: number; maxLon: number };
+}
+
+/**
+ * Does any WORD in the haystack start with the needle?
+ *
+ * Plain `includes` was matching mid-word, and at national scale that is not
+ * a subtlety: searching "Bolu cami" returned mosques in **Tirebolu**
+ * (Giresun), 600 km away, because "tirebolu" contains "bolu". Every province
+ * or district name that happens to be a substring of another place name has
+ * the same problem.
+ *
+ * Word-prefix rather than whole-word, because incremental typing has to keep
+ * working - somebody typing "kadik" must still find Kadıköy before they
+ * finish the word. The haystack is space-joined, so a word starts at index 0
+ * or after a space.
+ */
+function matchesWordPrefix(haystack: string, needle: string): boolean {
+  // Every word of the query must begin a word of the record - "moda parki"
+  // matches "Moda Parkı Tuvaleti", "bolu" no longer matches "Tirebolu".
+  for (const word of needle.split(" ")) {
+    if (!word) continue;
+    let from = 0;
+    let hit = false;
+    for (;;) {
+      const at = haystack.indexOf(word, from);
+      if (at === -1) break;
+      if (at === 0 || haystack[at - 1] === " ") {
+        hit = true;
+        break;
+      }
+      from = at + 1;
+    }
+    if (!hit) return false;
+  }
+  return true;
 }
 
 /** Hoisted once: the facet pass runs this over every match in the result
@@ -436,7 +471,7 @@ function loadProvince(slug: string): Place[] {
     // tagged "Kadikoy" rather than the two spelled without them.
     searchTextCache.set(
       resolved.id,
-      foldAscii(
+      foldWords(
         [resolved.name, resolved.address_line, resolved.district, resolved.province]
           .filter(Boolean)
           .join(" "),
@@ -495,6 +530,28 @@ function provincesFor(
 
 /** Every province. Used by the sitemap (build time), the tests, and any
  * query with no geographic constraint. */
+interface PlaceIndexFile {
+  provinces: string[];
+  ids: Record<string, number>;
+}
+
+let placeIndexCache: PlaceIndexFile | null | undefined;
+
+/** The id -> province lookup, read at most once per process and only from
+ * the by-id path. Null when the file is absent, which is a slower but
+ * correct configuration rather than a broken one. */
+function loadPlaceIndex(): PlaceIndexFile | null {
+  if (placeIndexCache !== undefined) return placeIndexCache;
+  try {
+    placeIndexCache = JSON.parse(
+      fs.readFileSync(path.join(DATA_DIR(), "place-index.json"), "utf-8"),
+    ) as PlaceIndexFile;
+  } catch {
+    placeIndexCache = null;
+  }
+  return placeIndexCache;
+}
+
 function loadAll(): Place[] {
   const all = placesFor(loadIndex().map((row) => row.slug));
   allLoaded = true;
@@ -536,6 +593,22 @@ export function getPlaceById(id: string, communityPlaces?: Place[]): Place | und
   }
   const fromCommunity = communityPlaces?.find((p) => p.id === id);
   if (fromCommunity) return fromCommunity;
+
+  // Not in memory: ask the id index which province holds it and read that
+  // one file. The index (3,2 MB, loaded once and only on this path) exists
+  // precisely so a miss is not a national load - otherwise a single
+  // /yer/<bogus-id> request would pull 167.829 records into memory, which
+  // is both a 15-second 404 and something a crawler could trigger at will.
+  const index = loadPlaceIndex();
+  if (index) {
+    const provinceIndexPosition = index.ids[id];
+    if (provinceIndexPosition === undefined) return undefined;
+    const slug = index.provinces[provinceIndexPosition];
+    return slug ? loadProvince(slug).find((p) => p.id === id) : undefined;
+  }
+
+  // No index file (a clone that has not run build_dataset_meta.mjs): fall
+  // back to the exhaustive read rather than answering a wrong 404.
   if (allLoaded) return undefined;
   return loadAll().find((p) => p.id === id);
 }
@@ -771,7 +844,8 @@ export function queryPlaces(
   const effectiveFreeOnly = freeOnly || parsedFromText.freeOnly;
   // Folded with the same function the index was built with, or the two would
   // simply never meet.
-  const textNeedle = parsedFromText.leftover ? foldAscii(parsedFromText.leftover) : null;
+  // Folded per word, like the index it is matched against.
+  const textNeedle = parsedFromText.leftover ? foldWords(parsedFromText.leftover) : null;
 
   const hasCenter = typeof lat === "number" && typeof lon === "number";
   const box = hasCenter && radius_m ? boundingBox({ lat: lat!, lon: lon! }, radius_m) : null;
@@ -983,8 +1057,8 @@ export function queryPlaces(
       if (needle) {
         const haystack =
           searchTextCache.get(place.id) ??
-          foldAscii([place.name, place.address_line, place.district, place.province].filter(Boolean).join(" "));
-        if (!haystack.includes(needle)) continue;
+          foldWords([place.name, place.address_line, place.district, place.province].filter(Boolean).join(" "));
+        if (!matchesWordPrefix(haystack, needle)) continue;
       }
 
       let distance: number | null = null;

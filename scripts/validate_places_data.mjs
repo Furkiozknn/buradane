@@ -217,8 +217,8 @@ const boundaryCount = [...fetchUnits.values()].filter((u) => u === "province_bou
 console.log(`gerçek il sınırından çekilen: ${boundaryCount}/${files.length}`);
 if (legacyOverlaps.length) {
   console.log(
-    `\n${legacyOverlaps.length} geçici örtüşme (eski kutu dosyası x yeni sınır dosyası) - ` +
-      `ilgili il yeniden çekilince kaybolur:`,
+    `\n${legacyOverlaps.length} açıklanmış örtüşme - yükleyici tekilleştirir ` +
+      `(ilçesi olan kopya kazanır):`,
   );
   for (const item of legacyOverlaps.slice(0, 5)) console.log("  ~ " + item);
 }

@@ -327,4 +327,24 @@ export function parseLocality(raw: string | null | undefined): {
 
 /** Exported for the district resolver and for tests; both need the exact
  * folding rules the province index was built with. */
+/**
+ * Folds each WORD separately and rejoins with single spaces.
+ *
+ * `foldAscii` deliberately strips everything that is not a letter or digit,
+ * spaces included, which turns "Cami Bilecik Merkez" into one 20-character
+ * blob. That is right for comparing one name against another - punctuation
+ * and spacing should not decide whether "Kadıköy" equals "Kadikoy" - and
+ * wrong for a search index, because a blob has no word boundaries and
+ * "Bolu" therefore matched "Tirebolu" 600 km away. Keeping the boundaries
+ * is what lets a search distinguish "starts a word" from "appears
+ * somewhere".
+ */
+export function foldWords(value: string): string {
+  return value
+    .split(/\s+/)
+    .map((word) => foldAscii(word))
+    .filter(Boolean)
+    .join(" ");
+}
+
 export { foldAscii, foldTr };

@@ -28,6 +28,7 @@ import { fileURLToPath } from "node:url";
 
 const DATA_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "frontend", "data");
 const OUT = path.join(DATA_DIR, "meta.json");
+const INDEX_OUT = path.join(DATA_DIR, "place-index.json");
 
 const files = fs
   .readdirSync(DATA_DIR)
@@ -42,6 +43,11 @@ const provinces = [];
 // the UI shows has to be the number the app actually holds. Summing file
 // lengths would overstate it by exactly those border cases.
 const distinctIds = new Set();
+// id -> index into `provinces`. Only ever read when a place is looked up by
+// id and is not already in memory - see getPlaceById. Without it that miss
+// costs a full national load (~15 s, ~400 MB), which any crawler could
+// trigger with one bogus /yer/<id> URL.
+const placeIndex = {};
 let newest = "";
 let attribution = "© OpenStreetMap katkıda bulunanları";
 let license = "ODbL 1.0";
@@ -57,6 +63,10 @@ for (const file of files) {
   let maxLon = -Infinity;
   for (const p of data.places) {
     distinctIds.add(p.id);
+    // First file wins, matching the loader's own preference order closely
+    // enough for a lookup hint: the record is read from that province and
+    // the dedupe rule then applies as usual.
+    if (!(p.id in placeIndex)) placeIndex[p.id] = provinces.length;
     if (p.lat < minLat) minLat = p.lat;
     if (p.lat > maxLat) maxLat = p.lat;
     if (p.lon < minLon) minLon = p.lon;
@@ -90,7 +100,17 @@ fs.writeFileSync(
   "utf-8",
 );
 
+fs.writeFileSync(
+  INDEX_OUT,
+  JSON.stringify({ provinces: provinces.map((p) => p.slug), ids: placeIndex }),
+  "utf-8",
+);
+
 console.log(
   `meta.json: ${provinces.length} il, ${distinctIds.size} mekan (benzersiz), ` +
     `${(fs.statSync(OUT).size / 1024).toFixed(0)} KB`,
+);
+console.log(
+  `place-index.json: ${Object.keys(placeIndex).length} id, ` +
+    `${(fs.statSync(INDEX_OUT).size / 1048576).toFixed(1)} MB`,
 );

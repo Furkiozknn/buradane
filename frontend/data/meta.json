@@ -1,9 +1,9 @@
 {
- "generated_at": "2026-09-06T04:40:24Z",
+ "generated_at": "2026-09-06T04:57:51Z",
  "source": "OpenStreetMap via Overpass API",
  "license": "ODbL 1.0",
  "attribution": "© OpenStreetMap katkıda bulunanları",
- "count": 132475,
+ "count": 167829,
  "provinces": [
   {
    "slug": "adana",
@@ -260,37 +260,37 @@
   {
    "slug": "canakkale",
    "label": "Çanakkale",
-   "count": 390,
-   "fetch_unit": "legacy_bbox",
+   "count": 1499,
+   "fetch_unit": "province_boundary",
    "bbox": {
-    "minLat": 40.093552,
-    "minLon": 26.3578521,
-    "maxLat": 40.1853909,
-    "maxLon": 26.4709353
+    "minLat": 39.4709899,
+    "minLon": 25.6832403,
+    "maxLat": 40.7371916,
+    "maxLon": 27.5035909
    }
   },
   {
    "slug": "cankiri",
    "label": "Çankırı",
-   "count": 114,
-   "fetch_unit": "legacy_bbox",
+   "count": 558,
+   "fetch_unit": "province_boundary",
    "bbox": {
-    "minLat": 40.5428945,
-    "minLon": 33.5968115,
-    "maxLat": 40.6509218,
-    "maxLon": 33.6849307
+    "minLat": 40.2849377,
+    "minLon": 32.7426586,
+    "maxLat": 41.0598137,
+    "maxLon": 34.1318276
    }
   },
   {
    "slug": "corum",
    "label": "Çorum",
-   "count": 394,
-   "fetch_unit": "legacy_bbox",
+   "count": 1066,
+   "fetch_unit": "province_boundary",
    "bbox": {
-    "minLat": 40.4952093,
-    "minLon": 34.8846052,
-    "maxLat": 40.6045464,
-    "maxLon": 34.9970578
+    "minLat": 39.9545867,
+    "minLon": 34.0207592,
+    "maxLat": 41.2886379,
+    "maxLon": 35.3385417
    }
   },
   {
@@ -476,25 +476,25 @@
   {
    "slug": "istanbul",
    "label": "İstanbul",
-   "count": 6481,
-   "fetch_unit": "legacy_bbox",
+   "count": 25916,
+   "fetch_unit": "province_boundary",
    "bbox": {
-    "minLat": 40.8500432,
-    "minLon": 28.5564135,
-    "maxLat": 41.2479331,
-    "maxLon": 29.439442
+    "minLat": 40.8084415,
+    "minLon": 27.9817677,
+    "maxLat": 41.552565,
+    "maxLon": 29.9051368
    }
   },
   {
    "slug": "izmir",
    "label": "İzmir",
-   "count": 2271,
-   "fetch_unit": "legacy_bbox",
+   "count": 8364,
+   "fetch_unit": "province_boundary",
    "bbox": {
-    "minLat": 38.3205181,
-    "minLon": 26.9800488,
-    "maxLat": 38.5295651,
-    "maxLon": 27.2502476
+    "minLat": 37.8756042,
+    "minLon": 26.2341494,
+    "maxLat": 39.3566922,
+    "maxLon": 28.4578994
    }
   },
   {
@@ -812,13 +812,13 @@
   {
    "slug": "sanliurfa",
    "label": "Şanlıurfa",
-   "count": 810,
-   "fetch_unit": "legacy_bbox",
+   "count": 2378,
+   "fetch_unit": "province_boundary",
    "bbox": {
-    "minLat": 37.1021824,
-    "minLon": 38.7237058,
-    "maxLat": 37.2200965,
-    "maxLon": 38.8692692
+    "minLat": 36.7073827,
+    "minLon": 37.866585,
+    "maxLat": 37.9596574,
+    "maxLon": 40.2102959
    }
   },
   {
@@ -848,13 +848,13 @@
   {
    "slug": "sirnak",
    "label": "Şırnak",
-   "count": 68,
-   "fetch_unit": "legacy_bbox",
+   "count": 545,
+   "fetch_unit": "province_boundary",
    "bbox": {
-    "minLat": 37.4920899,
-    "minLon": 42.4245473,
-    "maxLat": 37.5309091,
-    "maxLon": 42.5175259
+    "minLat": 37.14023,
+    "minLon": 41.6712713,
+    "maxLat": 37.5718569,
+    "maxLon": 43.3003047
    }
   },
   {
@@ -896,85 +896,85 @@
   {
    "slug": "trabzon",
    "label": "Trabzon",
-   "count": 898,
-   "fetch_unit": "legacy_bbox",
+   "count": 2305,
+   "fetch_unit": "province_boundary",
    "bbox": {
-    "minLat": 40.9609586,
-    "minLon": 39.6378819,
-    "maxLat": 41.0126333,
-    "maxLon": 39.8298627
+    "minLat": 40.5223872,
+    "minLon": 39.1429265,
+    "maxLat": 41.1065065,
+    "maxLon": 40.4572031
    }
   },
   {
    "slug": "tunceli",
    "label": "Tunceli",
-   "count": 45,
-   "fetch_unit": "legacy_bbox",
+   "count": 107,
+   "fetch_unit": "province_boundary",
    "bbox": {
-    "minLat": 39.0706077,
-    "minLon": 39.4952716,
-    "maxLat": 39.1318627,
-    "maxLon": 39.5556373
+    "minLat": 38.8452561,
+    "minLon": 38.9111948,
+    "maxLat": 39.5904772,
+    "maxLon": 40.2316178
    }
   },
   {
    "slug": "usak",
    "label": "Uşak",
-   "count": 574,
-   "fetch_unit": "legacy_bbox",
+   "count": 973,
+   "fetch_unit": "province_boundary",
    "bbox": {
-    "minLat": 38.6204531,
-    "minLon": 29.3516979,
-    "maxLat": 38.7256599,
-    "maxLon": 29.4747313
+    "minLat": 38.2393209,
+    "minLon": 28.7995648,
+    "maxLat": 38.8943811,
+    "maxLon": 29.990795
    }
   },
   {
    "slug": "van",
    "label": "Van",
-   "count": 576,
-   "fetch_unit": "legacy_bbox",
+   "count": 2202,
+   "fetch_unit": "province_boundary",
    "bbox": {
-    "minLat": 38.4403,
-    "minLon": 43.3138095,
-    "maxLat": 38.5574724,
-    "maxLon": 43.4480456
+    "minLat": 37.7353404,
+    "minLon": 42.6920986,
+    "maxLat": 39.2994252,
+    "maxLon": 44.4406843
    }
   },
   {
    "slug": "yalova",
    "label": "Yalova",
-   "count": 273,
-   "fetch_unit": "legacy_bbox",
+   "count": 584,
+   "fetch_unit": "province_boundary",
    "bbox": {
-    "minLat": 40.6043009,
-    "minLon": 29.20601,
-    "maxLat": 40.6707781,
-    "maxLon": 29.3366986
+    "minLat": 40.4643049,
+    "minLon": 28.7855615,
+    "maxLat": 40.7232346,
+    "maxLon": 29.5457989
    }
   },
   {
    "slug": "yozgat",
    "label": "Yozgat",
-   "count": 176,
-   "fetch_unit": "legacy_bbox",
+   "count": 1021,
+   "fetch_unit": "province_boundary",
    "bbox": {
-    "minLat": 39.7698629,
-    "minLon": 34.7627021,
-    "maxLat": 39.8399354,
-    "maxLon": 34.8664479
+    "minLat": 39.0572752,
+    "minLon": 34.0780068,
+    "maxLat": 40.2082267,
+    "maxLon": 36.0722405
    }
   },
   {
    "slug": "zonguldak",
    "label": "Zonguldak",
-   "count": 253,
-   "fetch_unit": "legacy_bbox",
+   "count": 1148,
+   "fetch_unit": "province_boundary",
    "bbox": {
-    "minLat": 41.4234997,
-    "minLon": 31.7195161,
-    "maxLat": 41.4935284,
-    "maxLon": 31.8518208
+    "minLat": 41.0188245,
+    "minLon": 31.337502,
+    "maxLat": 41.581948,
+    "maxLon": 32.2810779
    }
   }
  ]
