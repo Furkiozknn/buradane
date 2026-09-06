@@ -73,15 +73,54 @@ function emptyStore(): StoreShape {
   return { contributions: [], overrides: {}, places: [] };
 }
 
+/**
+ * Cached by file mtime and size.
+ *
+ * `GET /api/places` calls listOverrides() AND listCommunityPlaces(), each of
+ * which read and JSON.parse the whole store independently - twice per public
+ * read, with nothing cached. That was noise at 1 KB and is not at scale: a
+ * security review measured a 17,7 MB store turning a 56 ms query into
+ * 400-730 ms, permanently, for every visitor. The write path the product is
+ * built around was slowing down its own read path.
+ *
+ * Keyed on mtime+size rather than a timer, because the file changes only
+ * when this process writes it (or an operator edits it), and staleness here
+ * would mean a moderator's decision not taking effect. writeStore stamps the
+ * cache directly, so a write is visible to the very next read.
+ */
+let storeCache: { key: string; store: StoreShape } | null = null;
+
+/**
+ * Uncached, for the mutators.
+ *
+ * They do read -> mutate-in-place -> write, so handing them the cached
+ * object would let a concurrent READER observe half-applied changes -
+ * writeStore clears the cache, but the window between the mutation and the
+ * write is real. Mutations are rare and reads are hot, so the cache serves
+ * the hot path and the writers pay one parse. The store lock already
+ * serialises writers against each other.
+ */
+async function readStoreForUpdate(): Promise<StoreShape> {
+  storeCache = null;
+  return readStore();
+}
+
 async function readStore(): Promise<StoreShape> {
   try {
-    const raw = await fs.readFile(storePath(), "utf-8");
+    const target = storePath();
+    const stat = await fs.stat(target).catch(() => null);
+    const key = stat ? `${target}|${stat.mtimeMs}|${stat.size}` : `${target}|absent`;
+    if (storeCache && storeCache.key === key) return storeCache.store;
+
+    const raw = await fs.readFile(target, "utf-8");
     const parsed = JSON.parse(raw) as Partial<StoreShape>;
-    return {
+    const store: StoreShape = {
       contributions: parsed.contributions ?? [],
       overrides: parsed.overrides ?? {},
       places: parsed.places ?? [],
     };
+    storeCache = { key, store };
+    return store;
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
     if (code === "ENOENT") return emptyStore();
@@ -93,6 +132,9 @@ async function readStore(): Promise<StoreShape> {
 }
 
 async function writeStore(store: StoreShape): Promise<void> {
+  // The next read must see this, so the cache is dropped rather than
+  // re-stamped: the mtime the OS records is the authority, not one we guess.
+  storeCache = null;
   const target = storePath();
   await fs.mkdir(path.dirname(target), { recursive: true });
   // Write-then-rename, never write-in-place: the whole file is rewritten on
@@ -153,7 +195,7 @@ async function addContributionUnlocked(input: {
   payload?: Record<string, unknown>;
   note?: string | null;
 }): Promise<Contribution> {
-  const store = await readStore();
+  const store = await readStoreForUpdate();
 
   // A positive verification ("yes, it's still here") is the one contribution
   // that applies immediately rather than queueing. That mirrors the backend:
@@ -221,7 +263,7 @@ async function moderateContributionUnlocked(
   id: string,
   action: "approve" | "reject",
 ): Promise<ModerationResult> {
-  const store = await readStore();
+  const store = await readStoreForUpdate();
   const contribution = store.contributions.find((c) => c.id === id);
   if (!contribution) return { ok: false, reason: "not_found" };
 
@@ -378,7 +420,7 @@ export async function getPlaceOverrides(placeId: string): Promise<Partial<Place>
 
 export async function setPlaceOverride(placeId: string, patch: Partial<Place>): Promise<void> {
   return withStoreLock(async () => {
-    const store = await readStore();
+    const store = await readStoreForUpdate();
     store.overrides[placeId] = { ...(store.overrides[placeId] ?? {}), ...patch };
     await writeStore(store);
   });
@@ -386,7 +428,7 @@ export async function setPlaceOverride(placeId: string, patch: Partial<Place>): 
 
 export async function clearPlaceOverride(placeId: string): Promise<void> {
   return withStoreLock(async () => {
-    const store = await readStore();
+    const store = await readStoreForUpdate();
     delete store.overrides[placeId];
     await writeStore(store);
   });

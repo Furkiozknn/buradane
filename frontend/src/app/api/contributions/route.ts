@@ -18,6 +18,48 @@ const MAX_PAYLOAD_KEYS = 30;
 const MAX_PAYLOAD_STRING = 500;
 
 /**
+ * Reads the body, stopping the moment it exceeds the cap. Returns null when
+ * it does.
+ *
+ * `await request.text()` would materialise the whole thing first, and the
+ * content-length check above cannot save us: a chunked request has no
+ * content-length to fail on. A security review sent 250 MB that way and
+ * watched RSS go from 291 MB to 873 MB before the (correct) 413 came back -
+ * three concurrent requests would OOM the 512 MB container the deployment
+ * note recommends. The comment that used to sit here said "content-length
+ * is a claim, not a guarantee", which was right about the threat and
+ * applied the check one line too late.
+ *
+ * Reading the stream lets us abandon as soon as the counter passes the cap,
+ * so the peak cost of an attacker's 250 MB is one chunk.
+ */
+async function readBounded(request: Request): Promise<string | null> {
+  if (!request.body) return "";
+  const reader = request.body.getReader();
+  const decoder = new TextDecoder();
+  let size = 0;
+  let out = "";
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > MAX_BODY_BYTES) {
+        // Stop pulling: without this the sender keeps streaming into a
+        // buffer we have already decided to reject.
+        await reader.cancel();
+        return null;
+      }
+      out += decoder.decode(value, { stream: true });
+    }
+    return out + decoder.decode();
+  } catch {
+    // A truncated or aborted upload is not a body we can parse.
+    return null;
+  }
+}
+
+/**
  * `payload` is stored verbatim, so it is the one field a caller could grow
  * without limit. Kept permissive in shape (the demo's suggestion payload
  * evolves) but bounded in size: a fixed number of keys, each scalar capped,
@@ -88,9 +130,9 @@ export async function POST(request: Request) {
   if (declaredLength > MAX_BODY_BYTES) {
     return NextResponse.json({ error: "Gönderilen veri çok büyük" }, { status: 413 });
   }
-  const rawBody = await request.text();
-  // Re-checked after reading: content-length is a claim, not a guarantee.
-  if (rawBody.length > MAX_BODY_BYTES) {
+
+  const rawBody = await readBounded(request);
+  if (rawBody === null) {
     return NextResponse.json({ error: "Gönderilen veri çok büyük" }, { status: 413 });
   }
 
