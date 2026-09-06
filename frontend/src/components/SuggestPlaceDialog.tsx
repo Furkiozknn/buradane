@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Check, MapPin, X } from "lucide-react";
 
 import { CATEGORIES, categoryMeta } from "@/lib/categories";
 import { formatDistance } from "@/lib/geo";
 import type { CategorySlug, Place } from "@/lib/types";
+import { useModalDialog } from "@/lib/use-modal-dialog";
 
 /**
  * "Yer öner" - the lowest-friction contribution path. Location comes from
@@ -33,14 +34,7 @@ export function SuggestPlaceDialog({
   const [nearby, setNearby] = useState<Place[]>([]);
   const dialogRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    dialogRef.current?.focus();
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  useModalDialog(dialogRef, onClose);
 
   const toggle = (slug: CategorySlug) =>
     setSelected((current) =>

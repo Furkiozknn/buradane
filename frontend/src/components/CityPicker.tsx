@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { MapPin, X } from "lucide-react";
 
 import { TOTALS, findProvince, foldAscii } from "@/lib/administrative";
+import { useModalDialog } from "@/lib/use-modal-dialog";
 
 export interface DistrictChoice {
   name: string;
@@ -113,20 +114,11 @@ export function CityPicker({
   const coveredProvinces = new Set(
     cities.map((c) => findProvince(c.label)?.code).filter((code): code is number => code !== undefined),
   ).size;
-  // Focus moves INTO the dialog on open. Without it document.activeElement
-  // stayed on BODY, so Tab walked the app behind the overlay - and this
-  // dialog is the documented recovery path for someone whose location we
-  // cannot get, which makes it the worst one to leave unreachable. The
-  // suggest/report dialogs already did this; these two had been missed.
+  // This dialog is the documented recovery path for someone whose location
+  // we cannot get, which makes it the worst one to leave unreachable by
+  // keyboard - see use-modal-dialog.ts.
   const dialogRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    dialogRef.current?.focus();
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  useModalDialog(dialogRef, onClose);
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">

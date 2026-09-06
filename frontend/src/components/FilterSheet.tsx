@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 import { X } from "lucide-react";
 
 import { EXTRA_FILTERS, FILTERABLE_AMENITIES } from "@/lib/categories";
 import type { AmenityKey, PlaceQueryResult } from "@/lib/types";
+import { useModalDialog } from "@/lib/use-modal-dialog";
 
 export interface FilterState {
   amenities: AmenityKey[];
@@ -58,16 +59,8 @@ export function FilterSheet({
   onChange: (next: FilterState) => void;
   onClose: () => void;
 }) {
-  // Focus moves INTO the dialog on open - see CityPicker for why.
   const dialogRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    dialogRef.current?.focus();
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  useModalDialog(dialogRef, onClose);
 
   const toggleAmenity = (key: AmenityKey) => {
     onChange({

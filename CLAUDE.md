@@ -382,11 +382,53 @@ seçimi, viewport tazeliği, sheet snap noktaları, favoriler, URL senkronu).
 Değişiklikten önce ilgili bölümün tamamını oku. `eslint-disable` satırları
 gerekçeleriyle birlikte yazılmıştır; gerekçeyi okumadan kaldırma.
 
+### Modal diyaloglar — `use-modal-dialog.ts` kullanılır, elle yazılmaz
+
+`role="dialog"` + `aria-modal="true"` yazan her bileşen
+`useModalDialog(dialogRef, onClose)` çağırmak zorundadır. `aria-modal`
+ekran okuyucuya arka planın etkisiz olduğunu **söyler**; Tab tuşu için bunu
+doğru yapan hiçbir şey yoktur. Hook dört yükümlülüğü birlikte yerine
+getiriyor: Escape kapatır, odak açılışta içeri girer, Tab içeride sarar,
+kapanışta odak tetikleyiciye döner. Dördü de daha önce ayrı ayrı
+kopyalanmıştı ve son ikisi hiçbirinde yoktu — rapor diyalogundan Tab,
+örtünün ardındaki ~200 sonuç kartına yürüyordu.
+
+Depoda DOM test ortamı **yok** (jsdom/happy-dom kurulu değil ve yeni
+bağımlılık §10 gereği maintainer onayı ister), bu yüzden bu davranış gerçek
+tarayıcıda doğrulanır. Doğrulama tarifi: diyalogu aç, Shift+Tab bas — odak
+diyalogun **son** öğesine sarmalı, dışarı çıkmamalı; son öğede Tab bas —
+ilk öğeye dönmeli; Escape bas — diyalog kapanmalı ve odak açan düğmeye
+dönmeli.
+
 ### `places-repository.ts`
 
 Sorgu motoru. Filtre sırası, genişletme merdiveni ve facet hesabı birbirine
 bağlıdır. Facet sayaçları filtrelerin gerçekte döndürdüğü sayıyla **birebir
 aynı** olmak zorundadır — testler bunu kilitler.
+
+Modül **il başına tembel yükler** ve yüklenen ili bellekte tutar (kapasite 8,
+`MAX_RESIDENT_PROVINCES`). Bir ilin ilk yüklenmesinin maliyeti dosya okumak
+değil, ham OSM satırını `Place`'e çeviren kayıt başına iştir — ilçe/il
+çözümleme, erişim türetme, topluluk sinyalleri, Türkçe arama metni katlaması.
+Ölçüm: kayıt başına ~70-100 µs; İstanbul'un 25.916 kaydı için 1723 ms, uçtan
+uca ilk istek 2717 ms. Isındıktan sonra aynı sorgu 47 ms.
+
+### Next'te iki ayrı modül kaydı var — `instrumentation.ts` ile ısıtma İŞE YARAMAZ
+
+Yukarıdaki soğuk maliyeti kapatmanın bariz yolu, sunucu açılışında yoğun
+illeri `instrumentation.ts`'in `register()` kancasında önceden yüklemektir.
+**Denendi, ölçüldü, geri alındı.** Next route handler'ları ile
+instrumentation için ayrı modül örnekleri tutuyor: ısıtma kendi kopyasını
+dolduruyor, route handler işi baştan yapıyor ve toplam iş ikiye katlanıyor.
+
+| | İstanbul | Ankara | İzmir | Trabzon |
+|---|---|---|---|---|
+| instrumentation ile | 5999 ms | 2143 ms | 1567 ms | 420 ms |
+| instrumentation'sız | 2717 ms | 1358 ms | 1024 ms | 258 ms |
+
+Aynı ayrım daha önce modül düzeyindeki önbelleklerin iki kez dolmasında da
+görüldü. Modül durumunun süreç genelinde tek olduğunu **varsayma**; süreç
+genelinde bir şey paylaşman gerekiyorsa önce ölç.
 
 ---
 
@@ -492,6 +534,14 @@ Bunlar README'de de yazılıdır ve bilinçli kabul edilmiş durumlardır:
 - İl kapsamı **tamamlandı**: 81/81 il, her biri gerçek OSM il sınırından;
   167.829 mekan; 973 ilçe merkezinin tamamının 15 km'sinde veri var.
 - Fotoğraf desteği yoktur (OSM'de ölçülen kapsam %2,3 olduğu için ertelendi).
+- **Sunucu yeniden başladıktan sonra bir ile yapılan ilk sorgu yavaştır.**
+  Ölçüm: İstanbul 2717 ms, Ankara 1358 ms, Trabzon 258 ms; ısındıktan sonra
+  hepsi 41-65 ms (bkz. §9). Yalnızca İstanbul, `public/sw.js`'teki 2,5 sn'lik
+  network-first eşiğini aşıyor — yani önbelleği dolu, dönen bir ziyaretçi,
+  dağıtımdan sonraki ilk İstanbul sorgusunda bağlantısı gayet iyi olduğu
+  hâlde "önbellekten, eski olabilir" etiketi görebilir. Her sunucu başlangıcı
+  başına tek ziyaretçiyi etkiler. Eşiği yükseltmek düzeltme değildir: eşik
+  kötü bağlantı için vardır ve yükseltmek asıl amacını zayıflatır.
 - `backend/app/core/config.py`, var olmayan bir `docs/ARCHITECTURE.md`
   dosyasına atıf yapar.
 

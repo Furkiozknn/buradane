@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Check, X } from "lucide-react";
 
 import type { ContributionKind, Place } from "@/lib/types";
+import { useModalDialog } from "@/lib/use-modal-dialog";
 
 const REPORT_OPTIONS: { kind: ContributionKind; reason: string; label: string }[] = [
   { kind: "report_closed", reason: "closed", label: "Kapalı / artık burada değil" },
@@ -20,16 +21,9 @@ export function ReportDialog({ place, onClose }: { place: Place; onClose: () => 
   const [error, setError] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
 
-  // Escape closes, and focus moves into the dialog on open - both are basic
-  // dialog obligations that get skipped surprisingly often.
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    dialogRef.current?.focus();
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  // Escape, focus in, Tab trapped, focus restored on close. See
+  // use-modal-dialog.ts for why the last two are not optional here.
+  useModalDialog(dialogRef, onClose);
 
   async function submit() {
     if (selected === null) return;
