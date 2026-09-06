@@ -20,5 +20,12 @@ export default defineConfig({
     // The repository reads data/places.*.json relative to cwd, exactly as
     // the route handlers do at runtime.
     root: import.meta.dirname,
+    // Vitest's default is 5000 ms, and several suites load the whole
+    // national snapshot: measured at 3,5 s each on an idle developer
+    // machine, which left ~1,4 s of headroom on a shared two-core CI
+    // runner. Under load that produced timeouts - a FALSE RED, which is the
+    // failure mode that erodes trust in a suite and gets people reaching for
+    // --retry. The work is real and bounded; the limit just has to admit it.
+    testTimeout: 20_000,
   },
 });

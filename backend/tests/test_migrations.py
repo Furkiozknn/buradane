@@ -3,11 +3,10 @@ metadata knows must be created by a migration, and vice versa. Static
 parity - no database needed - so adding a model without writing its
 migration fails CI immediately instead of surfacing at deploy time.
 
-Scope, honestly: the static check compares TABLE NAMES only. A new column,
-index or constraint added to a model without a migration slips past both
-tests here - the cycle test below proves reversibility, not column parity.
-Full autogenerate-diff parity is an open follow-up; until then, reviewers
-must eyeball model diffs against the migration chain by hand."""
+Scope: the static check compares TABLE NAMES only and needs no database.
+Column, index and constraint parity is checked by the cycle test below,
+which runs autogenerate against the schema the migrations actually build -
+that needs Postgres, so it runs in CI rather than on a DB-less machine."""
 
 from __future__ import annotations
 
@@ -95,6 +94,32 @@ def test_upgrade_downgrade_upgrade_cycle_leaves_no_debris(monkeypatch):
         assert leftover_enums == 0, "downgrade must drop the enum types it created"
         assert leftover_tables == 0
         command.upgrade(cfg, "head")  # the run that used to die on DuplicateObject
+
+        # Column-level parity, against the schema the migrations ACTUALLY
+        # build. This is the gap a QA audit proved by adding a column to
+        # Place with no migration and watching the whole suite stay
+        # byte-identical: the static check above compares table NAMES, and
+        # every other test builds its schema with create_all, so the models
+        # and the migration chain were never once compared to each other.
+        # A missing column therefore stayed green through CI and failed at
+        # `alembic upgrade head` in production. autogenerate against the
+        # migrated scratch database is the comparison that was missing.
+        from alembic.autogenerate import compare_metadata
+        from alembic.migration import MigrationContext
+        from app.core.schema_filters import include_object  # the same filters env.py uses
+
+        from app.core.db import Base
+        import app.models  # noqa: F401 - populates Base.metadata
+
+        with create_engine(scratch_url).connect() as conn:
+            context = MigrationContext.configure(
+                conn, opts={"include_object": include_object, "compare_type": True}
+            )
+            diff = compare_metadata(context, Base.metadata)
+        assert diff == [], (
+            "modeller ile migration zinciri ayrışmış - eksik/fazla sütun, indeks "
+            f"ya da kısıt var. Fark: {diff}"
+        )
     finally:
         with admin_engine.connect() as conn:
             conn.execute(text(f'DROP DATABASE IF EXISTS "{scratch_name}" WITH (FORCE)'))

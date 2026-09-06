@@ -4,7 +4,16 @@ __pycache__/
 .pytest_cache/
 *.egg-info/
 .venv/
+
+# Env files, every variant and at every depth. The bare `.env` rule left
+# backend/.env.production, .env.local and .env.prod committable, and
+# docs/backend-ortam-degiskenleri.md tells operators to put
+# BURADANE_ADMIN_TOKEN and BURADANE_JWT_SECRET in exactly such a file - so
+# one `git add .` would have published them to a public repository. The
+# negation keeps the checked-in template visible.
 .env
+.env.*
+!.env.example
 
 # Node (frontend)
 node_modules/

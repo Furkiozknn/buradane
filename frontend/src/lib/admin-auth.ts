@@ -75,7 +75,10 @@ export type AdminAuthResult =
  * unauthenticated "by design" before this change). Failing closed and
  * saying why in the response body is the honest version of "dev
  * convenience": a developer who hits this immediately sees a clear 401
- * pointing at `.env.example`, instead of either a silently-open admin panel
+ * pointing at docs/backend-ortam-degiskenleri.md (which carries the
+ * copy-pasteable template this repo has instead of a committed .env.example
+ * - env files are gitignored at every depth), instead of either a
+ * silently-open admin panel
  * or an opaque, unexplained error.
  */
 export function checkAdminAuth(request: Request): AdminAuthResult {
