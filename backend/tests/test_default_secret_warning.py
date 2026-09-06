@@ -56,3 +56,54 @@ def test_no_token_is_accepted_under_the_published_default_secret(monkeypatch):
     monkeypatch.setattr(settings, "jwt_secret", deps.DEFAULT_JWT_SECRET)
     forged = create_access_token(str(user_id))
     assert deps._decode_user_id(forged) is None
+
+
+def test_the_api_client_fixture_installs_a_secret_that_actually_authenticates(api_jwt_secret):
+    """The other side of the refusal, and the regression this file was
+    missing.
+
+    When _decode_user_id started refusing every token under the published
+    default, six tests in test_admin_moderation.py went red in CI and only
+    in CI: they log in, get a genuinely valid token, and then get 403 on it.
+    Nothing was wrong with the auth code - the suite was simply exercising
+    the API under the secret the app is built to distrust, and no test said
+    so.
+
+    Two halves, because the first draft only had the first and a mutation
+    that deleted the fixture wiring sailed straight through it:
+
+    1. the value is usable - not the default, and a token minted under it
+       decodes;
+    2. the client fixture actually asks for it.
+
+    Note it takes api_jwt_secret as an argument rather than patching the
+    setting itself. That is the third mutation talking: a version that did
+    its own monkeypatching still passed when the fixture was gutted into a
+    plain `return`, because it was never exercising the fixture at all.
+
+    Needs no database, so it runs everywhere - including the machines where
+    the admin tests it protects skip.
+    """
+    import inspect
+    import uuid
+
+    from app.api import deps
+    from app.core.security import create_access_token
+
+    from .test_admin_moderation import client as client_fixture
+
+    assert api_jwt_secret != deps.DEFAULT_JWT_SECRET
+    # The fixture must have *installed* it, not merely named it.
+    assert settings.jwt_secret == api_jwt_secret
+
+    user_id = uuid.uuid4()
+    assert deps._decode_user_id(create_access_token(str(user_id))) == user_id
+
+    # pytest wraps a fixture function; __wrapped__ is the one that declares
+    # the dependencies. Structural on purpose: asserting the value is right
+    # says nothing about whether anything installs it.
+    params = inspect.signature(client_fixture.__wrapped__).parameters
+    assert "api_jwt_secret" in params, (
+        "the API client fixture no longer requests api_jwt_secret - every "
+        "authenticated request it makes will be refused at the door"
+    )
