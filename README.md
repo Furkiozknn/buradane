@@ -106,8 +106,8 @@ npm run dev
 ```
 
 `http://localhost:3000` adresinde açılır. Demo verisi
-(`frontend/data/places.*.json`, il başına bir dosya; 81'e doğru il il
-büyüyor - güncel il listesi ve sayılar uygulamanın şehir seçicisinde)
+(`frontend/data/places.*.json`, il başına bir dosya; 81 ilin tamamı
+mevcut - il listesi ve sayılar `frontend/data/meta.json` içinde)
 repoyla birlikte gelir - sadece demoyu denemek için "Veri Pipeline"
 adımlarını tekrar koşmanız gerekmez, onlar yalnızca anlık görüntüyü
 yenilemek ya da yeni bir şehir eklemek istediğinizde gerekli.
@@ -226,12 +226,13 @@ buradane/
 │   │   ├── components/                        # MapCanvas, AppShell, PlaceCard, PlaceDetail, FilterSheet, CategoryPicker, CityPicker, DirectionArrow, AdminPlaceEditor, ...
 │   │   └── lib/                                # types, places-repository (demo adaptörü), categories, contributions-store, geo, opening-hours, directions, url-state, use-favorites, use-media-query
 │   ├── data/
-│   │   ├── places.istanbul.json               # 6.481 gerçek OSM mekanı
-│   │   ├── places.ankara.json                 # 2.654
-│   │   ├── places.izmir.json                  # 2.271
+│   │   ├── places.<il>.json                   # 81 il dosyası, 167.829 gerçek OSM mekanı
+│   │   ├── meta.json                          # Üretim damgası, lisans, il ve kategori sayıları
+│   │   ├── place-index.json                   # Şehir seçici + arama için hafif indeks
 │   │   └── contributions.json                 # Kullanıcı katkıları + admin override'ları (git'te değil)
 │   ├── public/maplibre/                        # MapLibre worker dosyaları (bkz. "Bilinen Tuhaflıklar")
 │   └── scripts/copy-maplibre-worker.mjs        # predev/prebuild'de otomatik çalışır
+├── assets/                   # banner, konsensüs ve bedel diyagramları (bu README'nin görselleri)
 ├── scripts/                  # Demo veri pipeline'ı (bkz. "Veri Pipeline") - backend/app/ingest'ten ayrı, PostGIS'e değil düz JSON'a yazar
 │   ├── fetch_demo_data.py
 │   ├── enrich_demo_data.py
