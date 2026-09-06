@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import ForeignKey, String
+from sqlalchemy import ForeignKey, Index, String
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -71,3 +71,17 @@ class PlaceCategory(Base):
     # composite primary key, which is itself the uniqueness guarantee - a
     # second identical constraint was redundant (and Postgres quietly
     # collapsed it into the PK anyway; found writing the Alembic baseline).
+    #
+    # The PK does not cover a lookup by category_id, though: it is a btree
+    # on (place_id, category_id), so the leading column has to be known.
+    # "Every place in category X" - the query behind every category filter -
+    # is exactly the shape it cannot serve.
+    #
+    # Measured against 167,829 places / 281,679 links (the live dataset's
+    # size), on a category holding 400 of them: 39ms -> 22ms, the planner
+    # switching from a parallel seq scan of the whole join table to a bitmap
+    # index scan. On a category holding 20,000 it is ignored, correctly -
+    # at 14% of the table a seq scan is the cheaper plan - so this index
+    # costs a write and buys nothing on broad filters and half the query on
+    # narrow ones. Niche needs are the ones this product exists to answer.
+    __table_args__ = (Index("ix_place_categories_category", "category_id"),)

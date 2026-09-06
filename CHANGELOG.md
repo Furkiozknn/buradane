@@ -93,6 +93,34 @@ kategori sayısı. Bu boşluğun fark edilmemesinin sebebi de tam olarak bu
 asimetri: herkesin baktığı liste zaten 3'te sabitti.
 
 `test_query_counts.py` her iki ucu da kilitliyor.
+### İndeksleme
+
+**`place_categories.category_id` indekslendi — ve önerilen ikinci indeks
+ölçüm sonucu eklenmedi.**
+
+Birleşik birincil anahtar `(place_id, category_id)` bir btree, yani yalnızca
+`category_id` ile arama yapılamıyor: öndeki sütunun bilinmesi gerekiyor.
+"X kategorisindeki tüm yerler" ise her kategori filtresinin arkasındaki
+sorgu.
+
+Canlı veri kümesinin boyutuna yüklenmiş yerel bir PostgreSQL 16 / PostGIS
+3.4 kümesinde ölçüldü (167.829 mekan, 281.679 kategori bağı):
+
+| Kategorideki bağ | indeks yokken | indeksle | planlayıcı ne yaptı |
+|---|---|---|---|
+| 400 | 39 ms | **22 ms** | bitmap index scan'e geçti |
+| 20.000 | 65 ms | 64 ms | indeksi görmezden geldi |
+
+İkinci satır birincinin gerekçesi: tablonun %14'ünü okuyan bir sorguda
+sıralı tarama gerçekten daha ucuz ve PostgreSQL onu seçiyor. Yani bu indeks
+geniş filtrelerde hiçbir şey kazandırmıyor, dar filtrelerde sorguyu yarıya
+indiriyor — ihtiyaç odaklı bir bulucudan istenen de zaten dar olanlar.
+
+**Eklenmeyen:** aynı denetim notunun diğer yarısı olan
+`(status, reliability_score DESC)`. Hiçbir seçicilikte tercih edilmiyor:
+`status IN ('active','temporarily_closed')` satırların %71'ini geçiriyor
+(167.829'un 119.894'ü), dolayısıyla ölçülen her planda `places` sıralı
+taranıyor. Yazma maliyeti olur, okuma kazancı olmazdı.
 
 ### Güvenlik
 
