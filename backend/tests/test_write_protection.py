@@ -4,6 +4,9 @@ the FastAPI layer itself (requires PostGIS, see conftest.py)."""
 
 from __future__ import annotations
 
+import uuid
+from types import SimpleNamespace
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -169,6 +172,66 @@ class TestRateLimiting:
         limiter = ratelimit.TokenBucketLimiter(per_hour=60, burst=1)
         limiter.check("1.1.1.1")
         limiter.check("2.2.2.2")  # unaffected by 1.1.1.1's spent token
+
+    def test_every_spelling_of_one_uuid_charges_the_same_bucket(self, monkeypatch):
+        """The security review's P0. The path parameter is raw text but the
+        endpoint parses it to a uuid.UUID, so five different strings address
+        ONE place. Keyed on the text, a single address minted a fresh
+        verification budget per spelling (hex-case alone gives 2^32) and
+        reached consensus on any place with two requests - defeating the
+        entire consensus mechanism the limiter exists to protect."""
+        from fastapi import HTTPException
+
+        monkeypatch.setattr(
+            ratelimit, "_verification_limiter", ratelimit.TokenBucketLimiter(per_hour=1, burst=1)
+        )
+        place = uuid.uuid4()
+        spellings = [
+            str(place),
+            str(place).upper(),
+            str(place).replace("-", ""),
+            str(place).replace("-", "").upper(),
+            "{" + str(place) + "}",
+            f"urn:uuid:{place}",
+        ]
+
+        class FakeClient:
+            host = "203.0.113.7"
+
+        allowed = 0
+        for spelling in spellings:
+            request = SimpleNamespace(client=FakeClient(), path_params={"place_id": spelling})
+            try:
+                ratelimit.limit_verifications(request)
+                allowed += 1
+            except HTTPException as exc:
+                assert exc.status_code == 429
+        assert allowed == 1, (
+            f"{allowed} yazım geçti - aynı mekanın farklı yazımları ayrı kova alıyor, "
+            "tek adres konsensüsü tek başına doldurabilir"
+        )
+
+    def test_one_ipv6_line_shares_a_bucket_across_its_whole_prefix(self):
+        """A residential or mobile IPv6 line is handed a /64 - 2^64 source
+        addresses the holder can cycle through for free. Charged per /128
+        every packet looks like a new visitor and every per-address limit in
+        this module is decorative, so the key is the /64 prefix. IPv4 keeps
+        its full address: there is no equivalent free space behind one line.
+        """
+
+        def key_for(host: str) -> str:
+            class FakeClient:
+                pass
+
+            client = FakeClient()
+            client.host = host
+            return ratelimit.client_key(SimpleNamespace(client=client))
+
+        assert key_for("2a02:ff0:1234:5678::1") == key_for("2a02:ff0:1234:5678:dead:beef:0:9")
+        assert key_for("2a02:ff0:1234:5678::1") != key_for("2a02:ff0:1234:9999::1")
+        assert key_for("203.0.113.7") == "203.0.113.7"
+        assert key_for("203.0.113.7") != key_for("203.0.113.8")
+        assert key_for("unknown") == "unknown"
 
 
 class TestDeviceToken:

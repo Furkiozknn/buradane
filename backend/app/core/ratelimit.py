@@ -14,8 +14,10 @@ reverse proxy or a shared store - the dependency's call sites don't change.
 
 from __future__ import annotations
 
+import ipaddress
 import threading
 import time
+import uuid
 
 from fastapi import HTTPException, Request
 
@@ -53,11 +55,22 @@ class TokenBucketLimiter:
         if len(self._buckets) < 10_000:
             return
         full = self._burst - 0.01
-        self._buckets = {
+        pruned = {
             key: (tokens, last)
             for key, (tokens, last) in self._buckets.items()
             if min(self._burst, tokens + (now - last) * self._rate_per_second) < full
         }
+        # A slow bucket refills so gradually that NOTHING is ever prunable -
+        # the verification limiter refills one token per 90 days, so above
+        # 10k keys every check rebuilt the whole dict, inside the lock, and
+        # removed nothing. When the sweep cannot free at least a tenth of
+        # the table, drop the oldest half by last-seen instead: losing an
+        # old bucket only grants a fresh budget to the address that has been
+        # silent longest, which is the one least likely to be mid-attack.
+        if len(pruned) > len(self._buckets) * 0.9:
+            keep = sorted(self._buckets.items(), key=lambda kv: kv[1][1], reverse=True)
+            pruned = dict(keep[: len(keep) // 2])
+        self._buckets = pruned
 
 
 _write_limiter = TokenBucketLimiter(
@@ -97,6 +110,28 @@ _verification_limiter = TokenBucketLimiter(
 )
 
 
+def client_key(request: Request) -> str:
+    """The address a budget is charged to, normalised.
+
+    IPv6 is why this is not just ``client.host``: a residential or mobile
+    IPv6 line is handed a /64, which is 2^64 source addresses that cost the
+    holder nothing to cycle through. Keyed on the full /128, every packet
+    would look like a new visitor and every per-address limit in this file
+    would be decorative. Bucketing on the /64 prefix charges the subscriber,
+    which is the unit an ISP actually assigns. IPv4 keeps its full address -
+    there is no equivalent free space behind a single line.
+    """
+    client = request.client
+    host = client.host if client else "unknown"
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        return host
+    if address.version == 6:
+        return str(ipaddress.ip_network(f"{address}/64", strict=False).network_address)
+    return str(address)
+
+
 def limit_writes(request: Request) -> None:
     """FastAPI dependency: one token per community write, keyed by client IP.
 
@@ -104,14 +139,29 @@ def limit_writes(request: Request) -> None:
     shape (uvicorn facing the client, or a proxy configured with
     --proxy-headers so request.client is already the real peer).
     """
-    client = request.client
-    _write_limiter.check(client.host if client else "unknown")
+    _write_limiter.check(client_key(request))
 
 
 def limit_verifications(request: Request) -> None:
     """Per-IP-per-place ceiling for verification writes, below the consensus
     threshold - see _verification_limiter's comment for why the general
-    write limiter cannot protect consensus on its own."""
-    client = request.client
-    place_id = request.path_params.get("place_id", "")
-    _verification_limiter.check(f"{client.host if client else 'unknown'}:{place_id}")
+    write limiter cannot protect consensus on its own.
+
+    The place id is CANONICALISED before it becomes part of the key, and
+    that is the whole difference between a limit and a decoration. The path
+    parameter arrives as raw text; the endpoint then parses it to a
+    uuid.UUID, so "DEDF9137-...", "dedf9137-...", "dedf913723874061...",
+    "{dedf9137-...}" and "urn:uuid:dedf9137-..." all address ONE place while
+    presenting five different strings. Keyed on the raw text, one address
+    minted a fresh budget per spelling - hex-case alone gives 2^32 of them -
+    and reached consensus on any place with two requests. Parsing here makes
+    the key the identity the endpoint acts on. A value that is not a UUID
+    cannot reach a real place, so it keeps its raw form and is still charged
+    rather than skipped.
+    """
+    raw = str(request.path_params.get("place_id", ""))
+    try:
+        place_key = str(uuid.UUID(raw))
+    except ValueError:
+        place_key = raw
+    _verification_limiter.check(f"{client_key(request)}:{place_key}")
