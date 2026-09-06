@@ -27,8 +27,28 @@ _bearer_scheme = HTTPBearer(auto_error=False)
 
 DbSession = Annotated[Session, Depends(get_db)]
 
+# The value shipped in config.py, repeated here so the comparison below does
+# not depend on importing a private name - and so a reader sees exactly what
+# is being refused.
+DEFAULT_JWT_SECRET = "dev-secret-change-in-production"
+
 
 def _decode_user_id(token: str) -> uuid.UUID | None:
+    # No token is valid under the secret this repository publishes.
+    #
+    # services/bootstrap.py already refuses to CREATE an admin under the
+    # default secret, but that gate only runs when BURADANE_ADMIN_EMAIL and
+    # PASSWORD are both set - so a deployment whose admin row already exists
+    # and whose bootstrap env vars were removed (the rotation path
+    # bootstrap.py itself recommends) starts happily, and every one of its
+    # admin tokens is forgeable by anyone who has read this file. main.py
+    # answers that case with a log warning, and a warning is not a control -
+    # which is the argument bootstrap.py makes against warnings.
+    #
+    # Refusing here means the same thing at the door instead of at setup:
+    # under the published secret there is no authenticated request at all.
+    if settings.jwt_secret == DEFAULT_JWT_SECRET:
+        return None
     try:
         payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
     except JWTError:
