@@ -39,6 +39,7 @@ interface RawDivisions {
 let cache:
   | {
       districtsByKey: Map<string, OfficialDistrict>;
+      districtsByProvince: Map<string, { name: string; center: { lat: number; lon: number } }[]>;
       provinces: { name: string; center: { lat: number; lon: number } }[];
       counts: { provinces: number; districts: number };
     }
@@ -75,6 +76,12 @@ function load() {
     }
     cache = {
       districtsByKey,
+      districtsByProvince: new Map(
+        raw.provinces.map((p) => [
+          foldAscii(p.name),
+          p.districts.map((d) => ({ name: d.name, center: d.center })),
+        ]),
+      ),
       provinces: raw.provinces.map((p) => ({ name: p.name, center: p.center })),
       counts: raw.counts,
     };
@@ -106,4 +113,25 @@ export function divisionCounts(): { provinces: number; districts: number } | nul
 
 export function officialProvinces(): { name: string; center: { lat: number; lon: number } }[] {
   return load()?.provinces ?? [];
+}
+
+/** Every official ilçe of one il, with its centre. The centres are what a
+ * coverage check has to probe: a province is not covered because its file
+ * exists, it is covered when someone standing in its districts finds
+ * something. Empty when the list is absent or the name is not a province. */
+export function officialDistrictsOf(
+  provinceName: string,
+): { name: string; center: { lat: number; lon: number } }[] {
+  return load()?.districtsByProvince.get(foldAscii(provinceName)) ?? [];
+}
+
+/** The province's capital anchor (OSM `admin_centre` member node), by
+ * province name. Null when the list is absent or the name is unknown. */
+export function officialProvinceCenter(
+  provinceName: string,
+): { lat: number; lon: number } | null {
+  const data = load();
+  if (!data) return null;
+  const folded = foldAscii(provinceName);
+  return data.provinces.find((p) => foldAscii(p.name) === folded)?.center ?? null;
 }

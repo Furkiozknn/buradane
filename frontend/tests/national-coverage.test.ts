@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { allPlaces, datasetMeta, queryPlaces } from "@/lib/places-repository";
 import { PROVINCES, TOTALS, findProvince } from "@/lib/administrative";
-import { divisionCounts, officialDistrict } from "@/lib/admin-divisions";
+import { divisionCounts, officialDistrict, officialDistrictsOf, officialProvinces } from "@/lib/admin-divisions";
 
 /**
  * The national-coverage gate.
@@ -50,6 +50,7 @@ describe("national coverage", () => {
   it("gives every province a non-trivial number of places", () => {
     // A province that fetched almost nothing is a silent hole: the file
     // exists, the picker lists it, and the map opens on emptiness.
+    expect(datasetMeta().cities.length).toBe(81);
     const thin = datasetMeta()
       .cities.filter((c) => c.count < 20)
       .map((c) => `${c.label}: ${c.count}`);
@@ -58,6 +59,7 @@ describe("national coverage", () => {
 
   it("finds every province by typing its name", () => {
     // The single most common national query shape: province name alone.
+    expect(datasetMeta().cities.length).toBe(81);
     for (const city of datasetMeta().cities) {
       const result = queryPlaces({ q: city.label, limit: 1 });
       expect(result.total, `"${city.label}" aramasi bos dondu`).toBeGreaterThan(0);
@@ -73,6 +75,9 @@ describe("national coverage", () => {
     // Every district name the dataset carries must be one the official
     // boundary list knows - a name that is not is either a neighbourhood
     // mislabelled as a district or a spelling the canonicaliser missed.
+    // Same anchor: with every district null, `unknown` stays empty and the
+    // assertion below passes without having checked anything.
+    expect(allPlaces().filter((p) => p.district).length).toBeGreaterThan(1_000);
     const unknown = new Map<string, number>();
     for (const place of allPlaces()) {
       if (!place.district) continue;
@@ -85,7 +90,78 @@ describe("national coverage", () => {
     expect([...unknown.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10)).toEqual([]);
   });
 
+  it("loads one record per OSM id, whatever the files say", () => {
+    // Overpass' `(area:...)` returns a way that CROSSES a boundary to BOTH
+    // provinces' queries - a picnic area on the Batman/Diyarbakır border
+    // came back in both files and the map drew two pins on one spot. The
+    // loader keeps whichever copy landed inside a district (districts tile a
+    // province exactly, so that copy is geometrically confirmed).
+    const seen = new Set<string>();
+    const duplicates: string[] = [];
+    for (const place of allPlaces()) {
+      if (seen.has(place.id)) duplicates.push(place.id);
+      seen.add(place.id);
+    }
+    expect(duplicates).toEqual([]);
+  });
+
+  it("gives real coverage inside each province, not just at its centre", () => {
+    // THE regression test for the finding that mattered most: "81 il" once
+    // meant 81 boxes of ~12x12 km around the provincial capitals - 2,2% of
+    // the country - and every other check passed on it. A user standing in
+    // Alanya (350.000 residents, 110 km from Antalya's centre) got nothing.
+    //
+    // Data-driven over the province's own official district centres, and
+    // only for provinces already re-fetched from their real boundary, so
+    // this gets strictly harder as the migration completes instead of
+    // needing a hand-maintained list of cities to remember.
+    const divisions = officialProvinces();
+    expect(divisions.length).toBe(81);
+
+    const boundaryProvinces = datasetMeta()
+      .cities.filter((c) => c.fetchUnit === "province_boundary")
+      .map((c) => c.label);
+    expect(boundaryProvinces.length).toBeGreaterThan(0);
+
+    const thin: string[] = [];
+    for (const provinceName of boundaryProvinces) {
+      for (const district of officialDistrictsOf(provinceName)) {
+        const found = queryPlaces({
+          lat: district.center.lat,
+          lon: district.center.lon,
+          radius_m: 15_000,
+          limit: 1,
+        });
+        if (found.total === 0) thin.push(`${provinceName}/${district.name}`);
+      }
+    }
+    // A handful of genuinely empty rural districts is believable; a
+    // systematic hole is the bug this exists to catch.
+    const districtCount = boundaryProvinces.reduce(
+      (sum, name) => sum + officialDistrictsOf(name).length,
+      0,
+    );
+    expect(thin.length / districtCount, `veri bulunamayan ilçeler: ${thin.join(", ")}`).toBeLessThan(
+      0.1,
+    );
+  });
+
+  it("answers the Alanya question", () => {
+    // Named because it was the audit's headline failure: 0 results within
+    // 25 km of a district of 350.000 people, while the app claimed full
+    // national coverage.
+    const alanya = queryPlaces({ lat: 36.5444, lon: 31.9957, radius_m: 5_000, limit: 5 });
+    expect(alanya.total).toBeGreaterThan(50);
+    for (const place of alanya.places) {
+      expect(place.province).toBe("Antalya");
+    }
+  });
+
   it("keeps every place inside Türkiye and attributed", () => {
+    // Anchored: a bare `for (const p of allPlaces())` executes zero
+    // assertions and passes green if the dataset ever loads empty - which
+    // is precisely the regression this file exists to catch.
+    expect(allPlaces().length).toBeGreaterThan(40_000);
     for (const place of allPlaces()) {
       expect(place.lat).toBeGreaterThan(35.5);
       expect(place.lat).toBeLessThan(42.5);

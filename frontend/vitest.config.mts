@@ -27,5 +27,10 @@ export default defineConfig({
     // failure mode that erodes trust in a suite and gets people reaching for
     // --retry. The work is real and bounded; the limit just has to admit it.
     testTimeout: 20_000,
+    // Hooks get the same allowance for the same reason: a beforeEach that
+    // touches the dataset (to pick a real place id, say) pays the same load
+    // once, and vitest's 10 s hook default is under it now that the national
+    // snapshot is ~110.000 records.
+    hookTimeout: 20_000,
   },
 });

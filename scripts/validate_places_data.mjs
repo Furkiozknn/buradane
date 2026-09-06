@@ -33,7 +33,15 @@ const MAX_SPREAD_KM = 200;
 
 const files = fs.readdirSync(DATA_DIR).filter((f) => f.startsWith("places.") && f.endsWith(".json"));
 const problems = [];
+// Separate from `problems` on purpose: a duplicate that involves a legacy
+// bbox file is EXPECTED while the national re-fetch is in flight (the old
+// İstanbul box reaches into Kocaeli, so a place inside real Kocaeli appears
+// in both). It stops being possible once every file is boundary-based. A
+// gate that cannot tell that apart is a gate people learn to ignore.
+const legacyOverlaps = [];
 const seenIds = new Map(); // id -> first file
+const seenDistrict = new Map(); // id -> district of the first copy (null when outside every polygon)
+const fetchUnits = new Map(); // file -> fetch_unit
 let total = 0;
 
 function median(values) {
@@ -55,6 +63,7 @@ for (const file of files.sort()) {
     problems.push(`${file}: JSON parse edilemedi - ${err.message}`);
     continue;
   }
+  fetchUnits.set(file, data.fetch_unit ?? "legacy_bbox");
   if (!Array.isArray(data.places) || data.places.length === 0) {
     problems.push(`${file}: places dizisi boş ya da yok - boş dosya commit edilmez`);
     continue;
@@ -78,8 +87,29 @@ for (const file of files.sort()) {
       problems.push(`${file}: ${p.id} kategorisiz`);
     }
     const first = seenIds.get(p.id);
-    if (first && first !== file) problems.push(`MÜKERRER: ${p.id} hem ${first} hem ${file} içinde`);
-    else seenIds.set(p.id, file);
+    if (first && first !== file) {
+      const bothBoundary =
+        fetchUnits.get(first) === "province_boundary" &&
+        fetchUnits.get(file) === "province_boundary";
+      const message = `MÜKERRER: ${p.id} hem ${first} hem ${file} içinde`;
+      // Two real province boundaries do not overlap, so a duplicate between
+      // two boundary-based files starts out suspicious - but there is one
+      // understood, resolvable case. Overpass' `(area:...)` returns a WAY
+      // that crosses a boundary to both provinces' queries, and the copies
+      // are distinguishable: districts tile a province exactly, so the copy
+      // that landed inside one is geometrically in that province and the
+      // other is not. The loader keeps that copy (places-repository.ts), so
+      // exactly-one-has-a-district is a documented exception rather than a
+      // defect. Both or neither having one is unresolvable, and stays a
+      // problem.
+      const previous = seenDistrict.get(p.id);
+      const resolvable = bothBoundary && (previous == null) !== (p.district_raw == null);
+      if (!bothBoundary || resolvable) legacyOverlaps.push(message + (resolvable ? " [sınırı kesen way - yükleyici ilçesi olan kopyayı tutar]" : ""));
+      else problems.push(message);
+    } else {
+      seenIds.set(p.id, file);
+      seenDistrict.set(p.id, p.district_raw ?? null);
+    }
     lats.push(p.lat);
     lons.push(p.lon);
   }
@@ -99,7 +129,81 @@ for (const file of files.sort()) {
   total += data.places.length;
 }
 
+// ── Coverage: is the country actually covered, or just its 81 city centres?
+//
+// This is the check whose absence let "81 il" mean 81 boxes of ~12x12 km -
+// 2,2 % of Türkiye's land area, with Alanya (350.000 residents) returning
+// nothing. Every other gate here passed on that data: the files parsed, the
+// schema held, there were no duplicates, and nothing sat more than 200 km
+// from its own file's median, because a 12 km box cannot. The honest
+// measure is the one the user experiences - can somebody standing in an
+// arbitrary district find anything at all?
+const DISTRICT_RADIUS_KM = 15;
+let coverage = null;
+try {
+  const divisions = JSON.parse(
+    fs.readFileSync(path.join(DATA_DIR, "admin-divisions.json"), "utf-8"),
+  );
+  const all = [];
+  for (const file of files) {
+    const data = JSON.parse(fs.readFileSync(path.join(DATA_DIR, file), "utf-8"));
+    for (const p of data.places) all.push([p.lat, p.lon]);
+  }
+  // Grid index: 973 districts x 100k+ places is too many pairs to brute
+  // force, and a 0,2-degree bucket is comfortably wider than the radius.
+  const CELL = 0.2;
+  const grid = new Map();
+  for (const [lat, lon] of all) {
+    const key = `${Math.floor(lat / CELL)},${Math.floor(lon / CELL)}`;
+    let bucket = grid.get(key);
+    if (!bucket) grid.set(key, (bucket = []));
+    bucket.push([lat, lon]);
+  }
+  let covered = 0;
+  const empty = [];
+  for (const province of divisions.provinces) {
+    for (const district of province.districts) {
+      const { lat, lon } = district.center;
+      let near = false;
+      const ci = Math.floor(lat / CELL);
+      const cj = Math.floor(lon / CELL);
+      for (let i = ci - 1; i <= ci + 1 && !near; i += 1) {
+        for (let j = cj - 1; j <= cj + 1 && !near; j += 1) {
+          for (const [plat, plon] of grid.get(`${i},${j}`) ?? []) {
+            if (distanceKm(lat, lon, plat, plon) <= DISTRICT_RADIUS_KM) {
+              near = true;
+              break;
+            }
+          }
+        }
+      }
+      if (near) covered += 1;
+      else empty.push(`${province.name}/${district.name}`);
+    }
+  }
+  const totalDistricts = divisions.counts.districts;
+  coverage = { covered, totalDistricts, empty };
+  console.log(
+    `ilçe kapsamı: ${covered}/${totalDistricts} ilçe merkezinin ` +
+      `${DISTRICT_RADIUS_KM} km'si içinde veri var (%${((100 * covered) / totalDistricts).toFixed(1)})`,
+  );
+  if (empty.length) {
+    console.log(`  boş ilçeler (ilk 15): ${empty.slice(0, 15).join(", ")}`);
+  }
+} catch (err) {
+  console.log(`ilçe kapsamı ölçülemedi: ${err.message}`);
+}
+
 console.log(`${files.length} il dosyası, ${total} mekan, ${seenIds.size} benzersiz id`);
+const boundaryCount = [...fetchUnits.values()].filter((u) => u === "province_boundary").length;
+console.log(`gerçek il sınırından çekilen: ${boundaryCount}/${files.length}`);
+if (legacyOverlaps.length) {
+  console.log(
+    `\n${legacyOverlaps.length} geçici örtüşme (eski kutu dosyası x yeni sınır dosyası) - ` +
+      `ilgili il yeniden çekilince kaybolur:`,
+  );
+  for (const item of legacyOverlaps.slice(0, 5)) console.log("  ~ " + item);
+}
 if (problems.length) {
   console.error(`\n${problems.length} sorun:`);
   for (const p of problems.slice(0, 40)) console.error("  ✗ " + p);

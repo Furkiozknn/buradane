@@ -32,11 +32,13 @@ import { boundingBox, haversineMeters } from "./geo";
 import { isOpenNow } from "./opening-hours";
 import { AMENITIES, QUERY_NOTICES, SEARCH_SYNONYMS, type QueryNotice } from "./categories";
 import { findProvince, foldAscii, parseLocality, resolveDistrict } from "./administrative";
-import { divisionCounts, officialDistrict } from "./admin-divisions";
+import { divisionCounts, officialDistrict, officialProvinceCenter } from "./admin-divisions";
 
 interface RawDataset {
   city?: string;
   city_label?: string;
+  /** Emitted by fetch_by_district.py; absent on legacy bbox snapshots. */
+  fetch_unit?: string;
   generated_at: string;
   source: string;
   license: string;
@@ -74,16 +76,29 @@ export interface DatasetMeta {
     label: string;
     count: number;
     /**
-     * Where the map should open for this city, derived from the city's own
-     * places rather than a hand-maintained table.
+     * Where the map opens for this province: its capital, taken from the
+     * official division list, with the median of its own places as the
+     * fallback. Never a hand-maintained table in this file - that version
+     * meant "adding a city is a config row plus a fetch run" was not quite
+     * true, because a city whose centre nobody remembered to add silently
+     * opened on İstanbul.
      *
-     * The table version meant "adding a city is a config row plus a fetch
-     * run" was not quite true: a city whose centre nobody remembered to add
-     * silently opened on İstanbul. Median rather than mean, because one
-     * mis-tagged node hundreds of km outside the metro core would drag an
-     * average off the city entirely.
+     * The median alone was right while a file was a city box and stopped
+     * being right when files became whole provinces: Kütahya's median landed
+     * in open country with nothing within 5 km, while its capital holds 380
+     * places. See the assignment in loadDataset for the full reasoning.
      */
     center: { lat: number; lon: number };
+    /**
+     * How this province's snapshot was fetched. "province_boundary" means
+     * the real OSM admin relation - full provincial coverage, no overlap
+     * with neighbours. "legacy_bbox" is the older approach: a box around
+     * the provincial capital, which nationally covered 2,2% of the country
+     * and left districts like Alanya empty. Kept as data rather than a
+     * comment because the coverage test asserts against it, and because a
+     * reader of a file has a right to know which one they are holding.
+     */
+    fetchUnit: "province_boundary" | "legacy_bbox";
   }[];
 }
 
@@ -256,6 +271,9 @@ function loadDataset() {
   }
 
   const places: Place[] = [];
+  /** id -> index in `places`, so a second sighting can replace the first in
+   * place rather than searching the array. See the dedupe rule below. */
+  const seenPlaceIndex = new Map<string, number>();
   const cities: DatasetMeta["cities"] = [];
   let newest = "";
   let attribution = "© OpenStreetMap katkıda bulunanları";
@@ -284,7 +302,7 @@ function loadDataset() {
         { district: place.district_raw, province: place.province_raw },
         fileProvince,
       );
-      places.push({
+      const resolved: Place = {
         ...place,
         // Snapshots taken before the fetcher learned about these still carry
         // the raw OSM tags, so the fields are derived here rather than
@@ -294,14 +312,48 @@ function loadDataset() {
         district: place.district ?? locality.district,
         province: place.province ?? locality.province ?? fileProvince,
         ...deriveCommunitySignals(place),
-      });
+      };
+
+      // One OSM id, one place - decided by geometry, not by file order.
+      //
+      // Overpass' `(area:...)` returns a way that CROSSES a boundary to both
+      // provinces' queries, so a picnic area on the Batman/Diyarbakır border
+      // came back in both files and the map drew two pins on one spot. The
+      // tie-break is the district: districts tile a province exactly, so a
+      // record that landed inside one of them is geometrically confirmed to
+      // be in that province, while a record with no district was merely
+      // returned by the query. Batman said "Kozluk", Diyarbakır said null -
+      // and Batman is where it is.
+      //
+      // The same rule cleans up the legacy overlap while the national
+      // re-fetch is in flight: the old İstanbul bounding box reaches into
+      // real Kocaeli, and its records have no district.
+      const existingIndex = seenPlaceIndex.get(resolved.id);
+      if (existingIndex === undefined) {
+        seenPlaceIndex.set(resolved.id, places.length);
+        places.push(resolved);
+      } else if (!places[existingIndex].district && resolved.district) {
+        places[existingIndex] = resolved;
+      }
     }
 
     cities.push({
       slug,
       label: raw.city_label ?? slug,
       count: raw.places.length,
-      center: medianCenter(raw.places),
+      // The provincial capital when we know it, the median otherwise.
+      //
+      // The median was right when a file WAS a city box: the middle of the
+      // data was the middle of the city. Once files became whole provinces
+      // it stopped being: Kütahya's median landed in open country with zero
+      // places within 5 km, so picking Kütahya opened the map on emptiness
+      // while its actual centre holds 380. The capital anchor comes from the
+      // official list and is the `admin_centre` member node - the city
+      // itself, not the polygon's centroid, which for oddly shaped provinces
+      // is in the mountains. Median stays as the fallback for any file whose
+      // label does not resolve, which is what the app shipped with.
+      center: officialProvinceCenter(raw.city_label ?? slug) ?? medianCenter(raw.places),
+      fetchUnit: raw.fetch_unit === "province_boundary" ? "province_boundary" : "legacy_bbox",
     });
     if (raw.generated_at > newest) newest = raw.generated_at;
     attribution = raw.attribution ?? attribution;
