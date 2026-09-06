@@ -148,12 +148,21 @@ let provinceIndex: ProvinceIndexRow[] | null = null;
 const searchTextCache = new Map<string, string>();
 let allLoaded = false;
 
+export interface DistrictRow {
+  name: string;
+  count: number;
+  center: { lat: number; lon: number };
+}
+
 interface ProvinceIndexRow {
   slug: string;
   label: string;
   count: number;
   fetch_unit: string;
   bbox: { minLat: number; minLon: number; maxLat: number; maxLon: number };
+  /** Districts that actually have records, precomputed by
+   * build_dataset_meta.mjs. Absent on an index built before they existed. */
+  districts?: DistrictRow[];
 }
 
 /**
@@ -693,6 +702,26 @@ export function datasetMeta(): DatasetMeta {
 
 export function allPlaces(): Place[] {
   return loadAll();
+}
+
+/** One province's records. Exported for the sitemap, which is generated per
+ * province precisely so no build step or request ever needs the country. */
+export function placesOfProvince(slug: string): Place[] {
+  return loadProvince(slug);
+}
+
+/**
+ * The ilçe list for one province, or null when the slug names no province.
+ *
+ * Reads the index only - never a snapshot - so the districts endpoint stays
+ * cheap on a cold process. An index predating the district rows returns an
+ * empty list rather than throwing: the picker then simply offers no ilçe
+ * step, which is what the app did before this existed.
+ */
+export function districtsOfProvince(slug: string): DistrictRow[] | null {
+  const row = loadIndex().find((province) => province.slug === slug);
+  if (!row) return null;
+  return row.districts ?? [];
 }
 
 /**

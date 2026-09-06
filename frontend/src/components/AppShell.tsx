@@ -1109,7 +1109,7 @@ export function AppShell({
           cities={cityOptions}
           activeCity={activeCity}
           nearestCity={nearestCity}
-          onSelect={(city) => {
+          onSelect={(city, district) => {
             setActiveCity(city.slug);
             // The shared link's coordinates stop being the query origin the
             // moment the user names somewhere else - otherwise picking a
@@ -1127,7 +1127,15 @@ export function AppShell({
             // city - MapLibre reads `initialView` exactly once.
             setViewport(null);
             setStaleViewport(false);
-            setMapFocus({ center: city.center, zoom: 12.5, nonce: Date.now() });
+            // An ilçe is a much smaller thing than an il, so it opens
+            // closer: at 12.5 a district fills a fraction of the screen and
+            // the user has to zoom in before the pins mean anything.
+            if (district) {
+              setSharedCenter(district.center);
+              setMapFocus({ center: district.center, zoom: 14, nonce: Date.now() });
+            } else {
+              setMapFocus({ center: city.center, zoom: 12.5, nonce: Date.now() });
+            }
           }}
           onClose={() => setCityPickerOpen(false)}
         />

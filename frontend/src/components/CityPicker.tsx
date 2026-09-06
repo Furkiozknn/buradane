@@ -1,9 +1,15 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { MapPin, X } from "lucide-react";
 
 import { TOTALS, findProvince, foldAscii } from "@/lib/administrative";
+
+export interface DistrictChoice {
+  name: string;
+  count: number;
+  center: { lat: number; lon: number };
+}
 
 export interface CityOption {
   slug: string;
@@ -33,7 +39,7 @@ export function CityPicker({
    * rather than sorted to the top: a list that reorders itself between
    * openings costs more in muscle memory than the hint is worth. */
   nearestCity?: string | null;
-  onSelect: (city: CityOption) => void;
+  onSelect: (city: CityOption, district?: DistrictChoice) => void;
   onClose: () => void;
 }) {
   // Turkish collation, not the default. "İstanbul" and "İzmir" sort under a
@@ -48,9 +54,57 @@ export function CityPicker({
   // correct keyboard would lock out exactly the people typing on one that
   // lacks it.
   const [filter, setFilter] = useState("");
+
+  /**
+   * Second stage: which ilçe of the chosen il.
+   *
+   * The province centre is a fine place to open a map of Bayburt and a poor
+   * one for İstanbul, which holds 25.916 places across 39 districts -
+   * somebody in Kadıköy had to pan there by hand. Every record now carries
+   * a district (assigned from the real boundary polygons), so the app can
+   * finally offer the unit people actually think in. Fetched when a
+   * province is chosen rather than shipped with the page: the country has
+   * 973 districts, about 100 KB that every visitor would otherwise pay for
+   * on first paint to support a panel most never open.
+   */
+  const [drilled, setDrilled] = useState<CityOption | null>(null);
+  const [districts, setDistricts] = useState<DistrictChoice[] | null>(null);
+  const [districtError, setDistrictError] = useState(false);
+
+  useEffect(() => {
+    if (!drilled) return;
+    let cancelled = false;
+    // The reset happens in the click handler that sets `drilled`, not here:
+    // setting state synchronously inside an effect makes React re-render
+    // before it paints, which is the cascading-render the lint rule names.
+    (async () => {
+      try {
+        const response = await fetch(`/api/districts?province=${encodeURIComponent(drilled.slug)}`);
+        if (!response.ok) throw new Error(String(response.status));
+        const data = (await response.json()) as { districts: DistrictChoice[] };
+        if (!cancelled) setDistricts(data.districts);
+      } catch {
+        // A province is still selectable without its districts - falling
+        // back to "open the whole province" is exactly what the app did
+        // before this stage existed, so a failure here degrades rather
+        // than blocks.
+        if (!cancelled) setDistrictError(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [drilled]);
   const visible = filter.trim()
     ? sorted.filter((city) => foldAscii(city.label).includes(foldAscii(filter)))
     : sorted;
+
+  const visibleDistricts = useMemo(() => {
+    const rows = districts ?? [];
+    if (!filter.trim()) return rows;
+    const needle = foldAscii(filter);
+    return rows.filter((d) => foldAscii(d.name).includes(needle));
+  }, [districts, filter]);
 
   // Resolved through the province table rather than counted as city files:
   // the two are the same today, but a city slug is a fetch unit and a
@@ -88,11 +142,24 @@ export function CityPicker({
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
             <h2 id="city-title" className="text-[17px] font-bold text-text">
-              Şehir seç
+              {drilled ? `${drilled.label} — ilçe seç` : "Şehir seç"}
             </h2>
-            <p className="mt-0.5 text-[13px] text-text-secondary">
-              Başka bir şehre bakabilir, konumun kapalıysa buradan devam edebilirsin.
-            </p>
+            {drilled ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setDrilled(null);
+                  setFilter("");
+                }}
+                className="mt-0.5 inline-flex min-h-11 items-center text-[13px] font-medium text-brand"
+              >
+                ← Tüm iller
+              </button>
+            ) : (
+              <p className="mt-0.5 text-[13px] text-text-secondary">
+                Başka bir şehre bakabilir, konumun kapalıysa buradan devam edebilirsin.
+              </p>
+            )}
           </div>
           <button
             type="button"
@@ -106,26 +173,91 @@ export function CityPicker({
 
         {/* Shown from ten entries up: below that the list fits on screen and
             a search box would just push it down. */}
-        {cities.length >= 10 && (
+        {(drilled ? (districts?.length ?? 0) >= 10 : cities.length >= 10) && (
           <input
             type="search"
             value={filter}
             onChange={(event) => setFilter(event.target.value)}
-            placeholder="İl ara…"
-            aria-label="İl ara"
+            placeholder={drilled ? "İlçe ara…" : "İl ara…"}
+            aria-label={drilled ? "İlçe ara" : "İl ara"}
             className="mb-2 h-11 w-full rounded-xl border border-border bg-transparent px-3 text-[16px] outline-none focus:border-brand"
           />
         )}
 
-        {visible.length === 0 && (
+        {!drilled && visible.length === 0 && (
           <p className="py-6 text-center text-[13.5px] text-text-secondary" role="status">
             &ldquo;{filter}&rdquo; ile eşleşen il yok.
           </p>
         )}
 
-        {/* Scrolls: at nine cities the list already outgrew a small phone,
+        {drilled ? (
+          <ul className="max-h-[55vh] space-y-1.5 overflow-y-auto">
+            {/* Always first: a province is a legitimate answer, and it is
+                the answer for the 51 provinces where the centre IS the
+                place people mean. */}
+            <li>
+              <button
+                type="button"
+                onClick={() => onSelect(drilled)}
+                className="flex w-full items-center gap-3 rounded-xl border border-border p-3 text-left"
+              >
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface-sunken">
+                  <MapPin size={17} color="var(--text-secondary)" aria-hidden />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[15px] font-semibold text-text">
+                    Tüm {drilled.label}
+                  </span>
+                  <span className="block text-[12.5px] tabular-nums text-text-secondary">
+                    {drilled.count.toLocaleString("tr-TR")} kayıtlı yer
+                  </span>
+                </span>
+              </button>
+            </li>
+
+            {districts === null && !districtError && (
+              <li className="py-4 text-center text-[13px] text-text-secondary" role="status">
+                İlçeler yükleniyor…
+              </li>
+            )}
+            {districtError && (
+              <li className="py-4 text-center text-[13px] text-text-secondary" role="status">
+                İlçe listesi getirilemedi — il genelinde arayabilirsiniz.
+              </li>
+            )}
+
+            {visibleDistricts.map((district) => (
+              <li key={district.name}>
+                <button
+                  type="button"
+                  onClick={() => onSelect(drilled, district)}
+                  className="flex w-full items-center gap-3 rounded-xl border border-border p-3 text-left transition-colors hover:bg-surface-sunken"
+                >
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface-sunken">
+                    <MapPin size={17} color="var(--text-secondary)" aria-hidden />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[15px] font-semibold text-text">
+                      {district.name}
+                    </span>
+                    <span className="block text-[12.5px] tabular-nums text-text-secondary">
+                      {district.count.toLocaleString("tr-TR")} kayıtlı yer
+                    </span>
+                  </span>
+                </button>
+              </li>
+            ))}
+
+            {districts !== null && visibleDistricts.length === 0 && filter.trim() && (
+              <li className="py-4 text-center text-[13px] text-text-secondary" role="status">
+                &ldquo;{filter}&rdquo; ile eşleşen ilçe yok.
+              </li>
+            )}
+          </ul>
+        ) : (
+        /* Scrolls: at nine cities the list already outgrew a small phone,
             and without this the ones at the bottom simply could not be
-            reached. Sized in vh so it keeps working as provinces are added. */}
+            reached. Sized in vh so it keeps working as provinces are added. */
         <ul className="max-h-[55vh] space-y-1.5 overflow-y-auto">
           {visible.map((city) => {
             const isActive = city.slug === activeCity;
@@ -133,7 +265,12 @@ export function CityPicker({
               <li key={city.slug}>
                 <button
                   type="button"
-                  onClick={() => onSelect(city)}
+                  onClick={() => {
+                    setDrilled(city);
+                    setDistricts(null);
+                    setDistrictError(false);
+                    setFilter("");
+                  }}
                   aria-current={isActive ? "true" : undefined}
                   className="flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-colors"
                   style={{
@@ -172,6 +309,7 @@ export function CityPicker({
             );
           })}
         </ul>
+        )}
 
         {/* Coverage stated as a fraction. "6 il" on its own means nothing;
             "81 ilin 6'sı" is the difference between a reader assuming the

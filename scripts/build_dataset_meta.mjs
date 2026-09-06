@@ -97,6 +97,33 @@ for (const file of files) {
     if (p.lon > maxLon) maxLon = p.lon;
   }
 
+  // Districts that actually HAVE data, with where to open the map and how
+  // much is there. The app can now offer ilçe selection because every
+  // record carries one - and in a province like İstanbul (25.916 places)
+  // the province centre is not a useful place to open: somebody in Kadıköy
+  // had to pan there by hand. Counted and centred from the records
+  // themselves rather than from admin-divisions.json, so a district with no
+  // data is simply absent instead of being offered and then empty.
+  const districts = new Map();
+  for (const p of data.places) {
+    if (!p.district_raw) continue;
+    let d = districts.get(p.district_raw);
+    if (!d) districts.set(p.district_raw, (d = { name: p.district_raw, count: 0, lats: [], lons: [] }));
+    d.count += 1;
+    d.lats.push(p.lat);
+    d.lons.push(p.lon);
+  }
+  const districtRows = [...districts.values()]
+    .map((d) => {
+      // Median, not mean: one mis-tagged node on the far side of the
+      // district would drag an average out of it entirely.
+      const lats = d.lats.sort((a, b) => a - b);
+      const lons = d.lons.sort((a, b) => a - b);
+      const mid = Math.floor(lats.length / 2);
+      return { name: d.name, count: d.count, center: { lat: lats[mid], lon: lons[mid] } };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name, "tr"));
+
   provinceIds.push(new Set(data.places.map((p) => p.id)).size);
   provinces.push({
     slug,
@@ -107,6 +134,7 @@ for (const file of files) {
     // misses this rectangle cannot match anything in the file, which is the
     // whole point: it is the cheapest possible "do I need to read this?".
     bbox: { minLat, minLon, maxLat, maxLon },
+    districts: districtRows,
   });
 
   if (data.generated_at > newest) newest = data.generated_at;
