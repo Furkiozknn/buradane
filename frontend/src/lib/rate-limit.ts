@@ -66,32 +66,33 @@ export function createRateLimiter({ windowMs, maxRequests }: RateLimiterOptions)
         sweepStale(hitsByKey, now, windowMs);
       }
 
-      const cutoff = now - windowMs;
-      const recent = (hitsByKey.get(key) ?? []).filter((hit) => hit > cutoff);
-
-      if (recent.length >= maxRequests) {
-        hitsByKey.set(key, recent);
-        const oldest = recent[0];
-        const retryAfterMs = oldest + windowMs - now;
-        return { allowed: false, retryAfterSeconds: Math.max(1, Math.ceil(retryAfterMs / 1000)) };
-      }
-
-      recent.push(now);
+      const recent = recentHits(hitsByKey, key, now, windowMs);
+      const result = evaluate(recent, now, windowMs, maxRequests);
+      if (result.allowed) recent.push(now);
       hitsByKey.set(key, recent);
-      return { allowed: true, retryAfterSeconds: 0 };
+      return result;
     },
 
     peek(key: string, now: number = Date.now()): RateLimitResult {
-      const cutoff = now - windowMs;
-      const recent = (hitsByKey.get(key) ?? []).filter((hit) => hit > cutoff);
-      if (recent.length >= maxRequests) {
-        const oldest = recent[0];
-        const retryAfterMs = oldest + windowMs - now;
-        return { allowed: false, retryAfterSeconds: Math.max(1, Math.ceil(retryAfterMs / 1000)) };
-      }
-      return { allowed: true, retryAfterSeconds: 0 };
+      const recent = recentHits(hitsByKey, key, now, windowMs);
+      return evaluate(recent, now, windowMs, maxRequests);
     },
   };
+}
+
+function recentHits(map: Map<string, number[]>, key: string, now: number, windowMs: number): number[] {
+  const cutoff = now - windowMs;
+  return (map.get(key) ?? []).filter((hit) => hit > cutoff);
+}
+
+/** Shared allow/deny verdict for both `check` and `peek`, so the two can never drift apart. */
+function evaluate(recent: number[], now: number, windowMs: number, maxRequests: number): RateLimitResult {
+  if (recent.length >= maxRequests) {
+    const oldest = recent[0];
+    const retryAfterMs = oldest + windowMs - now;
+    return { allowed: false, retryAfterSeconds: Math.max(1, Math.ceil(retryAfterMs / 1000)) };
+  }
+  return { allowed: true, retryAfterSeconds: 0 };
 }
 
 function sweepStale(map: Map<string, number[]>, now: number, windowMs: number): void {
