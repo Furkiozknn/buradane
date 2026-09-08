@@ -86,6 +86,22 @@ for (const file of files.sort()) {
     if (!Array.isArray(p.categories) || p.categories.length === 0) {
       problems.push(`${file}: ${p.id} kategorisiz`);
     }
+    // OSM'in kendi etiket torbasında kimlik bilgisi taşıyan anahtarlar var:
+    // `internet_access:password` bir kafenin wifi şifresini düz metin olarak
+    // saklıyor. Katkıcı bunu OSM'e bilerek yazmış olabilir, burada ise hiçbir
+    // işe yaramıyor - kod yalnızca `internet_access` DEĞERİNİ okuyor ("wlan"
+    // mı diye), şifreyi hiç okumuyor. Depoda durduğu sürece her sır tarayıcısı
+    // haklı olarak kırmızı yanıyor. Yeni çekimlerde KEPT_TAGS izin listesi
+    // bunları zaten eliyor; bu kapı eski bbox yöntemiyle çekilmiş bir dosyanın
+    // geri sızmasını engelliyor.
+    for (const key of Object.keys(p.raw_tags ?? {})) {
+      if (/password|passwd|secret|api[_-]?key|token/i.test(key)) {
+        problems.push(
+          `${file}: ${p.id} raw_tags içinde kimlik bilgisi anahtarı '${key}' - ` +
+            `yayınlanmadan önce silinmeli`,
+        );
+      }
+    }
     const first = seenIds.get(p.id);
     if (first && first !== file) {
       const bothBoundary =
