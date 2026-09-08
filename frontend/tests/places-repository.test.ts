@@ -8,6 +8,18 @@ import type { Place } from "@/lib/types";
 const ISTANBUL = { lat: 41.0082, lon: 28.9784 };
 
 /**
+ * The instant the "açık mı" tests ask about: Tuesday 12:00 Europe/Istanbul.
+ * A weekday midday keeps both sides of the assertion non-empty - plenty of
+ * places open, and enough night-only or closed-today ones for the filter to
+ * have something to exclude.
+ *
+ * Pinned rather than `new Date()` because these tests compare two or three
+ * independent answers to "is this open", and reading the wall clock for each
+ * one made the suite fail by the hour instead of by the rule.
+ */
+const NOW = new Date("2026-09-08T09:00:00Z");
+
+/**
  * These lock the promises the code makes in comments and the README. Each
  * one corresponds to a claim a user relies on: that an unknown amenity is
  * not silently treated as a yes, that a report never changes the public
@@ -457,11 +469,24 @@ describe("open-now filter", () => {
     // below come from a truncated page while the totals do not - which is
     // exactly how this drifted when İstanbul's 40 km radius grew past
     // 20.000 records at national scale.
+    //
+    // NOW is pinned because this comparison spans three answers to "açık mı"
+    // - the unfiltered query's, the filtered query's, and this file's own
+    // loop - and each used to read the wall clock for itself. A place whose
+    // opening_hours boundary fell between two of those reads made the
+    // arithmetic off by one, so the suite failed by the hour rather than by
+    // the rule. The rule is what this test is about.
     const LIMIT = 100_000;
-    const all = queryPlaces({ ...ISTANBUL, radius_m: 40_000, limit: LIMIT });
-    const filtered = queryPlaces({ ...ISTANBUL, radius_m: 40_000, openNow: true, limit: LIMIT });
+    const all = queryPlaces({ ...ISTANBUL, radius_m: 40_000, limit: LIMIT, now: NOW });
+    const filtered = queryPlaces({
+      ...ISTANBUL,
+      radius_m: 40_000,
+      openNow: true,
+      limit: LIMIT,
+      now: NOW,
+    });
     expect(all.places.length).toBe(all.total);
-    const closed = all.places.filter((p) => isOpenNow(p.opening_hours_raw) === "closed").length;
+    const closed = all.places.filter((p) => isOpenNow(p.opening_hours_raw, NOW) === "closed").length;
     expect(closed).toBeGreaterThan(0);
     expect(all.total - filtered.total).toBe(closed);
   });
@@ -574,8 +599,16 @@ describe("facets", () => {
   });
 
   it("counts notClosed with the same rule the filter uses", () => {
-    const result = queryPlaces({ ...ISTANBUL, radius_m: 20_000, limit: 5 });
-    const filtered = queryPlaces({ ...ISTANBUL, radius_m: 20_000, openNow: true, limit: 5 });
+    // Same instant for both, or this asserts that the clock did not move
+    // between two queries rather than that the chip and the filter agree.
+    const result = queryPlaces({ ...ISTANBUL, radius_m: 20_000, limit: 5, now: NOW });
+    const filtered = queryPlaces({
+      ...ISTANBUL,
+      radius_m: 20_000,
+      openNow: true,
+      limit: 5,
+      now: NOW,
+    });
     expect(result.facets.notClosed).toBe(filtered.total);
   });
 

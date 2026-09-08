@@ -1067,6 +1067,20 @@ export function queryPlaces(
      * overrides already use.
      */
     communityPlaces?: Place[];
+    /**
+     * The instant "açık mı" is answered against. Read ONCE per query and
+     * threaded through every isOpenNow call below.
+     *
+     * isOpenNow's own docstring says "never read the clock implicitly", but
+     * its `now = new Date()` default did exactly that, and all three call
+     * sites here took the default. So a single query asked the question at
+     * three different instants: the `notClosed` chip counted a place whose
+     * opening_hours boundary fell between two of those reads, and the list
+     * that chip links to then excluded it. The chip said 15.699, the filter
+     * returned 15.698, and the disagreement appeared and vanished with the
+     * wall clock. Passing it in makes one query one instant.
+     */
+    now?: Date;
   },
 ): PlaceQueryResult {
   const {
@@ -1084,6 +1098,7 @@ export function queryPlaces(
     overrides,
     communityPlaces,
     sort = "distance",
+    now = new Date(),
   } = query;
 
   let parsedFromText = {
@@ -1221,7 +1236,7 @@ export function queryPlaces(
       // filter actively harmful.
       //
       // The chip is labelled "Kapalıları gizle" to match exactly this.
-      if (openNow && isOpenNow(place.opening_hours_raw) === "closed") continue;
+      if (openNow && isOpenNow(place.opening_hours_raw, now) === "closed") continue;
 
       // Matched against a precomputed, diacritic-free blob of name, address,
       // district and province. Two things this fixes at once: "Kadıköy" now
@@ -1342,7 +1357,7 @@ export function queryPlaces(
       }
     }
     if (place.price_type === "free") facets.freeOnly += 1;
-    if (isOpenNow(place.opening_hours_raw) !== "closed") facets.notClosed += 1;
+    if (isOpenNow(place.opening_hours_raw, now) !== "closed") facets.notClosed += 1;
   }
 
   // `raw_tags` is the full OSM tag bag - useful on a detail page, pure weight
@@ -1399,7 +1414,7 @@ export function queryPlaces(
       if (effectiveFreeOnly && place.price_type !== "free") continue;
 
       // Excludes places we KNOW are closed, not places we have no hours for.
-      if (openNow && isOpenNow(place.opening_hours_raw) === "closed") continue;
+      if (openNow && isOpenNow(place.opening_hours_raw, now) === "closed") continue;
 
       if (needle) {
         const haystack =
