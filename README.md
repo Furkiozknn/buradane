@@ -2,6 +2,13 @@
 
 # buradane
 
+![buradane demo: İstanbul haritasında kategori seçimi ve serbest metin araması; "ücretsiz tuvalet" yazılınca sonuçlar 19'a iniyor ve harita yeniden kümeleniyor](assets/demo.gif)
+
+<sub>Gerçek kullanım, montaj değil: <code>node frontend/scripts/demo-kaydet.mjs</code>
+çalışan uygulamayı açıp kendisi kullanıyor. Kayıttaki sayılar da gerçek —
+Park 248 sonuç, Cami 454, Tuvalet 121, ve "ücretsiz tuvalet" araması 19.
+Hepsi 167.829 kayıtlık OpenStreetMap anlık görüntüsünden.</sub>
+
 **"Burada ne var?"** — Türkiye'deki kamusal ve ihtiyaç alanlarını (tuvalet,
 park, içme suyu, spor alanı, cami, kütüphane, otopark, toplanma alanı ve
 daha fazlası) keşfetmeye yarayan, ihtiyaç-odaklı bir kamusal alan bulma

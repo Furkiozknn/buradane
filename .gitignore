@@ -37,3 +37,6 @@ frontend/data/contributions.json
 # OS
 .DS_Store
 Thumbs.db
+
+# frontend/scripts/demo-kaydet.mjs gecici kareleri
+frontend/.demo/
