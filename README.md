@@ -29,9 +29,8 @@ bağlanacak şekilde tasarlandı.
 süresi) ve **"bu bilgi hâlâ doğru mu?"** (tek dokunuşla "Evet, burada"
 doğrulaması, tazelik etiketi, kaynak ve güvenilirlik skoru).
 
-> **Demo ekran görüntüsü:** Henüz eklenmedi. Aşağıdaki "Hızlı Başlangıç →
-> Frontend" adımlarıyla demoyu yerelde çalıştırıp **167.829 gerçek
-> OpenStreetMap mekanı** üzerinde harita ve liste arayüzünü görebilirsiniz.
+![buradane demo: İstanbul Sultanahmet çevresinde gerçek OSM mekanları — tuvalet, otopark, çeşme, cami; sol panelde kategori sayıları](assets/harita-ekran-goruntusu.png)
+
 > **Kapsam tamamlandı (2026-09-06): 81/81 il**, her biri kendi resmî OSM il
 > sınırından çekildi - il merkezine çizilmiş bir kutudan değil. Ölçülen
 > sonuç: **973 ilçe merkezinin 973'ünün 15 km'si içinde veri var**.
