@@ -7,18 +7,31 @@
  * user sees "teÅŸekkÃ¼rler" - and the file is gone with the container. The
  * failure is invisible to every test, every health check and the user.
  *
- * So durability is not guessed, it is declared. `BURADANE_CONTRIBUTIONS=off`
- * turns the write path into an honest 503 that says submissions are closed,
- * instead of accepting data this deployment cannot keep.
+ * Two ways this resolves, in order:
  *
- * Default is ON: local development, tests and any volume-backed host keep
- * working untouched. Only a deployment that knows it has no durable disk
- * sets the flag.
+ * 1. `BURADANE_CONTRIBUTIONS` - an explicit `off` (or `on`) always wins.
+ * 2. Otherwise, serverless platforms are detected and default to OFF.
+ *    Vercel sets `VERCEL=1` on every build and invocation. Relying on
+ *    someone remembering an env var is exactly how data gets lost quietly:
+ *    the safe state has to be the one you get by doing nothing.
+ *
+ * Anywhere else - local development, tests, a volume-backed container -
+ * defaults to ON and nothing changes.
  */
-export function contributionsEnabled(): boolean {
-  return process.env.BURADANE_CONTRIBUTIONS?.trim().toLowerCase() !== "off";
+function serverlessHost(): boolean {
+  // Vercel and Netlify both set these unconditionally on their build and
+  // runtime environments. Neither gives a route handler a disk that
+  // survives the invocation.
+  return Boolean(process.env.VERCEL || process.env.NETLIFY);
 }
 
-/** Shown to the user, and in the API body, when the flag is off. */
+export function contributionsEnabled(): boolean {
+  const bayrak = process.env.BURADANE_CONTRIBUTIONS?.trim().toLowerCase();
+  if (bayrak === "off") return false;
+  if (bayrak === "on") return true;
+  return !serverlessHost();
+}
+
+/** Shown to the user, and in the API body, when contributions are off. */
 export const CONTRIBUTIONS_OFF_MESSAGE =
   "KatkÄ± gÃ¶nderimi bu kurulumda geÃ§ici olarak kapalÄ±: kalÄ±cÄ± depolama baÄŸlanana kadar gÃ¶nderdiÄŸiniz bilgi saklanamaz. Verinizi kaybetmektense kapalÄ± tutuyoruz.";

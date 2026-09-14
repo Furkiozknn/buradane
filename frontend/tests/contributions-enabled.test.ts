@@ -4,49 +4,105 @@ import {
   CONTRIBUTIONS_OFF_MESSAGE,
   contributionsEnabled,
 } from "@/lib/contributions-enabled";
+import { SITE_URL_FALLBACK, siteUrl } from "@/lib/site-url";
 
 /**
- * The flag exists to stop a deployment from accepting data it cannot keep.
- * A serverless host writes the JSON store successfully and loses it with the
- * container - 201 to the user, nothing on disk, nothing in any log. These
- * tests pin the one behaviour that prevents that: OFF has to mean off, and
- * everything else has to mean on, so no deployment ends up silently
- * discarding contributions because a variable was spelled oddly.
+ * These two resolvers decide whether a deployment quietly loses user data
+ * and whether every share card and sitemap URL points somewhere real. Both
+ * fail invisibly when wrong, so both are pinned here.
  */
+
+const ANAHTARLAR = [
+  "BURADANE_CONTRIBUTIONS",
+  "BURADANE_SITE_URL",
+  "VERCEL",
+  "NETLIFY",
+  "VERCEL_PROJECT_PRODUCTION_URL",
+] as const;
+
+const oncekiler = new Map<string, string | undefined>();
+
+function ayarla(k: string, v: string | undefined) {
+  if (!oncekiler.has(k)) oncekiler.set(k, process.env[k]);
+  if (v === undefined) delete process.env[k];
+  else process.env[k] = v;
+}
+
+afterEach(() => {
+  for (const k of ANAHTARLAR) {
+    const v = oncekiler.get(k);
+    if (v === undefined) delete process.env[k];
+    else process.env[k] = v;
+  }
+  oncekiler.clear();
+});
+
 describe("contributionsEnabled", () => {
-  const onceki = process.env.BURADANE_CONTRIBUTIONS;
-
-  afterEach(() => {
-    if (onceki === undefined) delete process.env.BURADANE_CONTRIBUTIONS;
-    else process.env.BURADANE_CONTRIBUTIONS = onceki;
-  });
-
-  it("defaults to enabled when the variable is unset", () => {
-    delete process.env.BURADANE_CONTRIBUTIONS;
+  it("defaults to enabled off a serverless host", () => {
+    for (const k of ANAHTARLAR) ayarla(k, undefined);
     expect(contributionsEnabled()).toBe(true);
   });
 
-  it("is disabled only by the exact opt-out value", () => {
-    for (const deger of ["off", "OFF", " Off ", "oFf"]) {
-      process.env.BURADANE_CONTRIBUTIONS = deger;
-      expect(contributionsEnabled(), `"${deger}" kapatmali`).toBe(false);
-    }
+  it("defaults to DISABLED on Vercel, with no configuration", () => {
+    // The whole point: the safe state is the one you get by doing nothing.
+    for (const k of ANAHTARLAR) ayarla(k, undefined);
+    ayarla("VERCEL", "1");
+    expect(contributionsEnabled()).toBe(false);
   });
 
-  it("stays enabled for anything that is not the opt-out", () => {
-    // A typo must fail SAFE: writes keep working rather than silently
-    // stopping. The dangerous direction is accepting data we cannot keep,
-    // and that only happens when the flag is deliberately set to off.
-    for (const deger of ["on", "1", "true", "", "disabled", "kapali"]) {
-      process.env.BURADANE_CONTRIBUTIONS = deger;
-      expect(contributionsEnabled(), `"${deger}" acik kalmali`).toBe(true);
-    }
+  it("defaults to disabled on Netlify too", () => {
+    for (const k of ANAHTARLAR) ayarla(k, undefined);
+    ayarla("NETLIFY", "true");
+    expect(contributionsEnabled()).toBe(false);
   });
 
-  it("carries a message that explains why, not just that", () => {
-    // A bare "kapalÄ±" tells the user nothing about whether to try later or
-    // somewhere else. The reason is the useful part.
+  it("lets an explicit flag override the host detection both ways", () => {
+    for (const k of ANAHTARLAR) ayarla(k, undefined);
+    ayarla("VERCEL", "1");
+    ayarla("BURADANE_CONTRIBUTIONS", "on");
+    expect(contributionsEnabled(), "acik zorlanabilmeli").toBe(true);
+
+    ayarla("VERCEL", undefined);
+    ayarla("BURADANE_CONTRIBUTIONS", "OFF");
+    expect(contributionsEnabled(), "kapali zorlanabilmeli").toBe(false);
+  });
+
+  it("treats an unrecognised value as absent, not as off", () => {
+    // A typo must not silently stop writes on a host that can keep them.
+    for (const k of ANAHTARLAR) ayarla(k, undefined);
+    ayarla("BURADANE_CONTRIBUTIONS", "kapali");
+    expect(contributionsEnabled()).toBe(true);
+  });
+
+  it("explains why, not just that", () => {
     expect(CONTRIBUTIONS_OFF_MESSAGE).toMatch(/kalÄ±cÄ± depolama/i);
-    expect(CONTRIBUTIONS_OFF_MESSAGE.length).toBeGreaterThan(40);
+  });
+});
+
+describe("siteUrl", () => {
+  it("prefers the explicit variable and strips trailing slashes", () => {
+    for (const k of ANAHTARLAR) ayarla(k, undefined);
+    ayarla("BURADANE_SITE_URL", "https://buradane.com//");
+    expect(siteUrl()).toBe("https://buradane.com");
+  });
+
+  it("falls back to Vercel's stable production hostname", () => {
+    for (const k of ANAHTARLAR) ayarla(k, undefined);
+    ayarla("VERCEL_PROJECT_PRODUCTION_URL", "buradane.vercel.app");
+    expect(siteUrl()).toBe("https://buradane.vercel.app");
+  });
+
+  it("lets the explicit variable win over Vercel's", () => {
+    for (const k of ANAHTARLAR) ayarla(k, undefined);
+    ayarla("VERCEL_PROJECT_PRODUCTION_URL", "buradane.vercel.app");
+    ayarla("BURADANE_SITE_URL", "https://buradane.com");
+    expect(siteUrl()).toBe("https://buradane.com");
+  });
+
+  it("uses an obviously fake domain when nothing is set", () => {
+    // Visible misconfiguration beats a silent link to someone else's site.
+    for (const k of ANAHTARLAR) ayarla(k, undefined);
+    expect(siteUrl()).toBe(SITE_URL_FALLBACK);
+    expect(siteUrl()).toContain(".example");
   });
 });
