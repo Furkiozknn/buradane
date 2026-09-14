@@ -16,6 +16,9 @@ import { AMENITY_BY_KEY, categoryMeta } from "@/lib/categories";
 import { listCommunityPlaces, getPlaceOverrides } from "@/lib/contributions-store";
 import { applyOverride, getPlaceById } from "@/lib/places-repository";
 import type { AmenityKey, Place } from "@/lib/types";
+import { headers } from "next/headers";
+import { jsonLdToScript, nonceFromCsp, placeJsonLd } from "@/lib/place-jsonld";
+import { siteUrl } from "@/lib/site-url";
 
 /**
  * Server-rendered, shareable page for one place: /yer/node%2F123456.
@@ -73,12 +76,17 @@ export async function generateMetadata({
   const place = await loadPlace(id);
   if (!place) return { title: "Mekan bulunamadı — buradane" };
 
+  const url = `${siteUrl()}/yer/${encodeURIComponent(id)}`;
   const title = `${place.name} — buradane`;
   const description = describe(place);
   return {
     title,
     description,
-    openGraph: { title, description, type: "website", locale: "tr_TR" },
+    // 167 bin sayfada canonical yoktu. Ayni yer birden fazla adresle
+    // (kodlanmis/kodlanmamis id, takip parametreli paylasim linkleri)
+    // ulasilabildigi icin siralama sinyalleri boluniyordu.
+    alternates: { canonical: url },
+    openGraph: { title, description, type: "website", locale: "tr_TR", url },
     twitter: { card: "summary_large_image", title, description },
   };
 }
@@ -87,6 +95,12 @@ export default async function PlacePage({ params }: { params: Promise<{ id: stri
   const { id } = await params;
   const place = await loadPlace(id);
   if (!place) notFound();
+
+  // CSP nonce'u proxy.ts'in request header'ina yazdigi politikadan geri al.
+  // Nonce'suz inline script tarayici tarafindan dusurulur: sayfa duzgun
+  // gorunur, yapisal veri hic var olmaz.
+  const nonce = nonceFromCsp((await headers()).get("content-security-policy"));
+  const jsonLd = jsonLdToScript(placeJsonLd(place));
 
   const primary = categoryMeta(place.categories[0]);
   const knownAmenities = (Object.entries(place.amenities) as [AmenityKey, boolean | null][]).filter(
@@ -97,6 +111,11 @@ export default async function PlacePage({ params }: { params: Promise<{ id: stri
 
   return (
     <main className="mx-auto min-h-[100dvh] max-w-lg bg-bg px-4 py-6">
+      <script
+        type="application/ld+json"
+        nonce={nonce}
+        dangerouslySetInnerHTML={{ __html: jsonLd }}
+      />
       <Link
         href="/"
         className="mb-4 inline-flex min-h-11 items-center gap-1.5 text-[13.5px] font-medium text-brand"
