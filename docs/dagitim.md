@@ -160,3 +160,45 @@ cd frontend && npm test                    # ulusal kapsam testleri dahil
 Doğrulama betiği kırmızıysa **commit etmeyin**. Overpass hız sınırlıdır ve
 betik il bazında checkpoint atar; kesintide `--only-missing` ile kaldığı
 yerden devam eder.
+
+## 9. Vercel (en hizli yol, kalici disk YOK)
+
+Vercel'de bu uygulama **okuma tarafiyla** calisir: harita, arama, `/yer`
+sayfalari, sitemap, paylasim kartlari. Katki gonderimi calismaz -- ve
+bilerek calismaz.
+
+**Neden:** Vercel'in dosya sistemi cagriyi asmiyor. Katki deposu bir JSON
+dosyasina yaziyor; orada yazma basarili olur, kullaniciya 201 doner, sonra
+container ile birlikte kaybolur. Bu yuzden `contributions-enabled.ts`
+`VERCEL` degiskenini gorunce gonderimi **varsayilan olarak kapatir** ve
+kullaniciya sebebini soyleyen bir 503 doner. Hicbir env degiskeni
+ayarlamaniz gerekmez; guvenli durum hicbir sey yapmayinca gelen durumdur.
+
+### Kurulum
+
+1. vercel.com -> **Add New -> Project** -> `Furkiozknn/buradane`
+2. **Root Directory: `frontend`** (tek onemli ayar; kacirilirsa build koku
+   yanlis olur ve derleme hemen patlar)
+3. Deploy.
+
+Env degiskeni **sart degil**:
+
+| Degisken | Ayarlanmazsa ne olur |
+|---|---|
+| `BURADANE_SITE_URL` | `VERCEL_PROJECT_PRODUCTION_URL` kullanilir; sitemap ve paylasim kartlari `*.vercel.app` adresini gosterir. Gercek alan adi alininca bunu set edin. |
+| `BURADANE_CONTRIBUTIONS` | Vercel'de otomatik `off`. Kalici disk baglayana kadar dokunmayin. |
+| `BURADANE_ADMIN_TOKEN` | Ayarlanmaz -> `/api/admin/*` tamamen kapali (fail-closed). Vercel'de katki zaten kapali oldugundan moderasyon kuyrugu da bos; set etmeye gerek yok. |
+
+### Kalici diske gecerken
+
+Fly.io volume, Render disk ya da bir VPS -- fark etmez, sart su ucu:
+
+```
+BURADANE_DATA_DIR=/kalici/yol      # yazilabilir ve dagitimlar arasi kalici
+BURADANE_CONTRIBUTIONS=on          # otomatik algilamayi ez
+BURADANE_ADMIN_TOKEN=<uzun rastgele>
+```
+
+`BURADANE_CONTRIBUTIONS=on` yazmayi unutursaniz Vercel disinda zaten
+varsayilan aciktir; bu satir yalnizca Vercel uzerinde disk bagladiysaniz
+gerekir.
