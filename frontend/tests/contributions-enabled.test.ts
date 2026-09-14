@@ -75,7 +75,7 @@ describe("contributionsEnabled", () => {
   });
 
   it("explains why, not just that", () => {
-    expect(CONTRIBUTIONS_OFF_MESSAGE).toMatch(/kalÄ±cÄ± depolama/i);
+    expect(CONTRIBUTIONS_OFF_MESSAGE).toMatch(/kalıcı depolama/i);
   });
 });
 

@@ -6,7 +6,7 @@ import type { Place } from "@/lib/types";
 function yer(ustunden: Partial<Place> = {}): Place {
   return {
     id: "node/123",
-    name: "Test ParkÄ±",
+    name: "Test Parkı",
     lat: 41.0082,
     lon: 28.9784,
     categories: ["park"],
@@ -15,7 +15,7 @@ function yer(ustunden: Partial<Place> = {}): Place {
     access: "public",
     address_line: null,
     district: "Fatih",
-    province: "Ä°stanbul",
+    province: "İstanbul",
     opening_hours_raw: null,
     is_24h: null,
     website: null,
@@ -101,7 +101,7 @@ describe("placeJsonLd", () => {
       yer({ amenities: { ...yer().amenities, wheelchair_accessible: true, has_wifi: false } }),
     );
     const adlar = (d.amenityFeature as { name: string }[]).map((a) => a.name);
-    expect(adlar).toContain("Tekerlekli sandalye eriÅŸimi");
+    expect(adlar).toContain("Tekerlekli sandalye erişimi");
     expect(adlar).not.toContain("Wi-Fi");
   });
 

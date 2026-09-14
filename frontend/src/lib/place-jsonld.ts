@@ -36,16 +36,16 @@ const SCHEMA_TYPE: Partial<Record<CategorySlug, string>> = {
 
 /** Amenities worth publishing, with the wording a consumer will show. */
 const AMENITY_LABEL: Record<string, string> = {
-  wheelchair_accessible: "Tekerlekli sandalye eriÅŸimi",
+  wheelchair_accessible: "Tekerlekli sandalye erişimi",
   has_ramp: "Rampa",
-  baby_changing: "Bebek bakÄ±m alanÄ±",
-  child_friendly: "Ã‡ocuk dostu",
+  baby_changing: "Bebek bakım alanı",
+  child_friendly: "Çocuk dostu",
   pet_friendly: "Evcil hayvan dostu",
-  has_drinking_water: "Ä°Ã§me suyu",
+  has_drinking_water: "İçme suyu",
   has_wifi: "Wi-Fi",
-  has_shower: "DuÅŸ",
-  has_seating: "Oturma alanÄ±",
-  has_shade: "GÃ¶lge",
+  has_shower: "Duş",
+  has_seating: "Oturma alanı",
+  has_shade: "Gölge",
   has_parking: "Otopark",
   is_quiet: "Sessiz",
 };
