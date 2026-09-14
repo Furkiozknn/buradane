@@ -40,3 +40,23 @@ Thumbs.db
 
 # frontend/scripts/demo-kaydet.mjs gecici kareleri
 frontend/.demo/
+
+# --- Secrets and local credentials: never commit these ---
+!.env.sample
+!.env.template
+*.pem
+*.p12
+*.pfx
+*.ppk
+id_rsa
+id_rsa.*
+id_ed25519
+id_ed25519.*
+.netrc
+.npmrc
+.pypirc
+credentials.json
+secrets.json
+service-account*.json
+*.key
+!*.pub
