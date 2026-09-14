@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 
 import "./globals.css";
 import { ServiceWorkerRegistrar } from "@/components/ServiceWorkerRegistrar";
+import { siteUrl } from "@/lib/site-url";
 
 // Inter carries complete Turkish coverage (ı İ ğ Ğ ş Ş ç Ç ö Ö ü Ü) - a real
 // constraint here, since a font missing dotless ı silently mangles half the
@@ -14,6 +15,13 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
+  // Without this, every relative image in metadata - including the
+  // /yer/[id]/opengraph-image route - resolves against http://localhost:3000
+  // in production. The page still renders; only the share preview breaks, so
+  // nothing in CI or a smoke test notices. For an app people find by having a
+  // link sent to them, a broken preview card is a growth bug, not a cosmetic
+  // one. Next warns about this at build time and the warning was being missed.
+  metadataBase: new URL(siteUrl()),
   title: "buradane — Yakınımda ne var?",
   description:
     "Türkiye'deki kamusal alanları keşfet: tuvalet, park, içme suyu, dinlenme alanı, çocuk parkı, spor alanı, otopark ve daha fazlası. Konumuna en yakın olanı saniyeler içinde bul.",

@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 
 import { datasetMeta } from "@/lib/places-repository";
+import { siteUrl } from "@/lib/site-url";
 
 /**
  * /admin is an interface, not content; /api is machine surface. Neither
@@ -14,7 +15,7 @@ import { datasetMeta } from "@/lib/places-repository";
  * discoverable rather than merely valid.
  */
 export default function robots(): MetadataRoute.Robots {
-  const base = process.env.BURADANE_SITE_URL ?? "https://buradane.example";
+  const base = siteUrl();
   return {
     rules: {
       userAgent: "*",
