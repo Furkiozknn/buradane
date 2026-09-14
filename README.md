@@ -669,3 +669,14 @@ Akış: **issue → dal → PR → otomatik kontroller → review → merge**.
 Kaynak kodu [MIT](LICENSE). OpenStreetMap'ten alınan coğrafi veri ayrıca
 [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/) altındadır - bkz.
 [backend/docs/DATA_SOURCES.md](backend/docs/DATA_SOURCES.md).
+
+## Kendi kopyani yayina al
+
+[![Vercel ile dagit](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FFurkiozknn%2Fburadane&root-directory=frontend&project-name=buradane&repository-name=buradane)
+
+**Root Directory `frontend` olmali** -- buton bunu onden dolduruyor.
+
+Vercel'de katki gonderimi otomatik kapali gelir: orada kalici disk yok ve
+gonderilen veri sessizce kaybolurdu. Harita, arama, yer sayfalari ve
+sitemap tam calisir. Ayrintisi ve kalici diske gecis:
+[docs/dagitim.md](docs/dagitim.md).
