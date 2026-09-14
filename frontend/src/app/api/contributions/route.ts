@@ -5,6 +5,7 @@ import { addContribution, listContributions } from "@/lib/contributions-store";
 import { getPlaceById } from "@/lib/places-repository";
 import { checkRateLimit, getClientKey } from "@/lib/rate-limit";
 import type { ContributionKind } from "@/lib/types";
+import { CONTRIBUTIONS_OFF_MESSAGE, contributionsEnabled } from "@/lib/contributions-enabled";
 
 const VALID_KINDS: ContributionKind[] = [
   "suggestion",
@@ -103,6 +104,11 @@ export async function GET(request: Request) {
  * up in public search until a moderator approves it.
  */
 export async function POST(request: Request) {
+  // Kalici depolama yoksa yazma yoluna hic girme. Kabul edip kaybetmektense
+  // acikca reddet: kullanici bilgiyi baska bir yola tasiyabilsin.
+  if (!contributionsEnabled()) {
+    return NextResponse.json({ error: CONTRIBUTIONS_OFF_MESSAGE }, { status: 503 });
+  }
   // Rate-limited because this is the only unauthenticated write in the app
   // and it lands in a JSON file with no other size guard. The window is
   // generous on purpose - a person filing 2-3 reports back to back must
