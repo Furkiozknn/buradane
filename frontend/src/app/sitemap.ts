@@ -2,6 +2,7 @@ import type { MetadataRoute } from "next";
 
 import { datasetMeta, placesOfProvince } from "@/lib/places-repository";
 import { siteUrl } from "@/lib/site-url";
+import { GENERIC_NAMES } from "@/lib/generic-names";
 
 /**
  * One sitemap per province, not one file for the country.
@@ -25,8 +26,6 @@ import { siteUrl } from "@/lib/site-url";
  * stay reachable through the map and through links. A sitemap is a
  * recommendation, not an allowlist.
  */
-const GENERIC_NAMES =
-  /^(Umumi Tuvalet|Park|İçme Suyu Çeşmesi|Oturma Alanı|Çocuk Oyun Alanı|Spor Alanı|Otopark|Duş|Ücretsiz Wi-Fi Noktası|Cami|Eczane|Acil Toplanma Alanı|Kütüphane|Şarj İstasyonu)$/;
 
 /** Next calls this at build time to learn the shard ids; each returned
  * object becomes /sitemap/<id>.xml. */

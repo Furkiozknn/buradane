@@ -4,7 +4,7 @@
  * `contributions-store.ts` writes a JSON file. That is correct on a host
  * with a persistent volume and *silently wrong* on an ephemeral filesystem:
  * on a serverless platform the write succeeds, the endpoint returns 201, the
- * user sees "teÅŸekkÃ¼rler" - and the file is gone with the container. The
+ * user sees "teşekkürler" - and the file is gone with the container. The
  * failure is invisible to every test, every health check and the user.
  *
  * Two ways this resolves, in order:
@@ -34,4 +34,4 @@ export function contributionsEnabled(): boolean {
 
 /** Shown to the user, and in the API body, when contributions are off. */
 export const CONTRIBUTIONS_OFF_MESSAGE =
-  "KatkÄ± gÃ¶nderimi bu kurulumda geÃ§ici olarak kapalÄ±: kalÄ±cÄ± depolama baÄŸlanana kadar gÃ¶nderdiÄŸiniz bilgi saklanamaz. Verinizi kaybetmektense kapalÄ± tutuyoruz.";
+  "Katkı gönderimi bu kurulumda geçici olarak kapalı: kalıcı depolama bağlanana kadar gönderdiğiniz bilgi saklanamaz. Verinizi kaybetmektense kapalı tutuyoruz.";

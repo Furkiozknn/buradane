@@ -19,6 +19,7 @@ import type { AmenityKey, Place } from "@/lib/types";
 import { headers } from "next/headers";
 import { jsonLdToScript, nonceFromCsp, placeJsonLd } from "@/lib/place-jsonld";
 import { siteUrl } from "@/lib/site-url";
+import { isGenericName } from "@/lib/generic-names";
 
 /**
  * Server-rendered, shareable page for one place: /yer/node%2F123456.
@@ -51,20 +52,46 @@ async function loadPlace(rawId: string): Promise<Place | null> {
   return place;
 }
 
+/**
+ * The line that appears under the title in a search result.
+ *
+ * The previous version emitted an attribute list - "Otopark · Beyoğlu,
+ * İstanbul". Measured across 53.599 records in four provinces it averaged
+ * 32 characters against the ~155 Google renders, and 100% came out under
+ * 70. That is a label, not a description: it says nothing about what the
+ * page offers and gives nobody a reason to click it.
+ *
+ * This builds a sentence instead - still only from what is actually known.
+ * `null` means unknown here as everywhere else; a preview that invents
+ * "ücretsiz" would put the lie in the WhatsApp card itself.
+ */
 function describe(place: Place): string {
-  // Built only from what is actually known. `null` means unknown here as
-  // everywhere else - a share description that invents "ücretsiz" or
-  // "engelli erişimli" would put the lie in the WhatsApp preview itself.
-  const parts: string[] = [];
-  parts.push(place.categories.map((slug) => categoryMeta(slug).label).join(", "));
-  if (place.district || place.province) {
-    parts.push([place.district, place.province].filter(Boolean).join(", "));
+  const tur = place.categories.map((slug) => categoryMeta(slug).label).join(", ");
+  const yer = [place.district, place.province].filter(Boolean).join(", ");
+
+  const nitelikler: string[] = [];
+  // Kategori adi zaten "ucretsiz" iceriyorsa (Ucretsiz Wi-Fi Noktasi) tekrar
+  // etme: "ucretsiz wi-fi noktasi. Ucretsiz." arama sonucunda ozensiz duruyor.
+  const turSoylemis = tur.toLocaleLowerCase("tr-TR").includes("ücretsiz");
+  if (place.price_type === "free" && !turSoylemis) nitelikler.push("ücretsiz");
+  if (place.price_type === "paid") nitelikler.push("ücretli");
+  if (place.is_24h === true) nitelikler.push("7/24 açık");
+  if (place.amenities.wheelchair_accessible === true) nitelikler.push("engelli erişimli");
+
+  const cumleler: string[] = [];
+  cumleler.push(
+    yer ? `${yer} bölgesinde ${tur.toLocaleLowerCase("tr-TR")}.` : `${tur}.`,
+  );
+  if (nitelikler.length > 0) {
+    const ilk = nitelikler[0];
+    const govde =
+      ilk.charAt(0).toLocaleUpperCase("tr-TR") +
+      ilk.slice(1) +
+      (nitelikler.length > 1 ? `, ${nitelikler.slice(1).join(", ")}` : "");
+    cumleler.push(`${govde}.`);
   }
-  if (place.price_type === "free") parts.push("Ücretsiz");
-  if (place.price_type === "paid") parts.push("Ücretli");
-  if (place.amenities.wheelchair_accessible === true) parts.push("Engelli erişimli");
-  if (place.is_24h === true) parts.push("7/24 açık");
-  return parts.join(" · ");
+  cumleler.push("Konumu, yol tarifi ve en yakın alternatifleri buradane'de.");
+  return cumleler.join(" ");
 }
 
 export async function generateMetadata({
@@ -77,7 +104,13 @@ export async function generateMetadata({
   if (!place) return { title: "Mekan bulunamadı — buradane" };
 
   const url = `${siteUrl()}/yer/${encodeURIComponent(id)}`;
-  const title = `${place.name} — buradane`;
+  // Olculdu: 53.599 kaydin %75,3'unun basligi bir baskasiyla AYNIYDI
+  // ("Otopark - buradane" 8.822 kez). Konum eklemek bunu %63e indiriyor;
+  // asil coklugu asagidaki noindex kapatiyor.
+  const konum = [place.district, place.province].filter(Boolean).join(", ");
+  const title = konum
+    ? `${place.name}, ${konum} - buradane`
+    : `${place.name} - buradane`;
   const description = describe(place);
   return {
     title,
@@ -86,6 +119,14 @@ export async function generateMetadata({
     // (kodlanmis/kodlanmamis id, takip parametreli paylasim linkleri)
     // ulasilabildigi icin siralama sinyalleri boluniyordu.
     alternates: { canonical: url },
+    // Kategori adi tasiyan kayitlar (isimsiz OSM dugumleri) zaten sitemap
+    // disinda -- ayni karar burada da uygulanmali, yoksa 40 bin ince ve
+    // birbirinin benzeri sayfa indekste yarisip sitenin kalite sinyalini
+    // asagi cekiyor. Sayfa kullanicilar icin aynen erisilebilir kaliyor;
+    // follow acik, yani cikan baglantilar sayilmaya devam ediyor.
+    robots: isGenericName(place.name)
+      ? { index: false, follow: true }
+      : { index: true, follow: true },
     openGraph: { title, description, type: "website", locale: "tr_TR", url },
     twitter: { card: "summary_large_image", title, description },
   };
