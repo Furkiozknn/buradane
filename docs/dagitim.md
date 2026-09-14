@@ -114,7 +114,14 @@ anlatmaz.
 curl -sf "$SITE/api/places?lat=41.0082&lon=28.9784&radius_m=2000&limit=5" >/dev/null && echo "arama ok"
 curl -s -o /dev/null -w "%{http_code}\n" "$SITE/api/admin/auth"          # token'sız: 401 bekleniyor
 curl -s -o /dev/null -w "%{http_code}\n" "$SITE/yer/node%2F123456"        # 200 ya da 404, 500 değil
-curl -sI "$SITE/sitemap.xml" | head -1                                    # 200
+curl -sI "$SITE/sitemap/istanbul.xml" | head -1                           # 200
+curl -s "$SITE/robots.txt" | grep -c "^Sitemap:"                          # 81
+
+# /sitemap.xml diye tek bir dosya YOKTUR ve olmamalidir (bkz. sitemap.ts:
+# tek dosya 60.875 URL ederdi, protokol siniri 50.000 ve tarayicilar asani
+# reddediyor). Sitemap il basina bolunmus; robots.txt hepsini duyurur.
+# Buraya "/sitemap.xml 200 donmeli" yazan eski satir yanlisti: dogru
+# davranisi hata sayiyordu.
 
 # CSP her belgede nonce taşımalı; iki istek iki FARKLI nonce vermeli.
 curl -sI "$SITE/" | grep -i content-security-policy

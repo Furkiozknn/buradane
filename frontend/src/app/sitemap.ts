@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 
 import { datasetMeta, placesOfProvince } from "@/lib/places-repository";
+import { siteUrl } from "@/lib/site-url";
 
 /**
  * One sitemap per province, not one file for the country.
@@ -48,7 +49,7 @@ export default async function sitemap({
   // hardcode. The env var lets the eventual deployment set it without a
   // code change; the fallback is syntactically valid and obviously fake,
   // which beats shipping someone else's real domain in a sitemap.
-  const base = process.env.BURADANE_SITE_URL ?? "https://buradane.example";
+  const base = siteUrl();
 
   const places = placesOfProvince(slug)
     .filter(
