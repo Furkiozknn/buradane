@@ -3,7 +3,12 @@ import { NextResponse } from "next/server";
 import { adminAuthErrorResponse, checkAdminAuth } from "@/lib/admin-auth";
 
 import { applyOverride, getPlaceById } from "@/lib/places-repository";
-import { clearPlaceOverride, getPlaceOverrides, setPlaceOverride } from "@/lib/contributions-store";
+import {
+  clearPlaceOverride,
+  getPlaceOverrides,
+  listCommunityPlaces,
+  setPlaceOverride,
+} from "@/lib/contributions-store";
 import type { Place, PlaceStatus, PriceType } from "@/lib/types";
 
 /**
@@ -46,7 +51,11 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   const { id } = await context.params;
   const placeId = decodeURIComponent(id);
 
-  const base = getPlaceById(placeId);
+  // Community places are passed in for the same reason the public detail
+  // route passes them: a moderator-approved suggestion is not in the OSM
+  // snapshot, and without this layer the admin API 404s on precisely the
+  // records moderation produced - unmoderatable the moment they are approved.
+  const base = getPlaceById(placeId, await listCommunityPlaces());
   if (!base) {
     return NextResponse.json({ error: "Mekan bulunamadı" }, { status: 404 });
   }
@@ -135,7 +144,7 @@ export async function DELETE(request: Request, context: { params: Promise<{ id: 
   const { id } = await context.params;
   const placeId = decodeURIComponent(id);
 
-  const base = getPlaceById(placeId);
+  const base = getPlaceById(placeId, await listCommunityPlaces());
   if (!base) {
     return NextResponse.json({ error: "Mekan bulunamadı" }, { status: 404 });
   }

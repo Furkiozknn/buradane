@@ -171,22 +171,53 @@ export function recordAdminAuthFailure(key: string, now?: number): void {
 }
 
 /**
- * Best-effort caller identity from proxy headers - the standard `Request`
- * App Router handlers receive carries no lower-level connection info to
- * fall back on. Both headers are attacker-controlled on any deployment that
- * doesn't sit behind a proxy that overwrites them (Vercel does this; a bare
- * `next start` with nothing in front does not), so treat this as "raises
- * the cost of casual, unsophisticated abuse", not "reliable client
- * identity". Requests with neither header collapse into one shared
- * "unknown" bucket rather than skipping the limit entirely.
+ * Does this deployment sit behind a proxy that OVERWRITES the forwarding
+ * headers?
+ *
+ * Only the operator knows, so only the operator may say. `x-forwarded-for`
+ * and `x-real-ip` are plain request headers: on a bare `next start` the
+ * caller writes whatever they like into them, and the limiter then keys on
+ * a value the attacker chose. That is not merely a weak limit, it is an
+ * inverted one - the admin brute-force lockout in admin-auth.ts counts
+ * FAILED token attempts per client key, so a script that sends a new
+ * `x-forwarded-for` with every guess gets a fresh 10-attempt budget each
+ * time and the lockout never fires. Trusting the header by default made
+ * the strongest brake in the app the easiest one to walk around.
+ *
+ * Off unless explicitly turned on, because the safe state has to be the one
+ * you get by doing nothing - the same reasoning contributions-enabled.ts
+ * uses for durable storage.
+ */
+function trustsProxyHeaders(): boolean {
+  const flag = process.env.BURADANE_TRUST_PROXY?.trim().toLowerCase();
+  return flag === "1" || flag === "on" || flag === "true";
+}
+
+/**
+ * Best-effort caller identity - the standard `Request` App Router handlers
+ * receive carries no lower-level connection info to fall back on.
+ *
+ * With `BURADANE_TRUST_PROXY` set, the first entry of `x-forwarded-for`
+ * (then `x-real-ip`) is the client, which is correct behind a proxy that
+ * SETS rather than appends those headers. Without it, every caller shares
+ * one bucket: coarse, and deliberately so - a key nobody can rotate limits
+ * an attacker to one budget instead of unlimited budgets. Requests with no
+ * usable header land in that same shared bucket rather than skipping the
+ * limit entirely.
+ *
+ * The cost of the shared bucket is real and documented (docs/dagitim.md §4):
+ * without a proxy, contribution submission is capped site-wide. That is a
+ * visible, honest limit; a silently defeatable admin lockout is not.
  */
 export function getClientKey(request: Request): string {
-  const forwarded = request.headers.get("x-forwarded-for");
-  if (forwarded) {
-    const first = forwarded.split(",")[0]?.trim();
-    if (first) return first;
+  if (trustsProxyHeaders()) {
+    const forwarded = request.headers.get("x-forwarded-for");
+    if (forwarded) {
+      const first = forwarded.split(",")[0]?.trim();
+      if (first) return first;
+    }
+    const realIp = request.headers.get("x-real-ip")?.trim();
+    if (realIp) return realIp;
   }
-  const realIp = request.headers.get("x-real-ip")?.trim();
-  if (realIp) return realIp;
   return "unknown";
 }

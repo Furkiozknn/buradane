@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { adminAuthErrorResponse, checkAdminAuth } from "@/lib/admin-auth";
-import { addContribution, listContributions } from "@/lib/contributions-store";
+import { addContribution, listCommunityPlaces, listContributions } from "@/lib/contributions-store";
 import { getPlaceById } from "@/lib/places-repository";
 import { checkRateLimit, getClientKey } from "@/lib/rate-limit";
 import type { ContributionKind } from "@/lib/types";
@@ -178,8 +178,11 @@ export async function POST(request: Request) {
     }
   } else if (typeof body.placeId !== "string" || !body.placeId) {
     return NextResponse.json({ error: "Rapor için placeId gerekli" }, { status: 400 });
-  } else if (!getPlaceById(body.placeId)) {
-    // The id must name a real place. Without this the store accumulated
+  } else if (!getPlaceById(body.placeId, await listCommunityPlaces())) {
+    // The id must name a real place. Community places count as real: a
+    // moderator-approved suggestion lives outside the OSM snapshot, so
+    // looking it up without that layer 404s exactly the records the
+    // community just added - nobody could report or verify them. Without this the store accumulated
     // override entries for ids that do not exist - unbounded growth driven
     // entirely by the caller - and those ids became keys on a plain object,
     // so "__proto__"/"constructor"/"toString" ended up as own properties of

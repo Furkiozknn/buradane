@@ -7,7 +7,12 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { GET as adminAuthGET } from "@/app/api/admin/auth/route";
 import { PATCH as placePATCH, DELETE as placeDELETE } from "@/app/api/admin/places/[id]/route";
 import { PATCH as contributionPATCH } from "@/app/api/admin/contributions/[id]/route";
-import { GET as contributionsGET } from "@/app/api/contributions/route";
+import { GET as contributionsGET, POST as contributionsPOST } from "@/app/api/contributions/route";
+import {
+  addContribution,
+  listCommunityPlaces,
+  moderateContribution,
+} from "@/lib/contributions-store";
 
 /**
  * Route-level auth tests: the handlers themselves, not the helper.
@@ -26,6 +31,12 @@ import { GET as contributionsGET } from "@/app/api/contributions/route";
 
 const TOKEN_VAR = "BURADANE_ADMIN_TOKEN";
 const TOKEN = "route-test-token";
+// Every test below separates itself from the others by sending a distinct
+// `x-forwarded-for`, which only means anything when the deployment has said
+// it sits behind a proxy that overwrites the header. Without this the whole
+// file shares one "unknown" bucket and the first test's deliberate failures
+// lock out every test after it.
+const TRUST_PROXY_VAR = "BURADANE_TRUST_PROXY";
 
 let tempDir: string;
 
@@ -38,6 +49,7 @@ let testIp: string;
 
 beforeEach(async () => {
   process.env[TOKEN_VAR] = TOKEN;
+  process.env[TRUST_PROXY_VAR] = "1";
   testIp = `10.20.30.${ipCounter++}`;
   // The store must never touch real runtime data from tests.
   tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "buradane-routes-"));
@@ -46,6 +58,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   delete process.env[TOKEN_VAR];
+  delete process.env[TRUST_PROXY_VAR];
   delete process.env.BURADANE_DATA_DIR;
   await fs.rm(tempDir, { recursive: true, force: true });
 });
@@ -183,5 +196,71 @@ describe("admin route guards", () => {
     expect(
       (await placePATCH(req({ "x-admin-token": "her sey" }, {}), ctx("node/1"))).status,
     ).toBe(401);
+  });
+});
+
+/**
+ * Approving a suggestion must not produce a place nobody can reach.
+ *
+ * `getPlaceById` searches the immutable OSM snapshot; a moderator-approved
+ * community place lives outside it and only appears when the caller passes
+ * `communityPlaces`. Three handlers omitted that argument, so the moment a
+ * moderator approved a suggestion the resulting place 404'd on the admin
+ * PATCH, the admin DELETE and the report/verify path - unmoderatable and
+ * unreportable, while /api/places/:id and /yer/:id showed it fine. The
+ * asymmetry is the bug, so these assert the three former offenders behave
+ * like the two that were always right.
+ */
+describe("community places are reachable from every route", () => {
+  async function approvedCommunityPlace() {
+    const suggestion = await addContribution({
+      kind: "suggestion",
+      placeId: null,
+      placeName: "Topluluk Çeşmesi",
+      payload: {
+        name: "Topluluk Çeşmesi",
+        lat: 41.0082,
+        lon: 28.9784,
+        categories: ["su"],
+      },
+      note: null,
+    });
+    const moderated = await moderateContribution(suggestion.id, "approve");
+    expect(moderated.ok).toBe(true);
+    const places = await listCommunityPlaces();
+    expect(places).toHaveLength(1);
+    return places[0];
+  }
+
+  it("PATCH /api/admin/places/:id edits an approved community place", async () => {
+    const place = await approvedCommunityPlace();
+    const response = await placePATCH(
+      req({ "x-admin-token": TOKEN }, { status: "temporarily_closed" }),
+      ctx(place.id),
+    );
+    expect(response.status).toBe(200);
+  });
+
+  it("DELETE /api/admin/places/:id reverts an approved community place", async () => {
+    const place = await approvedCommunityPlace();
+    const response = await placeDELETE(req({ "x-admin-token": TOKEN }), ctx(place.id));
+    expect(response.status).toBe(200);
+  });
+
+  it("POST /api/contributions accepts a report against an approved community place", async () => {
+    const place = await approvedCommunityPlace();
+    const response = await contributionsPOST(
+      req({}, { kind: "report_closed", placeId: place.id, note: "Kapanmış" }),
+    );
+    expect(response.status).toBe(201);
+  });
+
+  it("POST /api/contributions still 404s an id that names no place at all", async () => {
+    // The existence check must stay a check: widening it to the community
+    // layer must not turn it into "anything goes".
+    const response = await contributionsPOST(
+      req({}, { kind: "report_closed", placeId: "node/boyle-bir-yer-yok" }),
+    );
+    expect(response.status).toBe(404);
   });
 });
