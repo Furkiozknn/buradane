@@ -421,7 +421,7 @@ uv run pytest tests/ -v
 
 - Yazma uçları girdi doğrulaması için Pydantic şemalarını kullanır (`app/schemas/`).
 - Kullanıcı katkıları (öneri/rapor) moderasyon onayı olmadan asla herkese açık aramaya düşmez.
-- JWT tabanlı opsiyonel kimlik doğrulama (`python-jose`), şifreler `bcrypt` ile hash'lenir. Token almanın tek yolu `POST /auth/login`; self-serve kayıt bilinçli olarak yok (hesaplar yalnızca moderasyon/atıf içindir).
+- JWT tabanlı opsiyonel kimlik doğrulama (`PyJWT`, HS256), şifreler `bcrypt` ile hash'lenir. Token almanın tek yolu `POST /auth/login`; self-serve kayıt bilinçli olarak yok (hesaplar yalnızca moderasyon/atıf içindir).
 - Moderasyon çıkışı: `BURADANE_ADMIN_EMAIL`/`BURADANE_ADMIN_PASSWORD` ile açılışta tek bir bootstrap moderatör oluşturulur (varsa asla üzerine yazılmaz); bekleyen raporlar `GET /reports` ile listelenir, `PATCH /reports/{id}` (`{"action": "accept"|"reject"}`) ile karara bağlanır. Kabul edilen `closed`/`under_maintenance` raporu mekanı `temporarily_closed` yapar, `reopened` tekrar `active` yapar, `broken_amenity` ilgili amenity bayrağını temizler; bilgilendirme türleri (yanlış konum/bilgi vb.) yalnızca raporu kapatır - veri düzeltmesi bilinçli bir admin düzenlemesi olarak kalır. Her iki karar da raporun güvenilirlik skoru üzerindeki bekleyen-rapor baskısını kaldırır.
 - `BURADANE_JWT_SECRET` artık yalnızca bir tavsiye değil: bootstrap admin yapılandırılmışken secret hâlâ varsayılan dev değerindeyse sunucu açılışta **açıkça reddeder** (herkesin forge edebileceği bir admin token'ı, admin'in hiç olmamasından kötüdür). Keşif-amaçlı, admin'siz çalıştırmalar secret'sız çalışmaya devam eder.
 - **Demo'nun admin uçları (`/api/admin/*`) paylaşılan-sır token'ı ile korunur.**
