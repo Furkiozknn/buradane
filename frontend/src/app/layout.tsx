@@ -1,18 +1,26 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+
+// Inter, self-hosted from a lockfile-pinned npm package rather than fetched
+// from fonts.googleapis.com at build time.
+//
+// `next/font/google` downloads the font during `next build`. That put an
+// unpinned third-party HTTP call on the critical path of CI: Google Fonts
+// being slow or unreachable turns a green build red, which is exactly the
+// failure mode this project claims not to have. `npm ci` also hits the
+// network, but every byte it fetches is pinned in package-lock.json; the
+// font request was not.
+//
+// `wght.css` is the weight-axis variable font, declared as seven @font-face
+// rules that differ only by unicode-range, so a browser downloads just the
+// subsets a page actually uses. Turkish needs two of them: ç ö ü and dotless
+// ı come from `latin`, while İ ğ Ğ ş Ş come from `latin-ext`. That per-subset
+// unicode-range is why this is a stylesheet import and not `next/font/local`,
+// which has no way to express one.
+import "@fontsource-variable/inter/wght.css";
 
 import "./globals.css";
 import { ServiceWorkerRegistrar } from "@/components/ServiceWorkerRegistrar";
 import { siteUrl } from "@/lib/site-url";
-
-// Inter carries complete Turkish coverage (ı İ ğ Ğ ş Ş ç Ç ö Ö ü Ü) - a real
-// constraint here, since a font missing dotless ı silently mangles half the
-// place names in the dataset.
-const inter = Inter({
-  variable: "--font-inter",
-  subsets: ["latin", "latin-ext"],
-  display: "swap",
-});
 
 export const metadata: Metadata = {
   // Without this, every relative image in metadata - including the
@@ -47,7 +55,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="tr">
-      <body className={`${inter.variable} antialiased`}>
+      <body className="antialiased">
         <a
           href="#sonuclar"
           className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-surface focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:shadow-lg"
