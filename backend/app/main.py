@@ -29,6 +29,18 @@ if settings.jwt_secret == "dev-secret-change-in-production":
         " yazili. Uretimde mutlaka degistirin:"
         " python -c \"import secrets; print(secrets.token_urlsafe(48))\""
     )
+# PyJWT raises InsecureKeyLengthWarning below 32 bytes, but a library warning
+# on the first signed token is not where an operator looks. RFC 7518 3.2 asks
+# for a key at least as long as the HMAC output - 32 bytes for SHA-256 - and
+# a short secret is brute-forceable offline once one token is captured.
+elif len(settings.jwt_secret.encode()) < 32:
+    logger.warning(
+        "BURADANE_JWT_SECRET 32 bayttan kisa (%d bayt). HS256 icin RFC 7518"
+        " en az 32 bayt ister; kisa bir sir, ele gecen tek bir token ile"
+        " cevrimdisi denenebilir. Uretmek icin:"
+        " python -c \"import secrets; print(secrets.token_urlsafe(48))\"",
+        len(settings.jwt_secret.encode()),
+    )
 
 
 @asynccontextmanager

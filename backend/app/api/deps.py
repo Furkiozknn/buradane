@@ -16,7 +16,7 @@ from typing import Annotated
 
 from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import JWTError, jwt
+import jwt
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -51,7 +51,7 @@ def _decode_user_id(token: str) -> uuid.UUID | None:
         return None
     try:
         payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
-    except JWTError:
+    except jwt.PyJWTError:
         return None
     sub = payload.get("sub")
     if sub is None:
