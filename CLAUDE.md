@@ -97,7 +97,7 @@ buradane/
 │   │   │       └── admin/          # Moderasyon + mekan düzenleme
 │   │   ├── components/             # İstemci bileşenleri
 │   │   └── lib/                    # Saf mantık — TESTLERİN ODAĞI
-│   ├── tests/                      # Vitest, 182 test
+│   ├── tests/                      # Vitest paketi
 │   ├── vitest.config.mts
 │   └── package.json
 ├── backend/
@@ -327,7 +327,7 @@ Bu kurallar estetik değil. İhlali, kullanıcının boşuna yürümesi demektir
 ## 8. Test kuralları
 
 ```bash
-cd frontend && npm test          # 182 test geçmeli
+cd frontend && npm test          # hepsi geçmeli (sayıyı koşu yazdırır)
 cd frontend && npx tsc --noEmit  # 0 hata
 cd frontend && npm run lint      # 0 hata
 cd frontend && npm run build     # başarılı

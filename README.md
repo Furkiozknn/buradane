@@ -234,7 +234,7 @@ buradane/
 │   ├── data/
 │   │   ├── places.<il>.json                   # 81 il dosyası, 167.829 gerçek OSM mekanı
 │   │   ├── meta.json                          # Üretim damgası, lisans, il ve kategori sayıları
-│   │   ├── meta.json                          # İl indeksi + 973 ilçe (seçici bunu okur)
+│   │   ├── admin-divisions.json                # İl indeksi + 973 ilçe (seçici bunu okur)
 │   │   ├── place-index.json                   # id → il eşlemesi (yalnız id aramasında)
 │   │   └── contributions.json                 # Kullanıcı katkıları + admin override'ları (git'te değil)
 │   ├── public/maplibre/                        # MapLibre worker dosyaları (bkz. "Bilinen Tuhaflıklar")
@@ -415,7 +415,8 @@ uv run pytest tests/ -v
 - **Saf mantık testleri** (`test_reliability.py`, `test_dedup_math.py`) - veritabanı gerektirmez, her ortamda çalışır.
 - **Veritabanı-bağımlı testler** (`test_search.py`, `test_dedup_integration.py`, `test_moderation.py`) - gerçek bir PostGIS bağlantısı gerektirir; `docker compose up -d` çalışıyorsa yerelde, yoksa CI'da (`.github/workflows/ci.yml`, `postgis/postgis` servis konteyneri ile) çalışır. Veritabanı yoksa bu testler **skip** edilir, başarısız olmaz - sahte bir "yeşil" göstermek yerine dürüst bir sinyal.
 
-(ESLint) var.
+Frontend tarafında ayrı bir katman daha var: `npm test` Vitest ile bileşen ve
+mantık testlerini, `npm run lint` ise statik denetimi (ESLint) çalıştırır.
 
 ## Güvenlik
 
@@ -670,13 +671,13 @@ Kaynak kodu [MIT](LICENSE). OpenStreetMap'ten alınan coğrafi veri ayrıca
 [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/) altındadır - bkz.
 [backend/docs/DATA_SOURCES.md](backend/docs/DATA_SOURCES.md).
 
-## Kendi kopyani yayina al
+## Kendi kopyanı yayına al
 
-[![Vercel ile dagit](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FFurkiozknn%2Fburadane&root-directory=frontend&project-name=buradane&repository-name=buradane)
+[![Vercel ile dağıt](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FFurkiozknn%2Fburadane&root-directory=frontend&project-name=buradane&repository-name=buradane)
 
-**Root Directory `frontend` olmali** -- buton bunu onden dolduruyor.
+**Root Directory `frontend` olmalı** — buton bunu önden dolduruyor.
 
-Vercel'de katki gonderimi otomatik kapali gelir: orada kalici disk yok ve
-gonderilen veri sessizce kaybolurdu. Harita, arama, yer sayfalari ve
-sitemap tam calisir. Ayrintisi ve kalici diske gecis:
+Vercel'de katkı gönderimi otomatik kapalı gelir: orada kalıcı disk yok ve
+gönderilen veri sessizce kaybolurdu. Harita, arama, yer sayfaları ve
+sitemap tam çalışır. Ayrıntısı ve kalıcı diske geçiş:
 [docs/dagitim.md](docs/dagitim.md).
