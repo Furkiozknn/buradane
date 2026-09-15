@@ -68,19 +68,34 @@ RSS demekti - üstelik Next.js bunu route ve RSC grafikleri için ayrı ayrı
 ## 4. Ters proxy (rate limit'in çalışması için şart)
 
 Hız sınırlayıcılar istemciyi `x-forwarded-for` başlığının **ilk** girdisinden
-tanır. Bu başlığı **ezen** bir proxy arkasında olmalısınız; başlığı sadece
-ekleyen (append) bir yapılandırmada saldırganın kendi başlığı ilk sırada
-kalır ve fren işlevsizleşir. nginx için:
+tanır — **ama yalnızca `BURADANE_TRUST_PROXY` açıkça ayarlandığında.**
+Ayarlanmadığı sürece başlıklar hiç okunmaz ve tüm ziyaretçiler tek bir
+`"unknown"` kovasını paylaşır.
+
+Bunun sebebi: `x-forwarded-for` sıradan bir istek başlığıdır. Önünde hiçbir
+şey olmayan bir kurulumda çağıran içine ne isterse yazar, ve admin
+kaba-kuvvet kilidi (`admin-auth.ts`) tam olarak bu değere göre sayar — her
+tahminde başlığı değiştiren bir betik her seferinde taze bir 10 deneme
+bütçesi alır ve kilit hiç devreye girmez. Başlığa varsayılan olarak güvenmek,
+uygulamanın en güçlü frenini en kolay atlatılan freni yapıyordu. Döndürülemez
+tek bir anahtar kabadır ama atlatılamaz; bir kilit için doğru takas budur.
+
+Başlığı **ezen** (append eden değil) bir proxy arkasındaysanız değişkeni açın.
+Sadece ekleyen bir yapılandırmada saldırganın kendi başlığı ilk sırada kalır
+ve fren yine işlevsizleşir — bu durumda **açmayın**. nginx için:
 
 ```nginx
 proxy_set_header X-Forwarded-For $remote_addr;   # add değil, set
 proxy_set_header X-Real-IP       $remote_addr;
 ```
 
-Hiçbir proxy yoksa (çıplak `next start`) tüm ziyaretçiler tek bir `"unknown"`
-kovasını paylaşır: katkı gönderimi tüm site için 10 istek/10 dakika ile
-sınırlanır. Bu bilinen ve belgelenmiş bir sınırdır
-(`frontend/src/lib/rate-limit.ts` dosya başında yazılıdır).
+```
+BURADANE_TRUST_PROXY=1             # yalnızca yukarıdaki gibi ezen bir proxy varsa
+```
+
+Proxy yoksa (çıplak `next start`) ya da değişken kapalıysa katkı gönderimi tüm
+site için 10 istek/10 dakika ile sınırlanır. Bu bilinen ve belgelenmiş bir
+sınırdır (`frontend/src/lib/rate-limit.ts` dosya başında yazılıdır).
 
 ### HSTS — burada eklenir, uygulamada değil
 
@@ -188,6 +203,7 @@ Env degiskeni **sart degil**:
 | `BURADANE_SITE_URL` | `VERCEL_PROJECT_PRODUCTION_URL` kullanilir; sitemap ve paylasim kartlari `*.vercel.app` adresini gosterir. Gercek alan adi alininca bunu set edin. |
 | `BURADANE_CONTRIBUTIONS` | Vercel'de otomatik `off`. Kalici disk baglayana kadar dokunmayin. |
 | `BURADANE_ADMIN_TOKEN` | Ayarlanmaz -> `/api/admin/*` tamamen kapali (fail-closed). Vercel'de katki zaten kapali oldugundan moderasyon kuyrugu da bos; set etmeye gerek yok. |
+| `BURADANE_TRUST_PROXY` | Ayarlanmaz -> `x-forwarded-for` / `x-real-ip` hic okunmaz, tum ziyaretciler tek bir hiz-limiti kovasini paylasir (bkz. §4). Vercel bu basliklari kendisi ezdigi icin burada `1` yapilabilir. |
 
 ### Kalici diske gecerken
 
