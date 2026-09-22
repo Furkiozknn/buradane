@@ -37,6 +37,12 @@ class PlaceListItem(BaseModel):
     status: PlaceStatus
     price_type: PriceType
     wheelchair_accessible: bool | None
+    # In the LIST shape, not only in PlaceDetail: the frontend filters on
+    # `access` before it renders a card, and a filter that needs a detail
+    # request per marker is not a filter. `operator` rides along because the
+    # share/JSON-LD path runs off list data too.
+    access: str | None = None
+    operator: str | None = None
     distance_m: float | None = None  # only populated for radius-based ("yakınımda") searches
     reliability_score: float
     freshness_label: str
@@ -55,6 +61,8 @@ class PlaceListItem(BaseModel):
             status=place.status,
             price_type=place.price_type,
             wheelchair_accessible=place.wheelchair_accessible,
+            access=place.access,
+            operator=place.operator,
             distance_m=distance_m,
             reliability_score=place.reliability_score,
             freshness_label=freshness_label(place.last_verified_at),
@@ -107,6 +115,8 @@ class PlaceDetail(PlaceListItem):
             is_24h=place.is_24h,
             price_type=place.price_type,
             price_note=place.price_note,
+            access=place.access,
+            operator=place.operator,
             categories=[CategoryOut.model_validate(pc.category) for pc in place.place_categories],
             status=place.status,
             wheelchair_accessible=place.wheelchair_accessible,

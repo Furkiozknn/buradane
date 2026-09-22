@@ -7,7 +7,7 @@ Kural: buradaki her "tamamlandı" maddesi depoda çalışan koda dayanır.
 Doğrulanmamış hiçbir şey tamamlanmış gibi yazılmamıştır. Bir madde
 belirsizse, belirsiz olduğu açıkça yazılıdır.
 
-**Son güncelleme:** 2026-09-06
+**Son güncelleme:** 2026-09-22
 
 ---
 
@@ -125,9 +125,18 @@ belirsizse, belirsiz olduğu açıkça yazılıdır.
 - ✅ Frontend ↔ backend sözleşmesi **alan alan karşılaştırıldı** — sonuç:
   [docs/api-sozlesme-farklari.md](docs/api-sozlesme-farklari.md). Zarf farkı
   (çıplak liste vs `{places,total,applied,facets}`), id şeması farkı
-  (UUID vs OSM ref), listede eksik alanlar (`access`, `district`,
-  `amenities`, `source`...), eksik parametreler (`q`, `open_now`, `sort`)
-  ve kapanış sırası orada.
+  (UUID vs OSM ref), listede eksik alanlar (`district`, `amenities`,
+  `source`...), eksik parametreler (`q`, `open_now`, `sort`) ve kapanış
+  sırası orada.
+- ✅ **§4'ün iki satırı kapandı (2026-09-22)** — `access` ve `operator` artık
+  modelde, `c3f8a1d05b47` migration'ında ve `PlaceListItem`'da; ikisi de
+  `app/ingest/osm_overpass.py` tarafından OSM'in kendi etiketlerinden
+  dolduruluyor. Listede olmaları bilinçli: frontend kartı çizmeden önce
+  `access`'e bakıp eliyor, ve işaretçi başına bir detay isteği gerektiren
+  bir filtre filtre değildir. Migration geri doldurma yapmıyor — sütunlar
+  var olmadan önce alınmış 167.829 satır için dürüst değer "bilinmiyor".
+  Kapanmayan kısım: `access`'e göre sorgu tarafı eleme hâlâ yok, o §5'te
+  duruyor.
 
 ### Demo ↔ backend geçişi
 - 🚧 "Taban-URL değişikliğiyle geçiş" vaadi **bugün geçerli değil** — farklar

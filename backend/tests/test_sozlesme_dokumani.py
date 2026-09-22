@@ -160,7 +160,18 @@ def test_ts_okuyucusu_ic_ice_obje_alanlarini_almiyor(tmp_path):
 
 
 def test_belgedeki_tablo_okunabiliyor():
-    assert "access" in belgedeki_eksik_alanlar()
+    """Ayrıştırıcı §4 tablosunu gerçekten okuyor mu.
+
+    Burada bir zamanlar `access` sabit yazıyordu. O fark 22 Eylül'de
+    kapanınca bu test kırıldı - ayrıştırıcı kusursuz çalışırken. Bir
+    ayrıştırıcının testi, ayrıştırdığı verinin içeriğine bağlı olmamalı:
+    sınanan şey artık tablonun iki özelliği. Eksik satırlar çıkıyor, ve
+    ✓ işaretli satırlar çıkmıyor.
+    """
+    eksikler = belgedeki_eksik_alanlar()
+    assert eksikler, "tablodan hic eksik alan cikmadi"
+    assert "price_type" not in eksikler, "✓ isaretli satir eksik sayildi"
+    assert "access" not in eksikler, "access 2026-09-22'de kapandi"
 
 
 # --------------------------------------------------------------------------
@@ -252,3 +263,29 @@ def test_belge_ve_yol_haritasi_birbirine_bagli():
     if not yol.is_file():
         pytest.skip("ROADMAP.md yok")
     assert "api-sozlesme-farklari.md" in yol.read_text(encoding="utf-8")
+
+
+def test_access_ve_operator_listede_de_var():
+    """Detayda olması yetmez; filtre liste üzerinde çalışıyor.
+
+    Frontend kartı çizmeden önce `access`'e bakıp `private` olanları
+    eliyor. Alan yalnızca `PlaceDetail`'de olsaydı bu, işaretçi başına bir
+    detay isteği demekti - yani bir filtre değil, bir istek fırtınası.
+    `operator` de liste verisinden okunuyor: paylaşım/JSON-LD yolu ve
+    güvenilirlik tamlık puanı ikisi de liste yanıtıyla çalışıyor.
+    """
+    liste = pydantic_alanlari(SEMA, "PlaceListItem")
+    assert "access" in liste
+    assert "operator" in liste
+
+
+def test_yeni_sutunlarin_migrationi_var():
+    """Modele bir sütun eklenip migration yazılmaması, deploy anında çıkar."""
+    import re
+
+    versions = SEMA.parent.parent.parent / "alembic" / "versions"
+    govde = "\n".join(p.read_text(encoding="utf-8") for p in versions.glob("*.py"))
+    for ad in ("access", "operator"):
+        assert re.search(r"add_column\(\s*[\"']places[\"'],\s*sa\.Column\(\s*[\"']%s[\"']" % ad, govde), (
+            "places.%s modelde var ama hicbir migration onu eklemiyor" % ad
+        )
