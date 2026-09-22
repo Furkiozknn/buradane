@@ -9,6 +9,53 @@ Buradaki her sayı ölçülmüştür. Ölçülmemiş bir iddia bu dosyaya girmez
 
 ---
 
+## [Yayımlanmamış]
+
+Depoda etiket yok; bu bölümün sınırı bir etiket değil, `1.0.0` girdisinin
+tarihi (6 Eylül 2026). Aşağısı o tarihten sonra `main`'e giren işin
+tamamıdır. Sürüm numarası verilmedi — verilecek numara bir karardır ve
+burada kendiliğinden alınmadı.
+
+### Güvenlik
+
+- `python-jose` yerine **PyJWT**; kısa JWT sırrı için uyarı, varsayılan
+  JWT sırrı artık istek anında da reddediliyor.
+- `x-forwarded-for` **varsayılan olarak güvenilmez** kabul ediliyor;
+  güvenilir vekil `BURADANE_TRUST_PROXY` ile açıkça bildiriliyor.
+- OSM'in kimlik bilgisi taşıyan etiketleri anlık görüntüden düşürüldü ve
+  girişte kapatıldı.
+- `.env`, özel anahtarlar ve kimlik dosyaları `.gitignore`'a alındı.
+- CI'da `GITHUB_TOKEN` izinleri kısıtlandı, eski koşular iptal ediliyor.
+
+### Düzeltildi
+
+- Topluluk yerleri 404 dönüyordu.
+- Paylaşılan her bağlantının önizleme görseli `localhost`'a çözülüyordu.
+- 167 bin yer sayfasında yapısal veri ve `canonical` yoktu.
+- Sayfa başlıkları %75 tekrarlıydı, açıklamalar 32 karaktere düşüyordu,
+  Türkçe bozuktu.
+- Kalıcı disk yokken katkı sessizce kabul ediliyordu; artık açıkça
+  reddediliyor.
+- `1.0.0` sonrası bulunan üç README kusuru giderildi.
+
+### Değiştirildi
+
+- Inter yazı tipi derleme sırasında Google Fonts'tan çekilmek yerine
+  paketten sunuluyor: CI'ın kritik yolunda sabitlenmemiş üçüncü taraf
+  HTTP çağrısı kalmadı.
+- Hız sınırlayıcıda `check`/`peek` tekrarı giderildi; `peek` ve
+  `getClientKey` için test eklendi.
+- "Açık mı" sorusu kayıt başına değil, sorgu başına bir kez soruluyor.
+
+### Eklendi
+
+- Vercel tek tıklık dağıtım: buton, `vercel.json` ve runbook bölümü.
+- README'ye gerçek OSM verisiyle üretilmiş harita ekran görüntüsü.
+- Dependabot yapılandırması, katkıcı şablonları ve davranış kuralları.
+- Makine-okunur `project-meta.json`.
+
+---
+
 ## [1.0.0] — 2026-09-06
 
 Türkiye'nin **81 ilinin tamamında gerçek coğrafi kapsam**. Bundan önceki
