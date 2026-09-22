@@ -681,3 +681,13 @@ Vercel'de katkı gönderimi otomatik kapalı gelir: orada kalıcı disk yok ve
 gönderilen veri sessizce kaybolurdu. Harita, arama, yer sayfaları ve
 sitemap tam çalışır. Ayrıntısı ve kalıcı diske geçiş:
 [docs/dagitim.md](docs/dagitim.md).
+
+---
+
+## Bu ekosistemden başka projeler
+
+- **[nova-drift](https://github.com/Furkiozknn/nova-drift)** — derleme adımı olmayan sonsuz tarayıcı uzay koşusu
+- **[masal](https://github.com/Furkiozknn/masal)** — çocuğun adına yazılan uyku öncesi masalı
+- **[turkce-ajanlar](https://github.com/Furkiozknn/turkce-ajanlar)** — Türkçe düşünen 70 Claude Code alt-ajanı
+
+<sub>Hepsi tek bir aranabilir sayfada: **[furkiozknn.github.io](https://furkiozknn.github.io/)** — her kart, o deponun kendi <code>project-meta.json</code> dosyasından üretiliyor.</sub>
