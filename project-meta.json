@@ -20,7 +20,7 @@
     "PostGIS",
     "Python"
   ],
-  "version": "1.0.0",
+  "version": null,
   "license": "MIT",
   "topics": [
     "accessibility",
@@ -40,7 +40,7 @@
     "turkiye",
     "typescript"
   ],
-  "summary": "\"What do I need, and where is the nearest one?\" 167,829 real OpenStreetMap places across all 81 provinces of T├╝rkiye - pulled from each province's true boundary, not a box around its capital, so all 973 district centres have data within 15 km. Bearing, distance and a one-tap \"still here?\" on every result. 324 tests.",
+  "summary": "\"What do I need, and where is the nearest one?\" 167,829 real OpenStreetMap places across all 81 provinces of Türkiye - pulled from each province's true boundary, not a box around its capital, so all 973 district centres have data within 15 km. Bearing, distance and a one-tap \"still here?\" on every result. 324 tests.",
   "key_features": [
     "167,829 real OpenStreetMap places across all 81 provinces of Turkiye",
     "Pulled from each province's true boundary, not a box around its capital, so all 973 district centres have data within 15 km",
@@ -91,7 +91,7 @@
   },
   "provenance": {
     "generated_at": "2026-09-22",
-    "generator": "ghcc/gen_meta.py",
+    "generator": "schema/uret.py",
     "rule": "mechanical fields read from the repository and the GitHub API; editorial fields hand-written and reviewed; no field is generated from a guess"
   }
 }
