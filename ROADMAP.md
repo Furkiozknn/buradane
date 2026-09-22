@@ -134,6 +134,14 @@ belirsizse, belirsiz olduğu açıkça yazılıdır.
   ve önerilen kapanış sırası: [docs/api-sozlesme-farklari.md](docs/api-sozlesme-farklari.md).
   Gerçekçi ilk hedef: Next.js API route'larının backend'i çağıran ince bir
   uyarlama katmanına dönüşmesi.
+- ✅ **O belge artık çalıştırılabilir** — `backend/tests/test_sozlesme_dokumani.py`
+  `PlaceListItem` ve `PlaceDetail` alanlarını kaynaktan (AST ile, import etmeden,
+  veritabanı olmadan) okuyup frontend'in `Place` tipiyle karşılaştırıyor ve sonucu
+  belgenin §4 tablosuyla eşleştiriyor. Bir fark kapanır da belge kapanmazsa test
+  kırmızı yanar; şemaya yeni bir boşluk açılırsa da. İlk koşuşunda gerçek bir
+  eksik buldu: `operator` alanını frontend JSON-LD `provider`'ı ve güvenilirlik
+  tamlık puanı için kullanıyor, backend hiçbir şemada üretmiyor, ve belge onu
+  saymıyordu — artık sayıyor.
 
 ### Türkiye kapsamı
 - ✅ **81/81 il** indi ve doğrulandı; ilçe kapsamı **973/973 (%100)**

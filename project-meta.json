@@ -58,9 +58,9 @@
     "videos": []
   },
   "tests": {
-    "count": 324,
-    "source": "96 backend (CI log) + 228 frontend (vitest)",
-    "measured": "2026-09-15"
+    "count": 334,
+    "source": "106 backend (96 CI log + 10 contract-document) + 228 frontend (vitest)",
+    "measured": "2026-09-22"
   },
   "ci": {
     "workflows": [

@@ -68,6 +68,7 @@ bunları içermiyor (bir kısmı `PlaceDetail`'de var, listede yok):
 | `verification_count`, `report_count` | Hiç yok | Güvenilirlik açıklaması, "N kişi doğruladı" |
 | `last_verified_at` | Yalnız Detail'de | — |
 | `source {slug, name, license, url}` | Hiç yok (DataSource modeli var, şemaya bağlanmamış) | Atıf (ODbL yükümlülüğü!) ve "Topluluk katkısı" ayrımı |
+| `operator` | **Modelde ve şemada hiç yok** | JSON-LD `provider` alanı (`place-jsonld.ts`) ve güvenilirlik tamlık puanı (`places-repository.ts`) — ikisi de bu alan olmadan sessizce eksik çalışır |
 
 Ayrıca amenity anahtar listesi birebir aynı değil:
 
