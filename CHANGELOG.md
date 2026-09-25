@@ -43,6 +43,15 @@ burada kendiliğinden alınmadı.
 - Kalıcı disk yokken katkı sessizce kabul ediliyordu; artık açıkça
   reddediliyor.
 - `1.0.0` sonrası bulunan üç README kusuru giderildi.
+- Taban harita stili (tiles.openfreemap.org) alınamadığında harita
+  `load` olayına hiç ulaşmıyor, sonuç katmanları hiç eklenmiyordu: sokak
+  yok, **pin de yok**, mesaj da yok — liste 200 sonuç gösterirken harita
+  boş bir dikdörtgendi. Artık düz bir arka plana geçiliyor; pinler,
+  kümeler ve seçim halkası doğru yerde çiziliyor ve "Sokak haritası
+  yüklenemedi" notu gösteriliyor.
+- ODbL atfı ("© OpenStreetMap katkıda bulunanları") artık
+  openstreetmap.org/copyright sayfasına bağlanıyor (liste başlığında ve
+  OSM kaynaklı yer sayfalarında), OSMF atıf yönergesinin istediği gibi.
 
 ### Değiştirildi
 

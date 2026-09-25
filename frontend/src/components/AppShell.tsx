@@ -1039,8 +1039,19 @@ export function AppShell({
                   sits behind the sheet at all snap heights. The licence
                   requires it to be reasonably visible, so it is now on
                   screen whatever the result set does. */}
+              {/* Linked to openstreetmap.org/copyright: the OSMF attribution
+                  guideline asks for the credit to point where the licence
+                  and the contributors are explained, not only to name them. */}
               <p className="truncate px-4 pb-2 text-[11px] text-text-muted">
-                {datasetMeta.attribution} · {datasetMeta.count.toLocaleString("tr-TR")} kayıt · ODbL
+                <a
+                  href="https://www.openstreetmap.org/copyright"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline decoration-dotted underline-offset-2 hover:text-text"
+                >
+                  {datasetMeta.attribution}
+                </a>{" "}
+                · {datasetMeta.count.toLocaleString("tr-TR")} kayıt · ODbL
               </p>
             </div>
 

@@ -58,8 +58,8 @@
     "videos": []
   },
   "tests": {
-    "count": 360,
-    "source": "132 backend (pytest: `132 passed`) + 228 frontend (vitest: `228 passed`)",
+    "count": 366,
+    "source": "132 backend (pytest: `132 passed`) + 234 frontend (vitest: `234 passed`)",
     "measured": "2026-09-25"
   },
   "ci": {
