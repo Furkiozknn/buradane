@@ -595,6 +595,14 @@ export function AppShell({
       // honest: there is no map to zoom while the panel owns the screen.
       data-sheet={isDesktop ? "sidebar" : snap}
     >
+      {/* First focusable element on the page: keyboard users skip the map
+          (every pin is a Tab stop) and land on the result list. */}
+      <a
+        href="#sonuclar"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-surface focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:shadow-lg"
+      >
+        Sonuç listesine geç
+      </a>
       <MapCanvas
         places={places}
         selectedId={selectedId}
