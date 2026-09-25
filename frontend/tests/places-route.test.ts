@@ -55,6 +55,14 @@ describe("GET /api/places - coordinate validation", () => {
     expect(await errorOf(response)).toMatch(/-90\.\.90/);
   });
 
+  it("tells a zoomed-out map to zoom in, even when its world copies pass ±180", async () => {
+    // Order matters: this viewport is both too wide and off the globe. The
+    // user behind it needs the actionable message, not the coordinate one.
+    const response = await get("bbox=-250,-60,250,80");
+    expect(response.status).toBe(400);
+    expect(await errorOf(response)).toMatch(/çok geniş/);
+  });
+
   it("refuses non-numeric bbox parts", async () => {
     expect((await get("bbox=nan,41,29,41.1")).status).toBe(400);
     expect((await get("bbox=1,2,3")).status).toBe(400);

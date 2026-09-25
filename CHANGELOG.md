@@ -37,7 +37,7 @@ burada kendiliğinden alınmadı.
   aralık dışı `lat`/`lon` **200 + boş liste** döndürüyordu; boyut
   denetimi `Math.abs` kullandığı için ters kutu onu da geçiyordu. Artık
   400 + gerekçe. Bu route handler'ın hiçbir kapısının testi yoktu;
-  `tests/places-route.test.ts` (11 test, düzeltme öncesi 3'ü kırmızı)
+  `tests/places-route.test.ts` (12 test, düzeltme öncesi 3'ü kırmızı)
   hepsini sabitliyor.
 
 ### Düzeltildi

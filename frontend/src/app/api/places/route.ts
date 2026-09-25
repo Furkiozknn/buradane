@@ -75,21 +75,6 @@ export async function GET(request: Request) {
     }
     bbox = parts as [number, number, number, number];
 
-    // Same refusal the backend gained for GET /places: an inverted or
-    // off-the-globe box is not "a place with nothing in it", yet it
-    // answered 200 + an empty list. The size check below used Math.abs, so
-    // an inverted box even passed it. 400 with a reason instead.
-    const [west, south, east, north] = bbox;
-    if (Math.abs(west) > 180 || Math.abs(east) > 180 || Math.abs(south) > 90 || Math.abs(north) > 90) {
-      return NextResponse.json({ error: "bbox -180..180 / -90..90 aralığının dışında" }, { status: 400 });
-    }
-    if (west > east || south > north) {
-      return NextResponse.json(
-        { error: "bbox 'min_lon,min_lat,max_lon,max_lat' sırasında olmalı (min ≤ max)" },
-        { status: 400 },
-      );
-    }
-
     // A viewport spanning the whole country is not a search, it is a scan:
     // measured at 274 ms p50 / 445 ms p95 with 47.319 matches, all of it
     // synchronous, so every other request on the single event loop queues
@@ -107,6 +92,22 @@ export async function GET(request: Request) {
             "Arama alanı çok geniş. Haritada biraz yakınlaşıp tekrar deneyin " +
             "(ya da bir şehir seçin).",
         },
+        { status: 400 },
+      );
+    }
+
+    // Same refusal the backend gained for GET /places: an inverted or
+    // off-the-globe box is not "a place with nothing in it", yet it
+    // answered 200 + an empty list. The size check above uses Math.abs, so
+    // an inverted box even passed it. Checked AFTER the size guard on
+    // purpose: a zoomed-out map with world copies reports longitudes past
+    // ±180, and that user needs "zoom in", not a lecture on coordinates.
+    if (Math.abs(minLon) > 180 || Math.abs(maxLon) > 180 || Math.abs(minLat) > 90 || Math.abs(maxLat) > 90) {
+      return NextResponse.json({ error: "bbox -180..180 / -90..90 aralığının dışında" }, { status: 400 });
+    }
+    if (minLon > maxLon || minLat > maxLat) {
+      return NextResponse.json(
+        { error: "bbox 'min_lon,min_lat,max_lon,max_lat' sırasında olmalı (min ≤ max)" },
         { status: 400 },
       );
     }
