@@ -1,0 +1,97 @@
+{
+  "schema_version": "1.0.0",
+  "id": "buradane",
+  "owner": "Furkiozknn",
+  "repository": "https://github.com/Furkiozknn/buradane",
+  "homepage": "https://furkiozknn.github.io/#buradane",
+  "releases": "https://github.com/Furkiozknn/buradane/releases",
+  "status": "active",
+  "category": "web-app",
+  "platform": [
+    "web",
+    "http-api"
+  ],
+  "primary_language": "TypeScript",
+  "technologies": [
+    "Next.js",
+    "TypeScript",
+    "MapLibre",
+    "FastAPI",
+    "PostGIS",
+    "Python"
+  ],
+  "version": null,
+  "license": "MIT",
+  "topics": [
+    "accessibility",
+    "civic-tech",
+    "crowdsourcing",
+    "fastapi",
+    "geospatial",
+    "maplibre",
+    "mapping",
+    "nextjs",
+    "open-data",
+    "openstreetmap",
+    "postgis",
+    "public-services",
+    "python",
+    "turkey",
+    "turkiye",
+    "typescript"
+  ],
+  "summary": "\"What do I need, and where is the nearest one?\" 167,829 real OpenStreetMap places across all 81 provinces of Türkiye - pulled from each province's true boundary, not a box around its capital, so all 973 district centres have data within 15 km. Bearing, distance and a one-tap \"still here?\" on every result. 324 tests.",
+  "key_features": [
+    "167,829 real OpenStreetMap places across all 81 provinces of Turkiye",
+    "Pulled from each province's true boundary, not a box around its capital, so all 973 district centres have data within 15 km",
+    "Bearing, distance and a one-tap 'still here?' on every result",
+    "ODbL data and MIT code split explicitly in a NOTICE file"
+  ],
+  "media": {
+    "hero": "assets/banner.svg",
+    "screenshots": [
+      "assets/harita-ekran-goruntusu.png"
+    ],
+    "gifs": [
+      "assets/demo.gif"
+    ],
+    "videos": []
+  },
+  "tests": {
+    "count": 347,
+    "source": "119 backend (CI log: `119 passed`) + 228 frontend (vitest)",
+    "measured": "2026-09-22"
+  },
+  "ci": {
+    "workflows": [
+      "ci.yml",
+      "frontend.yml"
+    ],
+    "badge": "https://github.com/Furkiozknn/buradane/actions/workflows/ci.yml/badge.svg"
+  },
+  "docs": {
+    "readme": "README.md",
+    "changelog": "CHANGELOG.md",
+    "version_history": null,
+    "roadmap": "ROADMAP.md",
+    "security": "SECURITY.md",
+    "contributing": "CONTRIBUTING.md",
+    "license_file": "LICENSE"
+  },
+  "social": {
+    "headline": "What do I need, and where is the nearest one? 167,829 places, all 81 provinces.",
+    "hashtags": [
+      "openstreetmap",
+      "civictech",
+      "nextjs",
+      "postgis",
+      "turkiye"
+    ],
+    "primary_link": "https://github.com/Furkiozknn/buradane"
+  },
+  "provenance": {
+    "generated_at": "2026-09-22",
+    "generator": "schema/uret.py",
+    "rule": "mechanical fields read from the repository and the GitHub API; editorial fields hand-written and reviewed; no field is generated from a guess"
+  }
+}

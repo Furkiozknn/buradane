@@ -234,7 +234,7 @@ buradane/
 │   ├── data/
 │   │   ├── places.<il>.json                   # 81 il dosyası, 167.829 gerçek OSM mekanı
 │   │   ├── meta.json                          # Üretim damgası, lisans, il ve kategori sayıları
-│   │   ├── meta.json                          # İl indeksi + 973 ilçe (seçici bunu okur)
+│   │   ├── admin-divisions.json                # İl indeksi + 973 ilçe (seçici bunu okur)
 │   │   ├── place-index.json                   # id → il eşlemesi (yalnız id aramasında)
 │   │   └── contributions.json                 # Kullanıcı katkıları + admin override'ları (git'te değil)
 │   ├── public/maplibre/                        # MapLibre worker dosyaları (bkz. "Bilinen Tuhaflıklar")
@@ -415,13 +415,14 @@ uv run pytest tests/ -v
 - **Saf mantık testleri** (`test_reliability.py`, `test_dedup_math.py`) - veritabanı gerektirmez, her ortamda çalışır.
 - **Veritabanı-bağımlı testler** (`test_search.py`, `test_dedup_integration.py`, `test_moderation.py`) - gerçek bir PostGIS bağlantısı gerektirir; `docker compose up -d` çalışıyorsa yerelde, yoksa CI'da (`.github/workflows/ci.yml`, `postgis/postgis` servis konteyneri ile) çalışır. Veritabanı yoksa bu testler **skip** edilir, başarısız olmaz - sahte bir "yeşil" göstermek yerine dürüst bir sinyal.
 
-(ESLint) var.
+Frontend tarafında ayrı bir katman daha var: `npm test` Vitest ile bileşen ve
+mantık testlerini, `npm run lint` ise statik denetimi (ESLint) çalıştırır.
 
 ## Güvenlik
 
 - Yazma uçları girdi doğrulaması için Pydantic şemalarını kullanır (`app/schemas/`).
 - Kullanıcı katkıları (öneri/rapor) moderasyon onayı olmadan asla herkese açık aramaya düşmez.
-- JWT tabanlı opsiyonel kimlik doğrulama (`python-jose`), şifreler `bcrypt` ile hash'lenir. Token almanın tek yolu `POST /auth/login`; self-serve kayıt bilinçli olarak yok (hesaplar yalnızca moderasyon/atıf içindir).
+- JWT tabanlı opsiyonel kimlik doğrulama (`PyJWT`, HS256), şifreler `bcrypt` ile hash'lenir. Token almanın tek yolu `POST /auth/login`; self-serve kayıt bilinçli olarak yok (hesaplar yalnızca moderasyon/atıf içindir).
 - Moderasyon çıkışı: `BURADANE_ADMIN_EMAIL`/`BURADANE_ADMIN_PASSWORD` ile açılışta tek bir bootstrap moderatör oluşturulur (varsa asla üzerine yazılmaz); bekleyen raporlar `GET /reports` ile listelenir, `PATCH /reports/{id}` (`{"action": "accept"|"reject"}`) ile karara bağlanır. Kabul edilen `closed`/`under_maintenance` raporu mekanı `temporarily_closed` yapar, `reopened` tekrar `active` yapar, `broken_amenity` ilgili amenity bayrağını temizler; bilgilendirme türleri (yanlış konum/bilgi vb.) yalnızca raporu kapatır - veri düzeltmesi bilinçli bir admin düzenlemesi olarak kalır. Her iki karar da raporun güvenilirlik skoru üzerindeki bekleyen-rapor baskısını kaldırır.
 - `BURADANE_JWT_SECRET` artık yalnızca bir tavsiye değil: bootstrap admin yapılandırılmışken secret hâlâ varsayılan dev değerindeyse sunucu açılışta **açıkça reddeder** (herkesin forge edebileceği bir admin token'ı, admin'in hiç olmamasından kötüdür). Keşif-amaçlı, admin'siz çalıştırmalar secret'sız çalışmaya devam eder.
 - **Demo'nun admin uçları (`/api/admin/*`) paylaşılan-sır token'ı ile korunur.**
@@ -670,13 +671,23 @@ Kaynak kodu [MIT](LICENSE). OpenStreetMap'ten alınan coğrafi veri ayrıca
 [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/) altındadır - bkz.
 [backend/docs/DATA_SOURCES.md](backend/docs/DATA_SOURCES.md).
 
-## Kendi kopyani yayina al
+## Kendi kopyanı yayına al
 
-[![Vercel ile dagit](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FFurkiozknn%2Fburadane&root-directory=frontend&project-name=buradane&repository-name=buradane)
+[![Vercel ile dağıt](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FFurkiozknn%2Fburadane&root-directory=frontend&project-name=buradane&repository-name=buradane)
 
-**Root Directory `frontend` olmali** -- buton bunu onden dolduruyor.
+**Root Directory `frontend` olmalı** — buton bunu önden dolduruyor.
 
-Vercel'de katki gonderimi otomatik kapali gelir: orada kalici disk yok ve
-gonderilen veri sessizce kaybolurdu. Harita, arama, yer sayfalari ve
-sitemap tam calisir. Ayrintisi ve kalici diske gecis:
+Vercel'de katkı gönderimi otomatik kapalı gelir: orada kalıcı disk yok ve
+gönderilen veri sessizce kaybolurdu. Harita, arama, yer sayfaları ve
+sitemap tam çalışır. Ayrıntısı ve kalıcı diske geçiş:
 [docs/dagitim.md](docs/dagitim.md).
+
+---
+
+## Bu ekosistemden başka projeler
+
+- **[nova-drift](https://github.com/Furkiozknn/nova-drift)** — derleme adımı olmayan sonsuz tarayıcı uzay koşusu
+- **[masal](https://github.com/Furkiozknn/masal)** — çocuğun adına yazılan uyku öncesi masalı
+- **[turkce-ajanlar](https://github.com/Furkiozknn/turkce-ajanlar)** — Türkçe düşünen 70 Claude Code alt-ajanı
+
+<sub>Hepsi tek bir aranabilir sayfada: **[furkiozknn.github.io](https://furkiozknn.github.io/)** — her kart, o deponun kendi <code>project-meta.json</code> dosyasından üretiliyor.</sub>

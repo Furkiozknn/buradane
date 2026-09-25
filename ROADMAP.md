@@ -7,7 +7,7 @@ Kural: buradaki her "tamamlandı" maddesi depoda çalışan koda dayanır.
 Doğrulanmamış hiçbir şey tamamlanmış gibi yazılmamıştır. Bir madde
 belirsizse, belirsiz olduğu açıkça yazılıdır.
 
-**Son güncelleme:** 2026-09-06
+**Son güncelleme:** 2026-09-22
 
 ---
 
@@ -125,15 +125,32 @@ belirsizse, belirsiz olduğu açıkça yazılıdır.
 - ✅ Frontend ↔ backend sözleşmesi **alan alan karşılaştırıldı** — sonuç:
   [docs/api-sozlesme-farklari.md](docs/api-sozlesme-farklari.md). Zarf farkı
   (çıplak liste vs `{places,total,applied,facets}`), id şeması farkı
-  (UUID vs OSM ref), listede eksik alanlar (`access`, `district`,
-  `amenities`, `source`...), eksik parametreler (`q`, `open_now`, `sort`)
-  ve kapanış sırası orada.
+  (UUID vs OSM ref), listede eksik alanlar (`district`, `amenities`,
+  `source`...), eksik parametreler (`q`, `open_now`, `sort`) ve kapanış
+  sırası orada.
+- ✅ **§4'ün iki satırı kapandı (2026-09-22)** — `access` ve `operator` artık
+  modelde, `c3f8a1d05b47` migration'ında ve `PlaceListItem`'da; ikisi de
+  `app/ingest/osm_overpass.py` tarafından OSM'in kendi etiketlerinden
+  dolduruluyor. Listede olmaları bilinçli: frontend kartı çizmeden önce
+  `access`'e bakıp eliyor, ve işaretçi başına bir detay isteği gerektiren
+  bir filtre filtre değildir. Migration geri doldurma yapmıyor — sütunlar
+  var olmadan önce alınmış 167.829 satır için dürüst değer "bilinmiyor".
+  Kapanmayan kısım: `access`'e göre sorgu tarafı eleme hâlâ yok, o §5'te
+  duruyor.
 
 ### Demo ↔ backend geçişi
 - 🚧 "Taban-URL değişikliğiyle geçiş" vaadi **bugün geçerli değil** — farklar
   ve önerilen kapanış sırası: [docs/api-sozlesme-farklari.md](docs/api-sozlesme-farklari.md).
   Gerçekçi ilk hedef: Next.js API route'larının backend'i çağıran ince bir
   uyarlama katmanına dönüşmesi.
+- ✅ **O belge artık çalıştırılabilir** — `backend/tests/test_sozlesme_dokumani.py`
+  `PlaceListItem` ve `PlaceDetail` alanlarını kaynaktan (AST ile, import etmeden,
+  veritabanı olmadan) okuyup frontend'in `Place` tipiyle karşılaştırıyor ve sonucu
+  belgenin §4 tablosuyla eşleştiriyor. Bir fark kapanır da belge kapanmazsa test
+  kırmızı yanar; şemaya yeni bir boşluk açılırsa da. İlk koşuşunda gerçek bir
+  eksik buldu: `operator` alanını frontend JSON-LD `provider`'ı ve güvenilirlik
+  tamlık puanı için kullanıyor, backend hiçbir şemada üretmiyor, ve belge onu
+  saymıyordu — artık sayıyor.
 
 ### Türkiye kapsamı
 - ✅ **81/81 il** indi ve doğrulandı; ilçe kapsamı **973/973 (%100)**

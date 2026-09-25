@@ -61,13 +61,34 @@ bunları içermiyor (bir kısmı `PlaceDetail`'de var, listede yok):
 | Alan | Backend durumu | Etki |
 |---|---|---|
 | `amenities` (12 anahtarlı obje) | Listede yalnız `wheelchair_accessible` düz alan | Kart rozetleri, özellik filtre sonuçlarının görselleştirilmesi |
-| `access` | **Modelde ve şemada hiç yok** | `private` eleme + "müşterilere açık" rozeti |
+| `access` | ✓ var (2026-09-22: modelde, migration'da, `PlaceListItem`'da) | `private` eleme + "müşterilere açık" rozeti |
 | `district`, `province` | Düz alan yok (`admin_region_id` ilişkisi var) | İlçe araması, kart alt yazısı, paylaşım açıklaması |
 | `opening_hours_raw`, `is_24h` | Yalnız Detail'de | "Kapalıları gizle" filtresi listede uygulanamaz |
 | `price_type` | ✓ var | — |
 | `verification_count`, `report_count` | Hiç yok | Güvenilirlik açıklaması, "N kişi doğruladı" |
 | `last_verified_at` | Yalnız Detail'de | — |
 | `source {slug, name, license, url}` | Hiç yok (DataSource modeli var, şemaya bağlanmamış) | Atıf (ODbL yükümlülüğü!) ve "Topluluk katkısı" ayrımı |
+| `operator` | ✓ var (2026-09-22: modelde, migration'da, `PlaceListItem`'da) | JSON-LD `provider` alanı (`place-jsonld.ts`) ve güvenilirlik tamlık puanı (`places-repository.ts`) — ikisi de bu alan olmadan sessizce eksik çalışırdı |
+
+**2026-09-22'de kapanan iki satır.** `access` ve `operator` artık modelde,
+`c3f8a1d05b47` migration'ında ve `PlaceListItem`'da — yani listede, sadece
+detayda değil. Liste görünümünde olmaları bilinçli: frontend kartı çizmeden
+önce `access`'e bakıp eliyor, ve işaretçi başına bir detay isteği gerektiren
+bir filtre filtre değildir. İkisi de `app/ingest/osm_overpass.py` tarafından
+OSM'in kendi `access`/`operator` etiketlerinden dolduruluyor; `access`
+enum değil düz metin, çünkü OSM'in sözlüğünün uzun bir kuyruğu var
+(`permissive`, `destination`, `delivery`, ...) ve görülmemiş bir değer bir
+ilin içe aktarımını düşürmek yerine veritabanına ulaşmalı.
+
+Migration geri doldurma yapmıyor: sütunlar var olmadan önce alınmış 167.829
+satır için dürüst değer "bilinmiyor"dur. `public` varsayılanı, eksik bir
+olguyu bir iddiaya çevirirdi — bu şemanın amenity sütunlarının tam olarak
+kaçındığı şey (bkz. `models/place.py`). Değerler bir sonraki içe aktarımda
+geliyor.
+
+Kapanmayan kısım: `access`'e göre **sorgu tarafı eleme** hâlâ yok. Alan
+artık yanıtta, ama `search_places` onu filtrelemiyor; bu §5'in konusu ve
+orada duruyor.
 
 Ayrıca amenity anahtar listesi birebir aynı değil:
 

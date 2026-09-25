@@ -24,6 +24,9 @@ let realPlaceId: string;
 beforeEach(async () => {
   tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "buradane-abuse-"));
   process.env.BURADANE_DATA_DIR = tempDir;
+  // `post()` below separates tests by forwarded address, which the limiter
+  // only honours when the deployment declares it is behind a proxy.
+  process.env.BURADANE_TRUST_PROXY = "1";
   // A scoped query, not allPlaces(): the reader is lazy per province now,
   // so asking for every record just to get one id would read all 81
   // snapshots on every test in this file.
@@ -32,6 +35,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   delete process.env.BURADANE_DATA_DIR;
+  delete process.env.BURADANE_TRUST_PROXY;
   await fs.rm(tempDir, { recursive: true, force: true });
 });
 

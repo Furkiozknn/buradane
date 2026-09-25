@@ -136,6 +136,14 @@ def _apply_amenity_hints(place: Place, tags: dict[str, str]) -> None:
         place.opening_hours_raw = tags["opening_hours"][:300]
     if tags.get("internet_access") == "wlan":
         place.has_wifi = True
+    # Carried through verbatim rather than normalised: `access` has a long
+    # tail in OSM and an unseen value must reach the database, not be
+    # dropped on the way. Trimmed to the column width so one absurd value
+    # cannot abort a 167k-row import.
+    if tags.get("access"):
+        place.access = tags["access"][:40]
+    if tags.get("operator"):
+        place.operator = tags["operator"][:200]
 
 
 def import_istanbul_pilot(db: Session, *, bbox: tuple[float, float, float, float] = ISTANBUL_BBOX) -> None:

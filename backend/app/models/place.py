@@ -82,6 +82,27 @@ class Place(Base):
     opening_hours_raw: Mapped[str | None] = mapped_column(String(300), nullable=True)  # OSM opening_hours syntax
     is_24h: Mapped[bool | None] = mapped_column(nullable=True)
 
+    # Who may use it, and who runs it. Both are plain OSM tags
+    # (`access`, `operator`) and both were missing from every schema, which
+    # docs/api-sozlesme-farklari.md §4 recorded as a gap the frontend
+    # silently works around:
+    #
+    #   access   - the demo drops `private` places from results and shows a
+    #              "müşterilere açık" badge for `customers`. With no field to
+    #              read, a locked service-yard toilet is offered to someone
+    #              looking for the nearest one.
+    #   operator - `place-jsonld.ts` puts it in the JSON-LD `provider` and
+    #              `places-repository.ts` counts it toward the completeness
+    #              part of the reliability score. Missing, both of those
+    #              quietly degrade rather than fail.
+    #
+    # Free text, not an enum: OSM's `access` has a long tail
+    # (`permissive`, `destination`, `delivery`, ...) and a value this schema
+    # has not seen must survive ingestion rather than abort it. The filtering
+    # the app does needs only a handful of values to be recognisable.
+    access: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    operator: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
     price_type: Mapped[PriceType] = mapped_column(SAEnum(PriceType), default=PriceType.unknown)
     price_note: Mapped[str | None] = mapped_column(String(300), nullable=True)
 

@@ -132,7 +132,11 @@ body {
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* "Inter Variable" is the family name @fontsource-variable/inter registers.
+     Inter carries complete Turkish coverage (ı İ ğ Ğ ş Ş ç Ç ö Ö ü Ü) - a real
+     constraint here, since a font missing dotless ı silently mangles half the
+     place names in the dataset. */
+  font-family: "Inter Variable", var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   /* The map owns the viewport; the page itself must never scroll or the
      bottom sheet gesture fights the document. */
