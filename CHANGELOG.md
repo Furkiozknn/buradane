@@ -69,6 +69,18 @@ burada kendiliğinden alınmadı.
   0 ihlal.
 - `docs/backend-ortam-degiskenleri.md` frontend tablosunda
   `BURADANE_TRUST_PROXY` ve `BURADANE_CONTRIBUTIONS` eksikti.
+- Yönetim panelindeki mekan düzenleyici **hiçbir mekanı bulamıyordu**.
+  Aramayı konumsuz `GET /api/places?q=…&limit=12` ile yapıyordu; bu uç
+  ulusal veriyle birlikte kapsam istiyor ve **400** ("Arama için konum
+  gerekli") döndürüyordu, düzenleyici de `if (!response.ok) return;` ile
+  bunu sessizce boş liste yapıyordu. Genel ucun kapsam kuralı aynen
+  duruyor; düzenleyici artık yönetici token'ı isteyen, **il seçimiyle**
+  tek il dosyası okuyan `GET /api/admin/places?province=…&q=…` kullanıyor
+  (bbox yetmezdi: Antalya ve Konya 3°'lik tavandan geniş). Kalıcı kapalı ve
+  incelemedeki yerler de bulunuyor, yoksa yanlışlıkla kapatılan bir yer
+  geri alınamazdı. Başarısız arama artık ekranda hata olarak gösteriliyor.
+  `tests/admin-place-search.test.ts` (10 test; düzeltme öncesi dosya
+  kırmızı — uç yoktu).
 
 ### Değiştirildi
 
