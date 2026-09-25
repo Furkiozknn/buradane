@@ -34,6 +34,7 @@ jobs:
   checks:
     name: Node ${{ matrix.node }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15  # olculen en uzun kosu 224 sn
 
     strategy:
       # Bir sürümdeki hata diğerinin sonucunu gizlemesin.
