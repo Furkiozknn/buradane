@@ -58,9 +58,9 @@
     "videos": []
   },
   "tests": {
-    "count": 347,
-    "source": "119 backend (CI log: `119 passed`) + 228 frontend (vitest)",
-    "measured": "2026-09-22"
+    "count": 360,
+    "source": "132 backend (pytest: `132 passed`) + 228 frontend (vitest: `228 passed`)",
+    "measured": "2026-09-25"
   },
   "ci": {
     "workflows": [

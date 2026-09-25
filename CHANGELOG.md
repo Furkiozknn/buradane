@@ -26,6 +26,12 @@ burada kendiliğinden alınmadı.
   girişte kapatıldı.
 - `.env`, özel anahtarlar ve kimlik dosyaları `.gitignore`'a alındı.
 - CI'da `GITHUB_TOKEN` izinleri kısıtlandı, eski koşular iptal ediliyor.
+- Backend `GET /places` ve `GET /reports`: `offset` artık en fazla 10.000.
+  Tavan yokken `?offset=99999999999999999999` BIGINT'e sığmıyor ve kimlik
+  doğrulamasız bir istek **500** döndürüyordu; artık 422.
+- Backend `bbox` doğrulaması: `nan`/`inf`, -180..180 / -90..90 dışı ve
+  ters çevrilmiş (min > max) kutular **200 + boş liste** döndürüyordu —
+  "burada hiçbir şey yok" ile ayırt edilemeyen bir cevap. Artık 400.
 
 ### Düzeltildi
 

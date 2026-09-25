@@ -311,7 +311,7 @@ FastAPI otomatik dokümantasyonu çalışırken `/docs` (Swagger) ve `/redoc`
 
 | Metod & Yol | Açıklama |
 |---|---|
-| `GET /places` | Arama: `lat`/`lon`+`radius_m` (yakınımda) **veya** `bbox` (harita görünümü), `category`, `amenity`, `free_only`, `min_reliability`, `admin_region_id` filtreleriyle |
+| `GET /places` | Arama: `lat`/`lon`+`radius_m` (yakınımda) **veya** `bbox` (harita görünümü), `category`, `amenity`, `free_only`, `min_reliability`, `admin_region_id` filtreleriyle. Sınırlar: `radius_m` ≤ 50.000, `limit` ≤ 200, `offset` ≤ 10.000; `bbox` sonlu, geçerli koordinat aralığında ve min ≤ max olmalı (aksi 400/422) |
 | `GET /places/{id}` | Yer detayı (tüm amenity'ler, kaynak/güncellik bilgisi) |
 | `POST /places/suggest` | Yeni yer öner (→ `pending_review`, moderasyon bekler) |
 | `POST /places/{id}/reports` | Bir yer hakkında sorun bildir (kapalı, bakımda, bilgi yanlış, ...) |
