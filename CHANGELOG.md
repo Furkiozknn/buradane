@@ -32,6 +32,13 @@ burada kendiliğinden alınmadı.
 - Backend `bbox` doğrulaması: `nan`/`inf`, -180..180 / -90..90 dışı ve
   ters çevrilmiş (min > max) kutular **200 + boş liste** döndürüyordu —
   "burada hiçbir şey yok" ile ayırt edilemeyen bir cevap. Artık 400.
+- Canlı haritanın çağırdığı demo ucu `GET /api/places` aynı açığı
+  taşıyordu: ters (min > max) ya da -180..180 / -90..90 dışı `bbox` ve
+  aralık dışı `lat`/`lon` **200 + boş liste** döndürüyordu; boyut
+  denetimi `Math.abs` kullandığı için ters kutu onu da geçiyordu. Artık
+  400 + gerekçe. Bu route handler'ın hiçbir kapısının testi yoktu;
+  `tests/places-route.test.ts` (11 test, düzeltme öncesi 3'ü kırmızı)
+  hepsini sabitliyor.
 
 ### Düzeltildi
 
@@ -52,6 +59,16 @@ burada kendiliğinden alınmadı.
 - ODbL atfı ("© OpenStreetMap katkıda bulunanları") artık
   openstreetmap.org/copyright sayfasına bağlanıyor (liste başlığında ve
   OSM kaynaklı yer sayfalarında), OSMF atıf yönergesinin istediği gibi.
+- "Sonuç listesine geç" atlama bağlantısı kök layout'taydı; hedefi
+  `#sonuclar` yalnızca harita sayfasında var. `/admin`, `/yer/[id]` ve 404
+  sayfasında ilk Tab durağı hiçbir yere gitmiyordu (axe-core: `skip-link`,
+  `region`). Bağlantı hedefiyle aynı bileşene (AppShell) taşındı.
+- Yönetim panelindeki `BURADANE_ADMIN_TOKEN` kod etiketinin kontrastı
+  4,39:1'di (WCAG AA 4,5:1 ister); artık ikincil metin rengiyle.
+  Playwright + axe-core, 390 ve 1280 px, açık ve koyu tema: 5 sayfada
+  0 ihlal.
+- `docs/backend-ortam-degiskenleri.md` frontend tablosunda
+  `BURADANE_TRUST_PROXY` ve `BURADANE_CONTRIBUTIONS` eksikti.
 
 ### Değiştirildi
 

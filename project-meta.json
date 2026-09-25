@@ -40,7 +40,7 @@
     "turkiye",
     "typescript"
   ],
-  "summary": "\"What do I need, and where is the nearest one?\" 167,829 real OpenStreetMap places across all 81 provinces of Türkiye - pulled from each province's true boundary, not a box around its capital, so all 973 district centres have data within 15 km. Bearing, distance and a one-tap \"still here?\" on every result. 324 tests.",
+  "summary": "\"What do I need, and where is the nearest one?\" 167,829 real OpenStreetMap places across all 81 provinces of Türkiye - pulled from each province's true boundary, not a box around its capital, so all 973 district centres have data within 15 km. Bearing, distance and a one-tap \"still here?\" on every result. 379 tests.",
   "key_features": [
     "167,829 real OpenStreetMap places across all 81 provinces of Turkiye",
     "Pulled from each province's true boundary, not a box around its capital, so all 973 district centres have data within 15 km",
@@ -58,8 +58,8 @@
     "videos": []
   },
   "tests": {
-    "count": 366,
-    "source": "132 backend (pytest: `132 passed`) + 234 frontend (vitest: `234 passed`)",
+    "count": 379,
+    "source": "132 backend (pytest: `132 passed`) + 247 frontend (vitest: `247 passed`)",
     "measured": "2026-09-25"
   },
   "ci": {
