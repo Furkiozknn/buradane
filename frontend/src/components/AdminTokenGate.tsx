@@ -116,7 +116,7 @@ export function AdminTokenGate({ children }: { children: React.ReactNode }) {
         </div>
         <p className="mb-3 text-[12.5px] leading-relaxed text-text-muted">
           Mekan düzenleme ve moderasyon işlemleri sunucudaki{" "}
-          <code className="rounded bg-surface-sunken px-1">BURADANE_ADMIN_TOKEN</code> değeriyle
+          <code className="rounded bg-surface-sunken px-1 text-text-secondary">BURADANE_ADMIN_TOKEN</code> değeriyle
           korunuyor. Token bu sekme kapanana kadar hatırlanır, hiçbir yere gönderilmez ve
           kodda saklanmaz.
         </p>

@@ -14,6 +14,8 @@ import {
 } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
+import { BASEMAP_STYLE, FALLBACK_STYLE, isBasemapStyleFailure } from "@/lib/basemap";
+
 /**
  * MapLibre GL JS v6 is ESM-only and loads its tile-parsing worker from a
  * separate file at runtime, so every bundler-based app has to point at that
@@ -101,13 +103,6 @@ const LABEL_LAYER = "place-labels";
 const SELECTED_LAYER = "place-selected";
 const KB_FOCUS_LAYER = "place-kb-focus";
 
-/**
- * Basemap: OpenFreeMap's public "positron" style - no API key, no signup,
- * OSM-derived vector tiles. A muted grey basemap is a deliberate choice, not
- * a default: every drop of color on this map belongs to the 9 category pins.
- * A vivid basemap would make a dense result set unreadable.
- */
-const BASEMAP_STYLE = "https://tiles.openfreemap.org/styles/positron";
 
 export interface MapCanvasProps {
   places: Place[];
@@ -161,6 +156,11 @@ export default function MapCanvas({
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const readyRef = useRef(false);
+  // Set once the basemap style could not be fetched and the plain fallback
+  // took its place - see lib/basemap.ts. State, not just a ref, because the
+  // user has to be told why there are pins but no streets.
+  const [basemapFailed, setBasemapFailed] = useState(false);
+  const fellBackRef = useRef(false);
   const userMarkerRef = useRef<Marker | null>(null);
   // Callbacks change identity on every parent render; holding them in refs
   // keeps the map's event listeners stable so the map is never re-created.
@@ -241,6 +241,15 @@ export default function MapCanvas({
     // map just stays blank and there is nothing to debug from.
     map.on("error", (event) => {
       console.error("MapLibre hatası:", event?.error?.message ?? event);
+      // A failed style fetch means `load` never fires, so the result layers
+      // are never added: no pins at all, not just no streets. Swap in a
+      // plain background so loading can finish and the pins still draw.
+      // Once only - if even this fails there is nothing better to fall to.
+      if (!readyRef.current && !fellBackRef.current && isBasemapStyleFailure(event?.error, BASEMAP_STYLE)) {
+        fellBackRef.current = true;
+        setBasemapFailed(true);
+        map.setStyle(FALLBACK_STYLE);
+      }
     });
 
     map.on("load", async () => {
@@ -469,6 +478,7 @@ export default function MapCanvas({
       map.remove();
       mapRef.current = null;
       readyRef.current = false;
+      fellBackRef.current = false;
     };
     // initialView is deliberately read once: it seeds the map at mount, and
     // later view changes travel through flyTo/easeTo on the live instance.
@@ -741,6 +751,18 @@ export default function MapCanvas({
   return (
     <div className="absolute inset-0">
       <div ref={containerRef} className="h-full w-full" />
+
+      {/* Right edge kept clear (88px) for the "Konumuma dön" button that
+          sits bottom-right at every breakpoint. */}
+      {basemapFailed && (
+        <p
+          role="status"
+          className="pointer-events-none absolute z-10 max-w-[calc(100%-88px)] rounded-xl border border-border bg-surface px-3 py-1.5 text-[12px] leading-snug text-text-muted shadow"
+          style={{ left: padding.left + 12, bottom: padding.bottom + 12 }}
+        >
+          Sokak haritası yüklenemedi — yerler yine de gösteriliyor
+        </p>
+      )}
 
       {/* Keyboard marker navigation - the skip-link pattern: sr-only until
           focused, then a visible pill. It must be a sibling AFTER the canvas

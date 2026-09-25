@@ -84,7 +84,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="buradane API",
     description="Türkiye'deki kamusal ve ortak kullanım alanlarını keşfetme platformu - API katmanı.",
-    version="0.1.0",
+    version="1.0.0",  # pyproject.toml ile ayni; test_surum.py kilitler
     lifespan=lifespan,
 )
 

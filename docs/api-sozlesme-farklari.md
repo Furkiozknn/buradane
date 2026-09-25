@@ -105,7 +105,7 @@ Ayrıca amenity anahtar listesi birebir aynı değil:
 | `sort` (`distance`/`reliability`) | Sıralama düğmesi | **YOK** (sabit sıralama) |
 | `free_only` | ✓ | ✓ (`free_only`) |
 | `category`, `amenity` (tekrarlı) | ✓ | ✓ |
-| `bbox`, `lat/lon/radius_m`, `limit/offset` | ✓ | ✓ (limit tavanı farklı: FE 300, BE 200) |
+| `bbox`, `lat/lon/radius_m`, `limit/offset` | ✓ (konum zorunlu: `bbox` ya da `lat`+`lon`+`radius_m`; `bbox` kenarı ≤ 3°) | ✓ (limit tavanı farklı: FE 300, BE 200; offset tavanı yalnız BE'de: 10.000). `radius_m` > 50 km: BE 422, FE 50 km'ye kırpar. Aralık dışı ya da ters (min > max) `bbox`: ikisinde de 400; aralık dışı `lat`/`lon`: BE 422, FE 400 |
 | — | — | Backend'de fazladan: `min_reliability`, `admin_region_id` (zararsız) |
 
 `q` en büyük parça: Türkçe çözümleme mantığı

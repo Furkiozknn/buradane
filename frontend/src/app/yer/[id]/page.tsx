@@ -266,7 +266,22 @@ export default async function PlacePage({ params }: { params: Promise<{ id: stri
         ) : (
           <Info size={14} aria-hidden />
         )}
-        {place.freshness_label} · Kaynak: {place.source.name} ({place.source.license})
+        {place.freshness_label} · Kaynak: {place.source.name} (
+        {/* Only OSM records link to the OSM copyright page - a community
+            submission carries its own licence label and is not OSM data. */}
+        {place.source.license.startsWith("ODbL") ? (
+          <a
+            href="https://www.openstreetmap.org/copyright"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline decoration-dotted underline-offset-2"
+          >
+            {place.source.license}
+          </a>
+        ) : (
+          place.source.license
+        )}
+        )
       </p>
 
       <div className="mt-6 flex flex-col gap-2">

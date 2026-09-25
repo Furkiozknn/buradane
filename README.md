@@ -98,6 +98,12 @@ ortam değişkeni olarak) - bkz. `app/core/config.py`:
 | `BURADANE_STALE_AFTER_DAYS` | `90` | Bir doğrulama/rapor kaç gün sonra "bayat" sayılır (güvenilirlik skoruna girer) |
 | `BURADANE_CORS_ORIGINS` | `["http://localhost:3000"]` | Frontend origin'i |
 
+Tablo en sık dokunulanlar. Tam liste (bootstrap moderatör, hız sınırları,
+bağlantı havuzu, frontend'in `BURADANE_ADMIN_TOKEN` / `BURADANE_TRUST_PROXY` /
+`BURADANE_DATA_DIR` / `BURADANE_CONTRIBUTIONS` / `BURADANE_SITE_URL`
+değişkenleri) ve kopyalanabilir şablon:
+[docs/backend-ortam-degiskenleri.md](docs/backend-ortam-degiskenleri.md).
+
 ### Frontend (demo)
 
 Gereksinimler: **Node.js 20.9+** (CI 20 ve 22 ile koşar), npm.
@@ -311,7 +317,7 @@ FastAPI otomatik dokümantasyonu çalışırken `/docs` (Swagger) ve `/redoc`
 
 | Metod & Yol | Açıklama |
 |---|---|
-| `GET /places` | Arama: `lat`/`lon`+`radius_m` (yakınımda) **veya** `bbox` (harita görünümü), `category`, `amenity`, `free_only`, `min_reliability`, `admin_region_id` filtreleriyle |
+| `GET /places` | Arama: `lat`/`lon`+`radius_m` (yakınımda) **veya** `bbox` (harita görünümü), `category`, `amenity`, `free_only`, `min_reliability`, `admin_region_id` filtreleriyle. Sınırlar: `radius_m` ≤ 50.000, `limit` ≤ 200, `offset` ≤ 10.000; `bbox` sonlu, geçerli koordinat aralığında ve min ≤ max olmalı (aksi 400/422) |
 | `GET /places/{id}` | Yer detayı (tüm amenity'ler, kaynak/güncellik bilgisi) |
 | `POST /places/suggest` | Yeni yer öner (→ `pending_review`, moderasyon bekler) |
 | `POST /places/{id}/reports` | Bir yer hakkında sorun bildir (kapalı, bakımda, bilgi yanlış, ...) |
@@ -413,10 +419,13 @@ uv run pytest tests/ -v
 
 İki katmanlı test stratejisi:
 - **Saf mantık testleri** (`test_reliability.py`, `test_dedup_math.py`) - veritabanı gerektirmez, her ortamda çalışır.
-- **Veritabanı-bağımlı testler** (`test_search.py`, `test_dedup_integration.py`, `test_moderation.py`) - gerçek bir PostGIS bağlantısı gerektirir; `docker compose up -d` çalışıyorsa yerelde, yoksa CI'da (`.github/workflows/ci.yml`, `postgis/postgis` servis konteyneri ile) çalışır. Veritabanı yoksa bu testler **skip** edilir, başarısız olmaz - sahte bir "yeşil" göstermek yerine dürüst bir sinyal.
+- **Veritabanı-bağımlı testler** (`test_search.py`, `test_moderation.py`, `test_admin_moderation.py`, `test_query_validation.py`, `test_migrations.py` ve diğerleri) - gerçek bir PostGIS bağlantısı gerektirir; `docker compose up -d --wait` çalışıyorsa yerelde, yoksa CI'da (`.github/workflows/ci.yml`, `postgis/postgis` servis konteyneri ile) çalışır. Yerelde veritabanı yoksa bu testler **skip** edilir, başarısız olmaz. CI'da ise tek bir skip bile koşuyu **kırmızıya** çevirir: orada veritabanı her zaman var, atlanan test "paket hiç koşmadı" demektir.
 
-Frontend tarafında ayrı bir katman daha var: `npm test` Vitest ile bileşen ve
-mantık testlerini, `npm run lint` ise statik denetimi (ESLint) çalıştırır.
+Frontend tarafında ayrı bir katman daha var (`cd frontend`): `npm test` Vitest
+ile mantık ve route handler testlerini (`GET /api/places` ve
+`POST /api/contributions` kapıları dahil), `npx tsc --noEmit` tip
+kontrolünü, `npm run lint` statik denetimi (ESLint) çalıştırır. CI ikisini de
+her PR'da koşar (`ci.yml`: backend, `frontend.yml`: Node 20 ve 22).
 
 ## Güvenlik
 

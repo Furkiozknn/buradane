@@ -1,7 +1,7 @@
 # Frontend kontrolleri.
 #
 # Neden ayrı bir workflow: mevcut `ci.yml` yalnızca backend'i (pytest +
-# PostGIS servis konteyneri) çalıştırıyor. Frontend'de 111 test, tip kontrolü
+# PostGIS servis konteyneri) çalıştırıyor. Frontend'de Vitest, tip kontrolü
 # ve lint var ve bunların hiçbiri PR'da koşmuyordu - üstelik geliştirmenin
 # büyük kısmı frontend'de. `ci.yml`'ı değiştirmek yerine ayrı tutuldu:
 # ikisinin çalışma dizini, dili ve servis ihtiyacı farklı, ve backend
@@ -34,6 +34,7 @@ jobs:
   checks:
     name: Node ${{ matrix.node }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15  # olculen en uzun kosu 224 sn
 
     strategy:
       # Bir sürümdeki hata diğerinin sonucunu gizlemesin.

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { createRateLimiter, getClientKey } from "@/lib/rate-limit";
+import { bucketFor, createRateLimiter, getClientKey } from "@/lib/rate-limit";
 
 /**
  * `security.test.ts` already covers the sliding-window math via
@@ -50,6 +50,50 @@ describe("getClientKey behind a declared proxy", () => {
       headers: { "x-forwarded-for": "", "x-real-ip": "198.51.100.7" },
     });
     expect(getClientKey(request)).toBe("198.51.100.7");
+  });
+});
+
+describe("bucketFor: one budget per IPv6 /64", () => {
+  // One IPv6 subscriber holds a whole /64 and can rotate through it freely;
+  // keyed on the full address, every admin guess got a fresh budget.
+  it("puts two addresses from the same /64 in one bucket", () => {
+    expect(bucketFor("2001:db8:1:2::1")).toBe(bucketFor("2001:db8:1:2:ffff:ffff:ffff:fffe"));
+    expect(bucketFor("2001:db8:1:2::1")).toBe("2001:db8:1:2::/64");
+  });
+
+  it("keeps neighbouring /64s apart", () => {
+    expect(bucketFor("2001:db8:1:2::1")).not.toBe(bucketFor("2001:db8:1:3::1"));
+  });
+
+  it("normalises spelling: case, leading zeros, brackets, zone id", () => {
+    const key = "2001:db8:1:2::/64";
+    expect(bucketFor("2001:0DB8:0001:0002:0:0:0:1")).toBe(key);
+    expect(bucketFor("[2001:db8:1:2::1]")).toBe(key);
+    expect(bucketFor("fe80::1%eth0")).toBe("fe80:0:0:0::/64");
+  });
+
+  it("treats IPv4-mapped IPv6 as the IPv4 address it carries", () => {
+    expect(bucketFor("::ffff:203.0.113.5")).toBe("203.0.113.5");
+    expect(bucketFor("::ffff:cb00:7105")).toBe("203.0.113.5");
+  });
+
+  it("leaves IPv4 and unparseable values unchanged", () => {
+    expect(bucketFor("203.0.113.5")).toBe("203.0.113.5");
+    expect(bucketFor("not-an-ip")).toBe("not-an-ip");
+    expect(bucketFor("1:2:3")).toBe("1:2:3");
+    expect(bucketFor("1::2::3")).toBe("1::2::3");
+  });
+
+  it("is what getClientKey returns behind a proxy", () => {
+    process.env.BURADANE_TRUST_PROXY = "1";
+    try {
+      const request = new Request("http://localhost/api/admin/auth", {
+        headers: { "x-forwarded-for": "2001:db8:1:2:aaaa::7, 10.0.0.1" },
+      });
+      expect(getClientKey(request)).toBe("2001:db8:1:2::/64");
+    } finally {
+      delete process.env.BURADANE_TRUST_PROXY;
+    }
   });
 });
 

@@ -214,10 +214,70 @@ export function getClientKey(request: Request): string {
     const forwarded = request.headers.get("x-forwarded-for");
     if (forwarded) {
       const first = forwarded.split(",")[0]?.trim();
-      if (first) return first;
+      if (first) return bucketFor(first);
     }
     const realIp = request.headers.get("x-real-ip")?.trim();
-    if (realIp) return realIp;
+    if (realIp) return bucketFor(realIp);
   }
   return "unknown";
+}
+
+/**
+ * The budget unit for one address: an IPv4 address as is, an IPv6 address
+ * by its /64.
+ *
+ * A single IPv6 subscriber is routinely handed a whole /64 - 2^64 addresses
+ * - and privacy extensions rotate through it on their own. Keyed on the full
+ * address, one machine could spend a fresh 10-attempt admin budget on every
+ * guess without trying. The /64 is the smallest block a real client cannot
+ * step outside of. IPv4-mapped IPv6 (`::ffff:203.0.113.5`) is the IPv4
+ * address it carries, so the two spellings share one budget. Anything that
+ * does not parse is returned unchanged: still a key, never a bypass.
+ */
+export function bucketFor(address: string): string {
+  const groups = parseIpv6(address);
+  if (!groups) return address;
+  const isMappedV4 = groups.slice(0, 5).every((g) => g === 0) && groups[5] === 0xffff;
+  if (isMappedV4) {
+    return [groups[6] >> 8, groups[6] & 0xff, groups[7] >> 8, groups[7] & 0xff].join(".");
+  }
+  return groups.slice(0, 4).map((g) => g.toString(16)).join(":") + "::/64";
+}
+
+/** Eight 16-bit groups, or null when `address` is not IPv6. */
+function parseIpv6(address: string): number[] | null {
+  let text = address.trim();
+  if (text.startsWith("[")) {
+    const end = text.indexOf("]");
+    if (end < 0) return null;
+    text = text.slice(1, end);
+  }
+  text = text.split("%")[0]; // zone id: fe80::1%eth0
+  if (!text.includes(":")) return null;
+
+  let tail: number[] = [];
+  const lastColon = text.lastIndexOf(":");
+  const last = text.slice(lastColon + 1);
+  if (last.includes(".")) {
+    const octets = last.split(".").map(Number);
+    if (octets.length !== 4 || octets.some((o) => !Number.isInteger(o) || o < 0 || o > 255)) {
+      return null;
+    }
+    tail = [(octets[0] << 8) | octets[1], (octets[2] << 8) | octets[3]];
+    text = text.slice(0, lastColon + 1) + "0";
+  }
+
+  const halves = text.split("::");
+  if (halves.length > 2) return null;
+  const parse = (part: string) => (part === "" ? [] : part.split(":"));
+  const head = parse(halves[0]);
+  const rest = halves.length === 2 ? parse(halves[1]) : [];
+  if ([...head, ...rest].some((g) => !/^[0-9a-fA-F]{1,4}$/.test(g))) return null;
+  const width = 8 - (tail.length ? 1 : 0);
+  const missing = width - head.length - rest.length;
+  if (halves.length === 1 ? missing !== 0 : missing < 1) return null;
+  const groups = [...head, ...Array(halves.length === 2 ? missing : 0).fill("0"), ...rest]
+    .map((g) => parseInt(g, 16));
+  if (tail.length) groups.splice(groups.length - 1, 1, ...tail);
+  return groups.length === 8 ? groups : null;
 }

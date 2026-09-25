@@ -57,6 +57,14 @@ export async function GET(request: Request) {
   if ((lat === undefined) !== (lon === undefined)) {
     return NextResponse.json({ error: "lat ve lon birlikte verilmeli" }, { status: 400 });
   }
+  // Out-of-range coordinates are not an error to the distance maths - they
+  // just match nothing, and `lat=500` answered 200 with an empty list that
+  // reads exactly like "nothing near you". The backend refuses the same
+  // input (lat ge=-90 le=90, lon ge=-180 le=180), and the contract is
+  // supposed to be one contract.
+  if (lat !== undefined && lon !== undefined && (Math.abs(lat) > 90 || Math.abs(lon) > 180)) {
+    return NextResponse.json({ error: "lat -90..90, lon -180..180 aralığında olmalı" }, { status: 400 });
+  }
 
   let bbox: [number, number, number, number] | undefined;
   const bboxRaw = params.get("bbox");
@@ -84,6 +92,22 @@ export async function GET(request: Request) {
             "Arama alanı çok geniş. Haritada biraz yakınlaşıp tekrar deneyin " +
             "(ya da bir şehir seçin).",
         },
+        { status: 400 },
+      );
+    }
+
+    // Same refusal the backend gained for GET /places: an inverted or
+    // off-the-globe box is not "a place with nothing in it", yet it
+    // answered 200 + an empty list. The size check above uses Math.abs, so
+    // an inverted box even passed it. Checked AFTER the size guard on
+    // purpose: a zoomed-out map with world copies reports longitudes past
+    // ±180, and that user needs "zoom in", not a lecture on coordinates.
+    if (Math.abs(minLon) > 180 || Math.abs(maxLon) > 180 || Math.abs(minLat) > 90 || Math.abs(maxLat) > 90) {
+      return NextResponse.json({ error: "bbox -180..180 / -90..90 aralığının dışında" }, { status: 400 });
+    }
+    if (minLon > maxLon || minLat > maxLat) {
+      return NextResponse.json(
+        { error: "bbox 'min_lon,min_lat,max_lon,max_lat' sırasında olmalı (min ≤ max)" },
         { status: 400 },
       );
     }
