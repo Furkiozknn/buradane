@@ -9,6 +9,26 @@
 Park 248 sonuç, Cami 454, Tuvalet 121, ve "ücretsiz tuvalet" araması 19.
 Hepsi 167.829 kayıtlık OpenStreetMap anlık görüntüsünden.</sub>
 
+<details>
+<summary><b>In English</b></summary>
+
+<br>
+
+**"What's here?"** is a need-first finder for public places in Türkiye: toilets, parks, drinking water, sports grounds, mosques, libraries, car parks, assembly areas and more. It is not a small Google Maps. It answers one question fast: *what do I need right now, and where is the nearest one?*
+
+- **167,829 real OpenStreetMap places across all 81 provinces.** Each province is fetched from its own official OSM boundary rather than a box around its capital; the box approach saw only 2.2% of the country. 973 of 973 district centres have data within 15 km.
+- **Every result answers two questions:** which way to go (a bearing arrow, distance and walking time) and whether the information is still true (one-tap "yes, it's here" confirmation, a freshness label, the source and a reliability score).
+- **Free-text search in Turkish.** Typing *ücretsiz tuvalet* ("free toilet") narrows the map in the demo above to the 19 nearest. Turkish casing and suffixes are handled: "KADIKÖY" matches "Kadıköy", and *çocuğumla* ("with my child") is recognised as *çocuk*.
+- **Two parts, one query contract.** There is a FastAPI + PostGIS backend and a Next.js + MapLibre GL JS demo that already runs end to end on the real data.
+
+```bash
+cd frontend && npm install && npm run dev    # http://localhost:3000, data ships with the repo
+```
+
+Code is MIT; the OpenStreetMap data is ODbL 1.0 (see `NOTICE`). The rest of this README is in Turkish.
+
+</details>
+
 **"Burada ne var?"** — Türkiye'deki kamusal ve ihtiyaç alanlarını (tuvalet,
 park, içme suyu, spor alanı, cami, kütüphane, otopark, toplanma alanı ve
 daha fazlası) keşfetmeye yarayan, ihtiyaç-odaklı bir kamusal alan bulma
