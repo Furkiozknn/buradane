@@ -80,6 +80,12 @@ bütçesi alır ve kilit hiç devreye girmez. Başlığa varsayılan olarak güv
 uygulamanın en güçlü frenini en kolay atlatılan freni yapıyordu. Döndürülemez
 tek bir anahtar kabadır ama atlatılamaz; bir kilit için doğru takas budur.
 
+IPv6 adresleri /64 önekiyle sayılır (`rate-limit.ts` içindeki `bucketFor`):
+tek bir abone çoğu zaman bütün bir /64 alır ve içinde istediği adrese
+geçebilir, yani tam adresle sayılsaydı her tahmin yeni bir bütçe olurdu.
+`::ffff:203.0.113.5` gibi IPv4'e eşlenmiş adresler taşıdıkları IPv4 adresiyle
+aynı kovaya düşer.
+
 Başlığı **ezen** (append eden değil) bir proxy arkasındaysanız değişkeni açın.
 Sadece ekleyen bir yapılandırmada saldırganın kendi başlığı ilk sırada kalır
 ve fren yine işlevsizleşir — bu durumda **açmayın**. nginx için:
