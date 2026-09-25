@@ -57,6 +57,14 @@ export async function GET(request: Request) {
   if ((lat === undefined) !== (lon === undefined)) {
     return NextResponse.json({ error: "lat ve lon birlikte verilmeli" }, { status: 400 });
   }
+  // Out-of-range coordinates are not an error to the distance maths - they
+  // just match nothing, and `lat=500` answered 200 with an empty list that
+  // reads exactly like "nothing near you". The backend refuses the same
+  // input (lat ge=-90 le=90, lon ge=-180 le=180), and the contract is
+  // supposed to be one contract.
+  if (lat !== undefined && lon !== undefined && (Math.abs(lat) > 90 || Math.abs(lon) > 180)) {
+    return NextResponse.json({ error: "lat -90..90, lon -180..180 aralığında olmalı" }, { status: 400 });
+  }
 
   let bbox: [number, number, number, number] | undefined;
   const bboxRaw = params.get("bbox");
@@ -66,6 +74,21 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "bbox 'min_lon,min_lat,max_lon,max_lat' olmalı" }, { status: 400 });
     }
     bbox = parts as [number, number, number, number];
+
+    // Same refusal the backend gained for GET /places: an inverted or
+    // off-the-globe box is not "a place with nothing in it", yet it
+    // answered 200 + an empty list. The size check below used Math.abs, so
+    // an inverted box even passed it. 400 with a reason instead.
+    const [west, south, east, north] = bbox;
+    if (Math.abs(west) > 180 || Math.abs(east) > 180 || Math.abs(south) > 90 || Math.abs(north) > 90) {
+      return NextResponse.json({ error: "bbox -180..180 / -90..90 aralığının dışında" }, { status: 400 });
+    }
+    if (west > east || south > north) {
+      return NextResponse.json(
+        { error: "bbox 'min_lon,min_lat,max_lon,max_lat' sırasında olmalı (min ≤ max)" },
+        { status: 400 },
+      );
+    }
 
     // A viewport spanning the whole country is not a search, it is a scan:
     // measured at 274 ms p50 / 445 ms p95 with 47.319 matches, all of it
