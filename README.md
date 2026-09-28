@@ -9,6 +9,9 @@
 Park 248 sonuç, Cami 454, Tuvalet 121, ve "ücretsiz tuvalet" araması 19.
 Hepsi 167.829 kayıtlık OpenStreetMap anlık görüntüsünden.</sub>
 
+<p align="center"><img src="docs/reel/reel.gif" alt="buradane - 15 saniyelik tanıtım videosu (hareketli grafik, gerçek kayıt değil)" width="720"></p>
+<p align="center"><sub>15 sn tanıtım videosu · <a href="docs/reel/reel.mp4">Sesli MP4 sürümü</a></sub></p>
+
 **"Burada ne var?"** — Türkiye'deki kamusal ve ihtiyaç alanlarını (tuvalet,
 park, içme suyu, spor alanı, cami, kütüphane, otopark, toplanma alanı ve
 daha fazlası) keşfetmeye yarayan, ihtiyaç-odaklı bir kamusal alan bulma
