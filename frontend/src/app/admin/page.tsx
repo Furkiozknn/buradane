@@ -91,7 +91,11 @@ export default async function AdminPage() {
       <AdminTokenGate>
         <section className="mb-8">
           <h2 className="mb-3 text-[15px] font-semibold text-text">Mekan düzenle</h2>
-          <AdminPlaceEditor />
+          <AdminPlaceEditor
+            provinces={meta.cities
+              .map(({ slug, label }) => ({ slug, label }))
+              .sort((a, b) => a.label.localeCompare(b.label, "tr"))}
+          />
         </section>
 
         <section>

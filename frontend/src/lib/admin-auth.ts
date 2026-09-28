@@ -17,8 +17,8 @@ import { getClientKey, peekAdminAuthFailures, recordAdminAuthFailure } from "./r
  * Server-side only. This module reaches into `node:crypto` and must never
  * be imported from a "use client" component - the client-side half of the
  * token flow (prompting for it, storing it in sessionStorage, attaching it
- * to requests) lives in AdminPlaceEditor.tsx instead, precisely so this
- * file is only ever reachable from the two admin route handlers.
+ * to requests) lives in src/lib/admin-token.ts instead, precisely so this
+ * file is only ever reachable from the /api/admin route handlers.
  */
 
 const BEARER_PREFIX = "Bearer ";

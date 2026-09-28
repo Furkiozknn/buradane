@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Check, RotateCcw, Search } from "lucide-react";
 import { adminFetch } from "@/lib/admin-token";
+import { adminPlaceSearchUrl, readAdminSearch, type AdminSearchOutcome } from "@/lib/admin-place-search";
 
 import { AMENITIES, categoryMeta } from "@/lib/categories";
 import type { AmenityKey, Place, PlaceStatus, PriceType } from "@/lib/types";
@@ -31,38 +32,51 @@ const EDITABLE_AMENITIES: AmenityKey[] = [
   "has_shade",
 ];
 
-export function AdminPlaceEditor() {
+export function AdminPlaceEditor({ provinces }: { provinces: { slug: string; label: string }[] }) {
+  const [province, setProvince] = useState("");
   const [term, setTerm] = useState("");
   const [results, setResults] = useState<Place[]>([]);
+  const [searchNote, setSearchNote] = useState<{ kind: "empty" | "error"; text: string } | null>(null);
   const [selected, setSelected] = useState<Place | null>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
   const requestIdRef = useRef(0);
 
-  // Debounced search against the same public endpoint the app uses - the
-  // admin sees exactly what users see, overrides included.
+  // Debounced search against the admin search route, scoped to one
+  // province. It used to hit the public /api/places with no location,
+  // which that route refuses (400, "konum gerekli") - and the refusal was
+  // swallowed, so every search looked like "no results". See
+  // src/lib/admin-place-search.ts and app/api/admin/places/route.ts.
   useEffect(() => {
-    if (term.trim().length < 2) {
+    const requestId = ++requestIdRef.current;
+    if (!province || term.trim().length < 2) {
       // Deferred rather than set synchronously: clearing during the effect
       // body is the cascading-render pattern React warns about, and there is
       // no reason this can't happen on the next tick.
-      const clear = setTimeout(() => setResults([]), 0);
+      const clear = setTimeout(() => {
+        setResults([]);
+        setSearchNote(null);
+      }, 0);
       return () => clearTimeout(clear);
     }
-    const requestId = ++requestIdRef.current;
     const timer = setTimeout(async () => {
+      let outcome: AdminSearchOutcome;
       try {
-        const response = await fetch(`/api/places?q=${encodeURIComponent(term.trim())}&limit=12`);
-        if (!response.ok) return;
-        const data = await response.json();
-        if (requestId !== requestIdRef.current) return;
-        setResults(data.places ?? []);
+        outcome = await readAdminSearch(await adminFetch(adminPlaceSearchUrl(province, term)));
       } catch {
-        // A failed lookup just shows nothing; the admin can retype.
+        outcome = { ok: false, error: "Arama yapılamadı: sunucuya ulaşılamadı" };
+      }
+      if (requestId !== requestIdRef.current) return;
+      if (outcome.ok) {
+        setResults(outcome.places);
+        setSearchNote(outcome.places.length === 0 ? { kind: "empty", text: "Bu ilde eşleşen mekan yok" } : null);
+      } else {
+        setResults([]);
+        setSearchNote({ kind: "error", text: outcome.error });
       }
     }, 300);
     return () => clearTimeout(timer);
-  }, [term]);
+  }, [province, term]);
 
   const patch = useCallback(
     async (body: Record<string, unknown>) => {
@@ -109,6 +123,22 @@ export function AdminPlaceEditor() {
 
   return (
     <div className="rounded-xl border border-border bg-surface p-4">
+      <label className="mb-3 block">
+        <span className="text-[13px] font-medium text-text-secondary">İl</span>
+        <select
+          value={province}
+          onChange={(event) => setProvince(event.target.value)}
+          className="mt-1 h-11 w-full rounded-xl border border-border bg-surface px-3 text-[15px] text-text outline-none focus:border-brand"
+        >
+          <option value="">İl seçin</option>
+          {provinces.map((p) => (
+            <option key={p.slug} value={p.slug}>
+              {p.label}
+            </option>
+          ))}
+        </select>
+      </label>
+
       <label className="block">
         <span className="text-[13px] font-medium text-text-secondary">Mekan ara</span>
         <span className="mt-1 flex h-11 items-center gap-2 rounded-xl border border-border px-3">
@@ -116,11 +146,22 @@ export function AdminPlaceEditor() {
           <input
             value={term}
             onChange={(event) => setTerm(event.target.value)}
-            placeholder="İsim ya da adres"
+            placeholder={province ? "İsim, adres ya da OSM kimliği" : "Önce il seçin"}
+            disabled={!province}
             className="h-full w-full bg-transparent text-[15px] outline-none placeholder:text-text-muted"
           />
         </span>
       </label>
+
+      {searchNote && !selected && (
+        <p
+          className="mt-3 text-[13px] font-medium"
+          style={{ color: searchNote.kind === "error" ? "var(--danger)" : "var(--text-secondary)" }}
+          role={searchNote.kind === "error" ? "alert" : "status"}
+        >
+          {searchNote.text}
+        </p>
+      )}
 
       {results.length > 0 && !selected && (
         <ul className="mt-3 max-h-64 space-y-1 overflow-y-auto">

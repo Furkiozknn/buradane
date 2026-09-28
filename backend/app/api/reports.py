@@ -16,6 +16,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
 
 from app.api.deps import AdminUser, DbSession
+from app.api.places import MAX_OFFSET
 from app.models.place import Place
 from app.models.signal import PlaceReport, ReportStatus
 from app.services.moderation import resolve_report
@@ -46,7 +47,7 @@ def list_reports(
     admin: AdminUser,
     report_status: ReportStatus = Query(default=ReportStatus.pending, alias="status"),
     limit: int = Query(default=50, ge=1, le=200),
-    offset: int = Query(default=0, ge=0),
+    offset: int = Query(default=0, ge=0, le=MAX_OFFSET),
 ) -> list[ReportOut]:
     rows = db.execute(
         select(PlaceReport, Place.name)

@@ -595,6 +595,14 @@ export function AppShell({
       // honest: there is no map to zoom while the panel owns the screen.
       data-sheet={isDesktop ? "sidebar" : snap}
     >
+      {/* First focusable element on the page: keyboard users skip the map
+          (every pin is a Tab stop) and land on the result list. */}
+      <a
+        href="#sonuclar"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-surface focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:shadow-lg"
+      >
+        Sonuç listesine geç
+      </a>
       <MapCanvas
         places={places}
         selectedId={selectedId}
@@ -1039,8 +1047,19 @@ export function AppShell({
                   sits behind the sheet at all snap heights. The licence
                   requires it to be reasonably visible, so it is now on
                   screen whatever the result set does. */}
+              {/* Linked to openstreetmap.org/copyright: the OSMF attribution
+                  guideline asks for the credit to point where the licence
+                  and the contributors are explained, not only to name them. */}
               <p className="truncate px-4 pb-2 text-[11px] text-text-muted">
-                {datasetMeta.attribution} · {datasetMeta.count.toLocaleString("tr-TR")} kayıt · ODbL
+                <a
+                  href="https://www.openstreetmap.org/copyright"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline decoration-dotted underline-offset-2 hover:text-text"
+                >
+                  {datasetMeta.attribution}
+                </a>{" "}
+                · {datasetMeta.count.toLocaleString("tr-TR")} kayıt · ODbL
               </p>
             </div>
 

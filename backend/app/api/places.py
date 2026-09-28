@@ -6,6 +6,7 @@ record (see app/models/signal.py and app/services/moderation.py)."""
 
 from __future__ import annotations
 
+import math
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -30,6 +31,13 @@ from app.services.search import FILTERABLE_AMENITIES, PlaceSearchParams, search_
 
 router = APIRouter(prefix="/places", tags=["places"])
 
+#: Deepest page a client may ask for. Without a ceiling `ge=0` accepts any
+#: Python int, and one past BIGINT made psycopg fail to bind it - an
+#: unauthenticated `?offset=99999999999999999999` answered 500. Nobody pages
+#: 10.000 rows deep into "the nearest one"; a caller that needs the whole
+#: table wants an export, not this endpoint.
+MAX_OFFSET = 10_000
+
 
 @router.get("", response_model=list[PlaceListItem])
 def list_places(
@@ -44,7 +52,7 @@ def list_places(
     min_reliability: float | None = Query(default=None, ge=0, le=1),
     admin_region_id: uuid.UUID | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
-    offset: int = Query(default=0, ge=0),
+    offset: int = Query(default=0, ge=0, le=MAX_OFFSET),
 ) -> list[PlaceListItem]:
     if (lat is None) != (lon is None):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "lat and lon must both be given or both omitted")
@@ -60,6 +68,16 @@ def list_places(
             parsed_bbox = tuple(float(p) for p in parts)
         except ValueError as exc:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "bbox values must be numbers") from exc
+        # float() happily parses "nan" and "inf", and an out-of-range or
+        # inverted box is not an error to PostGIS either - every one of them
+        # answered 200 with an empty list, which reads as "nothing here".
+        min_lon, min_lat, max_lon, max_lat = parsed_bbox
+        if not all(math.isfinite(v) for v in parsed_bbox):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "bbox values must be finite numbers")
+        if not (-180 <= min_lon <= 180 and -180 <= max_lon <= 180 and -90 <= min_lat <= 90 and -90 <= max_lat <= 90):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "bbox is outside -180..180 / -90..90")
+        if min_lon > max_lon or min_lat > max_lat:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "bbox must be min_lon,min_lat,max_lon,max_lat with min <= max")
 
     for a in amenity:
         if a not in FILTERABLE_AMENITIES:

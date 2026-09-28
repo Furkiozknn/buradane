@@ -857,6 +857,68 @@ export function getPlaceById(id: string, communityPlaces?: Place[]): Place | und
 }
 
 /**
+ * Name/address/id search inside ONE province, for the admin place editor.
+ *
+ * The editor used to call the public `GET /api/places?q=` with no location.
+ * That route has required a scope since the national dataset landed (see
+ * NEEDS_SCOPE in app/api/places/route.ts) and answered 400, which the
+ * editor swallowed: every admin search came back empty, silently. A bbox is
+ * no fix either - Antalya and Konya are wider than the public route's 3°
+ * ceiling, so half of Alanya would stay unreachable.
+ *
+ * So the admin search names its province instead, and reads exactly that
+ * one file - never the country. It also differs from the public query on
+ * purpose: `permanently_closed` and `pending_review` places are INCLUDED,
+ * because the public engine hides them and an admin who closed a place by
+ * mistake must be able to find it again to press "Kaynak kayda dön".
+ *
+ * Returns null when the slug names no province (the caller answers 400
+ * rather than reading a file that is not there).
+ */
+export function searchProvinceForAdmin(options: {
+  province: string;
+  q: string;
+  limit: number;
+  overrides?: Record<string, Partial<Place>>;
+  communityPlaces?: Place[];
+}): Place[] | null {
+  const row = loadIndex().find((province) => province.slug === options.province);
+  if (!row) return null;
+
+  const needle = foldWords(options.q);
+  const rawId = options.q.trim();
+  if (!needle && !rawId) return [];
+
+  const overrides = options.overrides ?? {};
+  const { minLat, maxLat, minLon, maxLon } = row.bbox;
+  // Community places carry no province file, so they are placed by the
+  // province's own extent - the same test provincesFor uses.
+  const community = (options.communityPlaces ?? []).filter(
+    (p) => p.lat >= minLat && p.lat <= maxLat && p.lon >= minLon && p.lon <= maxLon,
+  );
+
+  const found: Place[] = [];
+  for (const base of [...loadProvince(row.slug), ...community]) {
+    const override = overrides[base.id];
+    const place = override ? applyOverride(base, override) : base;
+    // An admin rename must be findable under its new name, so the cached
+    // blob (built from the source record) is only used when nothing is
+    // layered on top of it.
+    const haystack =
+      (!override && searchTextCache.get(place.id)) ||
+      foldWords(
+        [place.name, place.address_line, place.district, place.province].filter(Boolean).join(" "),
+      );
+    if (place.id === rawId || (needle && matchesWordPrefix(haystack, needle))) {
+      const { raw_tags: _omit, ...listed } = place;
+      found.push(listed as Place);
+      if (found.length >= options.limit) break;
+    }
+  }
+  return found;
+}
+
+/**
  * Layers a moderation/verification override onto a base place.
  *
  * The score is *derived here*, never stored: the override records what

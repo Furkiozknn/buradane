@@ -102,7 +102,7 @@ def get_device_token_hash(
         return None
     if not _DEVICE_TOKEN_RE.match(x_device_token):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=422,  # HTTP_422_UNPROCESSABLE_ENTITY is deprecated in Starlette; the number is stable
             detail="X-Device-Token must be 16-128 characters of A-Za-z0-9_-",
         )
     return hashlib.sha256(x_device_token.encode()).hexdigest()

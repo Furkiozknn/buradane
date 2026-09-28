@@ -1,14 +1,38 @@
-# Bagimlilik guncellemelerini haftalik olarak otomatik acar.
+# Ayda bir, ekosistem basina TEK PR (groups). Her paket icin ayri PR,
+# 25 Eylul 2026'da hesapta 36 acik Dependabot PR'i demekti; upload/download-
+# artifact gibi birlikte yukselmesi gereken ciftler de ayni PR'da kalir.
+# Kural: github.com/Furkiozknn/Furkiozknn schema/politika.py
 version: 2
 updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "monthly"
     open-pull-requests-limit: 3
     commit-message:
       prefix: "ci"
     labels:
       - "ci"
+    groups:
+      actions:
+        patterns: ["*"]
 
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "monthly"
+    commit-message:
+      prefix: "deps"
+    groups:
+      npm:
+        patterns: ["*"]
+
+  - package-ecosystem: "uv"
+    directory: "/backend"
+    schedule:
+      interval: "monthly"
+    commit-message:
+      prefix: "deps"
+    groups:
+      uv:
+        patterns: ["*"]

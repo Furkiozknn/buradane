@@ -26,6 +26,19 @@ burada kendiliğinden alınmadı.
   girişte kapatıldı.
 - `.env`, özel anahtarlar ve kimlik dosyaları `.gitignore`'a alındı.
 - CI'da `GITHUB_TOKEN` izinleri kısıtlandı, eski koşular iptal ediliyor.
+- Backend `GET /places` ve `GET /reports`: `offset` artık en fazla 10.000.
+  Tavan yokken `?offset=99999999999999999999` BIGINT'e sığmıyor ve kimlik
+  doğrulamasız bir istek **500** döndürüyordu; artık 422.
+- Backend `bbox` doğrulaması: `nan`/`inf`, -180..180 / -90..90 dışı ve
+  ters çevrilmiş (min > max) kutular **200 + boş liste** döndürüyordu —
+  "burada hiçbir şey yok" ile ayırt edilemeyen bir cevap. Artık 400.
+- Canlı haritanın çağırdığı demo ucu `GET /api/places` aynı açığı
+  taşıyordu: ters (min > max) ya da -180..180 / -90..90 dışı `bbox` ve
+  aralık dışı `lat`/`lon` **200 + boş liste** döndürüyordu; boyut
+  denetimi `Math.abs` kullandığı için ters kutu onu da geçiyordu. Artık
+  400 + gerekçe. Bu route handler'ın hiçbir kapısının testi yoktu;
+  `tests/places-route.test.ts` (12 test, düzeltme öncesi 3'ü kırmızı)
+  hepsini sabitliyor.
 
 ### Düzeltildi
 
@@ -37,6 +50,37 @@ burada kendiliğinden alınmadı.
 - Kalıcı disk yokken katkı sessizce kabul ediliyordu; artık açıkça
   reddediliyor.
 - `1.0.0` sonrası bulunan üç README kusuru giderildi.
+- Taban harita stili (tiles.openfreemap.org) alınamadığında harita
+  `load` olayına hiç ulaşmıyor, sonuç katmanları hiç eklenmiyordu: sokak
+  yok, **pin de yok**, mesaj da yok — liste 200 sonuç gösterirken harita
+  boş bir dikdörtgendi. Artık düz bir arka plana geçiliyor; pinler,
+  kümeler ve seçim halkası doğru yerde çiziliyor ve "Sokak haritası
+  yüklenemedi" notu gösteriliyor.
+- ODbL atfı ("© OpenStreetMap katkıda bulunanları") artık
+  openstreetmap.org/copyright sayfasına bağlanıyor (liste başlığında ve
+  OSM kaynaklı yer sayfalarında), OSMF atıf yönergesinin istediği gibi.
+- "Sonuç listesine geç" atlama bağlantısı kök layout'taydı; hedefi
+  `#sonuclar` yalnızca harita sayfasında var. `/admin`, `/yer/[id]` ve 404
+  sayfasında ilk Tab durağı hiçbir yere gitmiyordu (axe-core: `skip-link`,
+  `region`). Bağlantı hedefiyle aynı bileşene (AppShell) taşındı.
+- Yönetim panelindeki `BURADANE_ADMIN_TOKEN` kod etiketinin kontrastı
+  4,39:1'di (WCAG AA 4,5:1 ister); artık ikincil metin rengiyle.
+  Playwright + axe-core, 390 ve 1280 px, açık ve koyu tema: 5 sayfada
+  0 ihlal.
+- `docs/backend-ortam-degiskenleri.md` frontend tablosunda
+  `BURADANE_TRUST_PROXY` ve `BURADANE_CONTRIBUTIONS` eksikti.
+- Yönetim panelindeki mekan düzenleyici **hiçbir mekanı bulamıyordu**.
+  Aramayı konumsuz `GET /api/places?q=…&limit=12` ile yapıyordu; bu uç
+  ulusal veriyle birlikte kapsam istiyor ve **400** ("Arama için konum
+  gerekli") döndürüyordu, düzenleyici de `if (!response.ok) return;` ile
+  bunu sessizce boş liste yapıyordu. Genel ucun kapsam kuralı aynen
+  duruyor; düzenleyici artık yönetici token'ı isteyen, **il seçimiyle**
+  tek il dosyası okuyan `GET /api/admin/places?province=…&q=…` kullanıyor
+  (bbox yetmezdi: Antalya ve Konya 3°'lik tavandan geniş). Kalıcı kapalı ve
+  incelemedeki yerler de bulunuyor, yoksa yanlışlıkla kapatılan bir yer
+  geri alınamazdı. Başarısız arama artık ekranda hata olarak gösteriliyor.
+  `tests/admin-place-search.test.ts` (10 test; düzeltme öncesi dosya
+  kırmızı — uç yoktu).
 
 ### Değiştirildi
 
