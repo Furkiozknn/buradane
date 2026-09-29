@@ -8,6 +8,7 @@ import { DirectionArrow } from "./DirectionArrow";
 import { isOpenNow } from "@/lib/opening-hours";
 import type { AmenityKey, Place } from "@/lib/types";
 import { directionsUrl } from "@/lib/directions";
+import { useT } from "@/lib/use-locale";
 
 /** Amenities worth surfacing on a compact card, in priority order. Only ones
  * that are definitively `true` are shown - an unknown value is not a feature. */
@@ -36,6 +37,7 @@ export function PlaceCard({
   onSelect: (place: Place) => void;
   onOpenDetail: (place: Place) => void;
 }) {
+  const { t, locale } = useT();
   const primary = categoryMeta(place.categories[0]);
   const Icon = primary.icon;
   const openState = isOpenNow(place.opening_hours_raw);
@@ -61,13 +63,16 @@ export function PlaceCard({
         onFocus={() => onSelect(place)}
         onMouseEnter={() => onSelect(place)}
         className="absolute inset-0 rounded-2xl"
-        aria-label={`${primary.label}. ${place.name}. ${
+        aria-label={`${t(primary.label)}. ${place.name}. ${
           place.distance_m != null
-            ? `${formatDistance(place.distance_m)} uzaklıkta${
-                bearing != null ? `, ${bearingLabel(bearing)} yönünde` : ""
-              }.`
+            ? bearing != null
+              ? t("{distance} uzaklıkta, {direction} yönünde.", {
+                  distance: formatDistance(place.distance_m),
+                  direction: bearingLabel(bearing, locale),
+                })
+              : t("{distance} uzaklıkta.", { distance: formatDistance(place.distance_m) })
             : ""
-        } Detayları aç.`}
+        } ${t("Detayları aç.")}`}
       />
 
       <span
@@ -97,9 +102,9 @@ export function PlaceCard({
             someone walks there; the duplicate is what had to go. Walking
             time is still on the detail panel, where there is room for it. */}
         <p className="mt-0.5 truncate text-[12.5px] text-text-secondary">
-          {primary.label}
-          {place.price_type === "free" && <> · Ücretsiz</>}
-          {place.price_type === "paid" && <> · Ücretli</>}
+          {t(primary.label)}
+          {place.price_type === "free" && <> · {t("Ücretsiz")}</>}
+          {place.price_type === "paid" && <> · {t("Ücretli")}</>}
         </p>
 
         {/* Where this actually is. At one city the card could leave it out;
@@ -117,24 +122,24 @@ export function PlaceCard({
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
           {isClosed ? (
             <Badge tone="danger" icon={<CircleAlert size={12} />}>
-              Geçici olarak kapalı
+              {t("Geçici olarak kapalı")}
             </Badge>
           ) : openState === "open" ? (
-            <Badge tone="success">Şu an açık</Badge>
+            <Badge tone="success">{t("Şu an açık")}</Badge>
           ) : openState === "closed" ? (
-            <Badge tone="warning">Şu an kapalı</Badge>
+            <Badge tone="warning">{t("Şu an kapalı")}</Badge>
           ) : null}
 
           {/* Conditional access is worth more room than a feature badge:
               walking to a place and being turned away is the failure this
               app exists to prevent, and "buy something first" is a condition
               people can plan around if they are told. */}
-          {place.access === "customers" && <Badge tone="warning">Müşterilere açık</Badge>}
-          {place.access === "permit" && <Badge tone="warning">İzinle girilir</Badge>}
+          {place.access === "customers" && <Badge tone="warning">{t("Müşterilere açık")}</Badge>}
+          {place.access === "permit" && <Badge tone="warning">{t("İzinle girilir")}</Badge>}
 
           {features.map((key) => (
             <Badge key={key} tone="neutral">
-              {AMENITY_BY_KEY[key].filterLabel}
+              {t(AMENITY_BY_KEY[key].filterLabel)}
             </Badge>
           ))}
 
@@ -165,13 +170,13 @@ export function PlaceCard({
             // hazardous and the colour stops meaning anything on the half
             // where it matters. Same words, same visibility, honest weight.
             <Badge tone="neutral" icon={<CircleAlert size={12} />}>
-              Bilgi güncelliği düşük
+              {t("Bilgi güncelliği düşük")}
             </Badge>
           ) : place.verification_count > 0 ? (
             // A check mark is a claim that someone confirmed this, so it is
             // shown only when someone actually did.
             <Badge tone="success" icon={<BadgeCheck size={12} />}>
-              {place.verification_count} kişi doğruladı
+              {t("{n} kişi doğruladı", { n: place.verification_count })}
             </Badge>
           ) : null}
         </div>
@@ -184,7 +189,7 @@ export function PlaceCard({
           rel="noopener noreferrer"
           onClick={(event) => event.stopPropagation()}
           className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-soft text-brand transition-colors hover:bg-brand hover:text-brand-contrast"
-          aria-label={`${place.name} için yol tarifi al`}
+          aria-label={t("{name} için yol tarifi al", { name: place.name })}
         >
           <Navigation size={17} />
         </a>

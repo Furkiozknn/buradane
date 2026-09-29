@@ -1,4 +1,8 @@
+import { headers } from "next/headers";
+
 import { AppShell } from "@/components/AppShell";
+import { looksLikeDesktop } from "@/lib/device";
+import { localeFromAcceptLanguage } from "@/lib/i18n";
 import { datasetMeta } from "@/lib/places-repository";
 import { EMPTY_URL_STATE, parseUrlState } from "@/lib/url-state";
 
@@ -19,6 +23,11 @@ export default async function Home({
 }) {
   const meta = datasetMeta();
   const params = await searchParams;
+  // The first paint speaks the visitor's browser language; a stored choice
+  // takes over on the client (see use-locale.tsx).
+  const requestHeaders = await headers();
+  const initialLocale = localeFromAcceptLanguage(requestHeaders.get("accept-language"));
+  const initialDesktop = looksLikeDesktop(requestHeaders);
 
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
@@ -37,6 +46,8 @@ export default async function Home({
         cities: meta.cities,
       }}
       initialState={initialState}
+      initialLocale={initialLocale}
+      initialDesktop={initialDesktop}
     />
   );
 }

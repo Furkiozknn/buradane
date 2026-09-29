@@ -7,6 +7,7 @@ import { CATEGORIES, categoryMeta } from "@/lib/categories";
 import { formatDistance } from "@/lib/geo";
 import type { CategorySlug, Place } from "@/lib/types";
 import { useModalDialog } from "@/lib/use-modal-dialog";
+import { useT } from "@/lib/use-locale";
 
 /**
  * "Yer öner" - the lowest-friction contribution path. Location comes from
@@ -24,6 +25,7 @@ export function SuggestPlaceDialog({
   center: { lat: number; lon: number };
   onClose: () => void;
 }) {
+  const { t } = useT();
   const [name, setName] = useState("");
   const [selected, setSelected] = useState<CategorySlug[]>([]);
   const [note, setNote] = useState("");
@@ -82,12 +84,12 @@ export function SuggestPlaceDialog({
       });
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
-        throw new Error(body.error ?? "Doğrulama gönderilemedi");
+        throw new Error(body.error ?? t("Doğrulama gönderilemedi"));
       }
       setState("verified");
     } catch (err) {
       setState("duplicates");
-      setError(err instanceof Error ? err.message : "Bilinmeyen bir hata oluştu");
+      setError(err instanceof Error ? err.message : t("Bilinmeyen bir hata oluştu"));
     }
   }
 
@@ -130,12 +132,12 @@ export function SuggestPlaceDialog({
       });
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
-        throw new Error(body.error ?? "Öneri gönderilemedi");
+        throw new Error(body.error ?? t("Öneri gönderilemedi"));
       }
       setState("done");
     } catch (err) {
       setState("error");
-      setError(err instanceof Error ? err.message : "Bilinmeyen bir hata oluştu");
+      setError(err instanceof Error ? err.message : t("Bilinmeyen bir hata oluştu"));
     }
   }
 
@@ -153,17 +155,17 @@ export function SuggestPlaceDialog({
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
             <h2 id="suggest-title" className="text-[17px] font-bold text-text">
-              Yer öner
+              {t("Yer öner")}
             </h2>
             <p className="mt-0.5 text-[13px] text-text-secondary">
-              Bildiğin bir yeri ekleyerek herkese yardımcı ol.
+              {t("Bildiğin bir yeri ekleyerek herkese yardımcı ol.")}
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full hover:bg-surface-sunken"
-            aria-label="Kapat"
+            aria-label={t("Kapat")}
           >
             <X size={18} />
           </button>
@@ -177,24 +179,24 @@ export function SuggestPlaceDialog({
             >
               <Check size={24} style={{ color: "var(--success)" }} />
             </span>
-            <p className="text-[15px] font-semibold text-text">Doğrulama kaydedildi, teşekkürler.</p>
+            <p className="text-[15px] font-semibold text-text">{t("Doğrulama kaydedildi, teşekkürler.")}</p>
             <p className="mt-1 text-[13px] text-text-secondary">
-              Mevcut kaydın hâlâ yerinde olduğunu işaretledin — bu, tazelik sinyalinin ta kendisi.
+              {t("Mevcut kaydın hâlâ yerinde olduğunu işaretledin — bu, tazelik sinyalinin ta kendisi.")}
             </p>
             <button
               type="button"
               onClick={onClose}
               className="mt-4 h-11 w-full rounded-xl bg-brand font-semibold text-brand-contrast"
             >
-              Kapat
+              {t("Kapat")}
             </button>
           </div>
         ) : state === "duplicates" ? (
           <div>
             <p className="text-[14px] leading-relaxed text-text-secondary">
-              Bu noktanın yakınında aynı türden{" "}
-              <strong className="text-text">{nearby.length} kayıt</strong> zaten var. Önerdiğin
-              bunlardan biri mi?
+              {t("Bu noktanın yakınında aynı türden {n} kayıt zaten var. Önerdiğin bunlardan biri mi?", {
+                n: nearby.length,
+              })}
             </p>
             <ul className="mt-3 space-y-2">
               {nearby.map((place) => {
@@ -215,7 +217,7 @@ export function SuggestPlaceDialog({
                         {place.name}
                       </span>
                       <span className="block text-[12px] text-text-secondary">
-                        {meta.label}
+                        {t(meta.label)}
                         {place.distance_m != null && <> · {formatDistance(place.distance_m)}</>}
                       </span>
                     </span>
@@ -225,7 +227,7 @@ export function SuggestPlaceDialog({
                       className="h-10 shrink-0 rounded-lg px-3 text-[13px] font-semibold"
                       style={{ background: "var(--success-soft)", color: "var(--success)" }}
                     >
-                      Bu o
+                      {t("Bu o")}
                     </button>
                   </li>
                 );
@@ -241,10 +243,10 @@ export function SuggestPlaceDialog({
               onClick={() => submit({ skipDuplicateCheck: true })}
               className="mt-3 h-12 w-full rounded-xl border border-border text-[14px] font-medium text-text"
             >
-              Hayır, bu yeni bir yer — önerimi gönder
+              {t("Hayır, bu yeni bir yer — önerimi gönder")}
             </button>
             <p className="mt-2 text-center text-[11.5px] text-text-muted">
-              &ldquo;Bu o&rdquo; demek, kaydı herkes için &ldquo;hâlâ burada&rdquo; olarak günceller.
+              {t("“Bu o” demek, kaydı herkes için “hâlâ burada” olarak günceller.")}
             </p>
           </div>
         ) : state === "done" ? (
@@ -255,34 +257,34 @@ export function SuggestPlaceDialog({
             >
               <Check size={24} style={{ color: "var(--success)" }} />
             </span>
-            <p className="text-[15px] font-semibold text-text">Önerin alındı, teşekkürler.</p>
+            <p className="text-[15px] font-semibold text-text">{t("Önerin alındı, teşekkürler.")}</p>
             <p className="mt-1 text-[13px] text-text-secondary">
-              Moderasyon onayından sonra haritada görünecek.
+              {t("Moderasyon onayından sonra haritada görünecek.")}
             </p>
             <button
               type="button"
               onClick={onClose}
               className="mt-4 h-11 w-full rounded-xl bg-brand font-semibold text-brand-contrast"
             >
-              Kapat
+              {t("Kapat")}
             </button>
           </div>
         ) : (
           <>
             <label className="block">
-              <span className="text-[13px] font-medium text-text-secondary">Mekan adı</span>
+              <span className="text-[13px] font-medium text-text-secondary">{t("Mekan adı")}</span>
               <input
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 maxLength={120}
-                placeholder="Örn. Sahil Parkı Çeşmesi"
+                placeholder={t("Örn. Sahil Parkı Çeşmesi")}
                 className="mt-1 h-12 w-full rounded-xl border border-border bg-surface px-3 text-[16px] outline-none focus:border-brand"
               />
             </label>
 
             <fieldset className="mt-4">
               <legend className="text-[13px] font-medium text-text-secondary">
-                Kategori <span className="text-text-muted">(birden fazla seçebilirsin)</span>
+                {t("Kategori")} <span className="text-text-muted">{t("(birden fazla seçebilirsin)")}</span>
               </legend>
               <div className="mt-2 flex flex-wrap gap-2">
                 {CATEGORIES.map((category) => {
@@ -302,7 +304,7 @@ export function SuggestPlaceDialog({
                       }}
                     >
                       <Icon size={15} color={isSelected ? category.onTint : category.pin} aria-hidden />
-                      {category.shortLabel}
+                      {t(category.shortLabel)}
                     </button>
                   );
                 })}
@@ -312,22 +314,22 @@ export function SuggestPlaceDialog({
             <div className="mt-4 flex items-center gap-2 rounded-xl bg-surface-sunken px-3 py-2.5">
               <MapPin size={16} className="shrink-0 text-brand" aria-hidden />
               <p className="text-[12.5px] text-text-secondary">
-                Konum, haritanın şu anki merkezi:{" "}
+                {t("Konum, haritanın şu anki merkezi:")}{" "}
                 <span className="tabular-nums text-text">
                   {center.lat.toFixed(5)}, {center.lon.toFixed(5)}
                 </span>
-                . Haritayı kaydırıp tekrar açarak değiştirebilirsin.
+                {t(". Haritayı kaydırıp tekrar açarak değiştirebilirsin.")}
               </p>
             </div>
 
             <label className="mt-3 block">
-              <span className="text-[13px] font-medium text-text-secondary">Not (isteğe bağlı)</span>
+              <span className="text-[13px] font-medium text-text-secondary">{t("Not (isteğe bağlı)")}</span>
               <textarea
                 value={note}
                 onChange={(event) => setNote(event.target.value)}
                 rows={2}
                 maxLength={500}
-                placeholder="Ücretsiz mi, erişilebilir mi, saatleri var mı?"
+                placeholder={t("Ücretsiz mi, erişilebilir mi, saatleri var mı?")}
                 className="mt-1 w-full resize-none rounded-xl border border-border bg-surface p-3 text-[16px] outline-none focus:border-brand"
               />
             </label>
@@ -344,10 +346,14 @@ export function SuggestPlaceDialog({
               disabled={!canSubmit}
               className="mt-4 h-12 w-full rounded-xl bg-brand text-[15px] font-semibold text-brand-contrast transition-opacity disabled:opacity-40"
             >
-              {state === "sending" ? "Gönderiliyor…" : state === "checking" ? "Yakın kayıtlar denetleniyor…" : "Öneriyi gönder"}
+              {state === "sending"
+                ? t("Gönderiliyor…")
+                : state === "checking"
+                  ? t("Yakın kayıtlar denetleniyor…")
+                  : t("Öneriyi gönder")}
             </button>
             <p className="mt-2 text-center text-[11.5px] text-text-muted">
-              Önerin moderasyon onayına düşer, hemen yayınlanmaz.
+              {t("Önerin moderasyon onayına düşer, hemen yayınlanmaz.")}
             </p>
           </>
         )}

@@ -5,8 +5,9 @@ import { Check, X } from "lucide-react";
 
 import type { ContributionKind, Place } from "@/lib/types";
 import { useModalDialog } from "@/lib/use-modal-dialog";
+import { useT } from "@/lib/use-locale";
 
-const REPORT_OPTIONS: { kind: ContributionKind; reason: string; label: string }[] = [
+export const REPORT_OPTIONS: { kind: ContributionKind; reason: string; label: string }[] = [
   { kind: "report_closed", reason: "closed", label: "Kapalı / artık burada değil" },
   { kind: "report_incorrect", reason: "wrong_info", label: "Bilgiler yanlış" },
   { kind: "report_incorrect", reason: "not_accessible", label: "Erişilebilir değil" },
@@ -15,6 +16,7 @@ const REPORT_OPTIONS: { kind: ContributionKind; reason: string; label: string }[
 ];
 
 export function ReportDialog({ place, onClose }: { place: Place; onClose: () => void }) {
+  const { t } = useT();
   const [selected, setSelected] = useState<number | null>(null);
   const [note, setNote] = useState("");
   const [state, setState] = useState<"idle" | "sending" | "done" | "error">("idle");
@@ -44,12 +46,12 @@ export function ReportDialog({ place, onClose }: { place: Place; onClose: () => 
       });
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
-        throw new Error(body.error ?? "Bildirim gönderilemedi");
+        throw new Error(body.error ?? t("Bildirim gönderilemedi"));
       }
       setState("done");
     } catch (err) {
       setState("error");
-      setError(err instanceof Error ? err.message : "Bilinmeyen bir hata oluştu");
+      setError(err instanceof Error ? err.message : t("Bilinmeyen bir hata oluştu"));
     }
   }
 
@@ -71,7 +73,7 @@ export function ReportDialog({ place, onClose }: { place: Place; onClose: () => 
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
             <h2 id="report-title" className="text-[17px] font-bold text-text">
-              Sorun bildir
+              {t("Sorun bildir")}
             </h2>
             <p className="mt-0.5 text-[13px] text-text-secondary">{place.name}</p>
           </div>
@@ -79,7 +81,7 @@ export function ReportDialog({ place, onClose }: { place: Place; onClose: () => 
             type="button"
             onClick={onClose}
             className="flex h-9 w-9 items-center justify-center rounded-full hover:bg-surface-sunken"
-            aria-label="Kapat"
+            aria-label={t("Kapat")}
           >
             <X size={18} />
           </button>
@@ -93,22 +95,22 @@ export function ReportDialog({ place, onClose }: { place: Place; onClose: () => 
             >
               <Check size={24} style={{ color: "var(--success)" }} />
             </span>
-            <p className="text-[15px] font-semibold text-text">Bildirimin alındı, teşekkürler.</p>
+            <p className="text-[15px] font-semibold text-text">{t("Bildirimin alındı, teşekkürler.")}</p>
             <p className="mt-1 text-[13px] text-text-secondary">
-              Moderasyon ekibi kontrol edene kadar mekan bilgisi değişmez.
+              {t("Moderasyon ekibi kontrol edene kadar mekan bilgisi değişmez.")}
             </p>
             <button
               type="button"
               onClick={onClose}
               className="mt-4 h-11 w-full rounded-xl bg-brand font-semibold text-brand-contrast"
             >
-              Kapat
+              {t("Kapat")}
             </button>
           </div>
         ) : (
           <>
             <fieldset className="space-y-1.5">
-              <legend className="sr-only">Sorun türü</legend>
+              <legend className="sr-only">{t("Sorun türü")}</legend>
               {REPORT_OPTIONS.map((option, index) => (
                 <label
                   key={option.reason}
@@ -125,20 +127,20 @@ export function ReportDialog({ place, onClose }: { place: Place; onClose: () => 
                     onChange={() => setSelected(index)}
                     className="h-4 w-4 accent-[var(--brand)]"
                   />
-                  {option.label}
+                  {t(option.label)}
                 </label>
               ))}
             </fieldset>
 
             <label className="mt-3 block">
-              <span className="text-[13px] font-medium text-text-secondary">Ek not (isteğe bağlı)</span>
+              <span className="text-[13px] font-medium text-text-secondary">{t("Ek not (isteğe bağlı)")}</span>
               <textarea
                 value={note}
                 onChange={(event) => setNote(event.target.value)}
                 rows={2}
                 maxLength={500}
                 className="mt-1 w-full resize-none rounded-xl border border-border bg-surface p-3 text-[16px] outline-none focus:border-brand"
-                placeholder="Ne gördüğünü kısaca yazabilirsin"
+                placeholder={t("Ne gördüğünü kısaca yazabilirsin")}
               />
             </label>
 
@@ -154,7 +156,7 @@ export function ReportDialog({ place, onClose }: { place: Place; onClose: () => 
               disabled={selected === null || state === "sending"}
               className="mt-3 h-12 w-full rounded-xl bg-brand text-[15px] font-semibold text-brand-contrast transition-opacity disabled:opacity-40"
             >
-              {state === "sending" ? "Gönderiliyor…" : "Bildir"}
+              {state === "sending" ? t("Gönderiliyor…") : t("Bildir")}
             </button>
           </>
         )}

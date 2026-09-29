@@ -5,6 +5,7 @@ import { MapPin, X } from "lucide-react";
 
 import { TOTALS, findProvince, foldAscii } from "@/lib/administrative";
 import { useModalDialog } from "@/lib/use-modal-dialog";
+import { useT } from "@/lib/use-locale";
 
 export interface DistrictChoice {
   name: string;
@@ -43,6 +44,7 @@ export function CityPicker({
   onSelect: (city: CityOption, district?: DistrictChoice) => void;
   onClose: () => void;
 }) {
+  const { t, num } = useT();
   // Turkish collation, not the default. "İstanbul" and "İzmir" sort under a
   // dotted İ that ASCII ordering puts in the wrong place entirely, which in
   // a Turkish city list reads as a bug.
@@ -134,7 +136,7 @@ export function CityPicker({
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
             <h2 id="city-title" className="text-[17px] font-bold text-text">
-              {drilled ? `${drilled.label} — ilçe seç` : "Şehir seç"}
+              {drilled ? t("{name} — ilçe seç", { name: drilled.label }) : t("Şehir seç")}
             </h2>
             {drilled ? (
               <button
@@ -145,11 +147,11 @@ export function CityPicker({
                 }}
                 className="mt-0.5 inline-flex min-h-11 items-center text-[13px] font-medium text-brand"
               >
-                ← Tüm iller
+                {t("← Tüm iller")}
               </button>
             ) : (
               <p className="mt-0.5 text-[13px] text-text-secondary">
-                Başka bir şehre bakabilir, konumun kapalıysa buradan devam edebilirsin.
+                {t("Başka bir şehre bakabilir, konumun kapalıysa buradan devam edebilirsin.")}
               </p>
             )}
           </div>
@@ -157,7 +159,7 @@ export function CityPicker({
             type="button"
             onClick={onClose}
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full hover:bg-surface-sunken"
-            aria-label="Kapat"
+            aria-label={t("Kapat")}
           >
             <X size={18} />
           </button>
@@ -170,15 +172,15 @@ export function CityPicker({
             type="search"
             value={filter}
             onChange={(event) => setFilter(event.target.value)}
-            placeholder={drilled ? "İlçe ara…" : "İl ara…"}
-            aria-label={drilled ? "İlçe ara" : "İl ara"}
+            placeholder={drilled ? t("İlçe ara…") : t("İl ara…")}
+            aria-label={drilled ? t("İlçe ara") : t("İl ara")}
             className="mb-2 h-11 w-full rounded-xl border border-border bg-transparent px-3 text-[16px] outline-none focus:border-brand"
           />
         )}
 
         {!drilled && visible.length === 0 && (
           <p className="py-6 text-center text-[13.5px] text-text-secondary" role="status">
-            &ldquo;{filter}&rdquo; ile eşleşen il yok.
+            {t("“{filter}” ile eşleşen il yok.", { filter })}
           </p>
         )}
 
@@ -198,10 +200,10 @@ export function CityPicker({
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block text-[15px] font-semibold text-text">
-                    Tüm {drilled.label}
+                    {t("Tüm {name}", { name: drilled.label })}
                   </span>
                   <span className="block text-[12.5px] tabular-nums text-text-secondary">
-                    {drilled.count.toLocaleString("tr-TR")} kayıtlı yer
+                    {t("{n} kayıtlı yer", { n: num(drilled.count) })}
                   </span>
                 </span>
               </button>
@@ -209,12 +211,12 @@ export function CityPicker({
 
             {districts === null && !districtError && (
               <li className="py-4 text-center text-[13px] text-text-secondary" role="status">
-                İlçeler yükleniyor…
+                {t("İlçeler yükleniyor…")}
               </li>
             )}
             {districtError && (
               <li className="py-4 text-center text-[13px] text-text-secondary" role="status">
-                İlçe listesi getirilemedi — il genelinde arayabilirsiniz.
+                {t("İlçe listesi getirilemedi — il genelinde arayabilirsiniz.")}
               </li>
             )}
 
@@ -233,7 +235,7 @@ export function CityPicker({
                       {district.name}
                     </span>
                     <span className="block text-[12.5px] tabular-nums text-text-secondary">
-                      {district.count.toLocaleString("tr-TR")} kayıtlı yer
+                      {t("{n} kayıtlı yer", { n: num(district.count) })}
                     </span>
                   </span>
                 </button>
@@ -242,7 +244,7 @@ export function CityPicker({
 
             {districts !== null && visibleDistricts.length === 0 && filter.trim() && (
               <li className="py-4 text-center text-[13px] text-text-secondary" role="status">
-                &ldquo;{filter}&rdquo; ile eşleşen ilçe yok.
+                {t("“{filter}” ile eşleşen ilçe yok.", { filter })}
               </li>
             )}
           </ul>
@@ -288,12 +290,12 @@ export function CityPicker({
                           className="rounded-full px-1.5 py-0.5 text-[10.5px] font-semibold"
                           style={{ background: "var(--brand-soft)", color: "var(--brand)" }}
                         >
-                          en yakın
+                          {t("en yakın")}
                         </span>
                       )}
                     </span>
                     <span className="block text-[12.5px] tabular-nums text-text-secondary">
-                      {city.count.toLocaleString("tr-TR")} kayıtlı yer
+                      {t("{n} kayıtlı yer", { n: num(city.count) })}
                     </span>
                   </span>
                 </button>
@@ -313,9 +315,10 @@ export function CityPicker({
               on how the number is *pronounced* (7'si, 8'i, 9'u, 40'ı, 81'i),
               so a template that appends one is wrong for most values it will
               ever hold as coverage grows from 1 to 81. */}
-          Türkiye&apos;deki {TOTALS.provinces} ilin{" "}
-          <strong className="font-semibold text-text-secondary">{coveredProvinces}</strong> tanesi
-          kapsanıyor.
+          {t("Türkiye’deki {total} ilin {covered} tanesi kapsanıyor.", {
+            total: TOTALS.provinces,
+            covered: coveredProvinces,
+          })}
         </p>
       </div>
     </div>

@@ -17,8 +17,15 @@ import { useCallback, useSyncExternalStore } from "react";
  * cascading extra render an effect-then-setState pass causes. Its server
  * snapshot returns false, so SSR markup and first client paint always agree
  * (mobile-first) and there is no hydration mismatch.
+ *
+ * `serverGuess` replaces that `false` when the server has evidence of the
+ * device (see app/page.tsx). Every desktop visitor used to receive the phone
+ * layout first and then watch the sheet jump to the sidebar: Lighthouse
+ * measured that as a layout shift of 0.245 on desktop. A wrong guess costs
+ * exactly what the old constant cost every desktop visit, and the real value
+ * still takes over right after hydration.
  */
-export function useMediaQuery(query: string): boolean {
+export function useMediaQuery(query: string, serverGuess = false): boolean {
   const subscribe = useCallback(
     (onChange: () => void) => {
       const list = window.matchMedia(query);
@@ -29,7 +36,7 @@ export function useMediaQuery(query: string): boolean {
   );
 
   const getSnapshot = useCallback(() => window.matchMedia(query).matches, [query]);
-  const getServerSnapshot = useCallback(() => false, []);
+  const getServerSnapshot = useCallback(() => serverGuess, [serverGuess]);
 
   return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }

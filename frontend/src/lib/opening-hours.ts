@@ -144,10 +144,15 @@ export function openStateLabel(state: OpenState): string {
   return "Saat bilgisi yok";
 }
 
-/** Turns "Mo-Fr 09:00-18:00; Sa 10:00-14:00" into readable Turkish lines. */
-export function humanizeOpeningHours(raw: string | null | undefined): string[] {
+/** Turns "Mo-Fr 09:00-18:00; Sa 10:00-14:00" into readable lines. English
+ * keeps OSM's own day abbreviations (Mo, Tu ...), which are already English. */
+export function humanizeOpeningHours(
+  raw: string | null | undefined,
+  locale: "tr" | "en" = "tr",
+): string[] {
   if (!raw) return [];
-  if (raw.trim() === "24/7") return ["Her gün 24 saat açık"];
+  if (raw.trim() === "24/7") return [locale === "en" ? "Open 24 hours, every day" : "Her gün 24 saat açık"];
+  if (locale === "en") return raw.split(";").map((rule) => rule.trim());
 
   const TR_DAYS: Record<string, string> = {
     Mo: "Pzt",

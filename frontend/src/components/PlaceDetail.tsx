@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
   BadgeCheck,
@@ -26,6 +26,8 @@ import { directionsUrl, osmUrl } from "@/lib/directions";
 import { displayUrl, safeExternalUrl } from "@/lib/external-url";
 import type { Place } from "@/lib/types";
 import { ReportDialog } from "./ReportDialog";
+import { useT } from "@/lib/use-locale";
+import { markVerified, wasVerifiedToday } from "@/lib/verified-store";
 
 export function PlaceDetail({
   place,
@@ -42,13 +44,32 @@ export function PlaceDetail({
   isFavorite?: boolean;
   onToggleFavorite?: (placeId: string) => void;
 }) {
+  const { t, locale } = useT();
   const [reportOpen, setReportOpen] = useState(false);
-  const [verifyState, setVerifyState] = useState<"idle" | "sending" | "done" | "error">("idle");
+  // A tap made earlier today (this device) starts as "done": the panel must
+  // say the confirmation counted instead of offering it again.
+  const [verifyState, setVerifyState] = useState<"idle" | "sending" | "done" | "error">(() => {
+    try {
+      return wasVerifiedToday(window.localStorage, place.id) ? "done" : "idle";
+    } catch {
+      return "idle";
+    }
+  });
+  // The confirm buttons unmount when the tap succeeds; without moving focus
+  // to the result, a keyboard or screen-reader user lands on <body>.
+  const verifiedRef = useRef<HTMLParagraphElement>(null);
+  const focusResult = useRef(false);
+  useEffect(() => {
+    if (verifyState === "done" && focusResult.current) {
+      focusResult.current = false;
+      verifiedRef.current?.focus();
+    }
+  }, [verifyState]);
   const [shared, setShared] = useState(false);
   const primary = categoryMeta(place.categories[0]);
   const Icon = primary.icon;
   const openState = isOpenNow(place.opening_hours_raw);
-  const hours = humanizeOpeningHours(place.opening_hours_raw);
+  const hours = humanizeOpeningHours(place.opening_hours_raw, locale);
   // null when the OSM value is not a usable web address, which also drops
   // the whole contact section if it was the only field in it - see
   // external-url.ts for what "usable" excludes and why.
@@ -66,7 +87,7 @@ export function PlaceDetail({
    * from that page. */
   async function share() {
     const url = `${window.location.origin}/yer/${encodeURIComponent(place.id)}`;
-    const text = `${place.name} — ${primary.label}`;
+    const text = `${place.name} — ${t(primary.label)}`;
     try {
       if (navigator.share) {
         await navigator.share({ title: "buradane", text, url });
@@ -93,7 +114,13 @@ export function PlaceDetail({
           placeName: place.name,
         }),
       });
-      if (!response.ok) throw new Error("Doğrulama gönderilemedi");
+      if (!response.ok) throw new Error("verify failed");
+      try {
+        markVerified(window.localStorage, place.id);
+      } catch {
+        // Blocked storage only costs the "you confirmed this" memory.
+      }
+      focusResult.current = true;
       setVerifyState("done");
       onVerified?.(place.id);
     } catch {
@@ -114,11 +141,11 @@ export function PlaceDetail({
           type="button"
           onClick={onBack}
           className="flex h-10 w-10 items-center justify-center rounded-full hover:bg-surface-sunken"
-          aria-label="Listeye dön"
+          aria-label={t("Listeye dön")}
         >
           <ArrowLeft size={20} />
         </button>
-        <span className="text-[13px] font-medium text-text-secondary">Mekan detayı</span>
+        <span className="text-[13px] font-medium text-text-secondary">{t("Mekan detayı")}</span>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-6">
@@ -146,7 +173,7 @@ export function PlaceDetail({
                   className="rounded-full px-2.5 py-0.5 text-[11.5px] font-medium"
                   style={{ background: meta.tint, color: meta.onTint }}
                 >
-                  {meta.label}
+                  {t(meta.label)}
                 </span>
               );
             })}
@@ -159,10 +186,13 @@ export function PlaceDetail({
           <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[13.5px] text-text-secondary">
             {place.distance_m != null && (
               <span className="font-medium text-brand">
-                {formatDistance(place.distance_m)} · yürüyerek {walkingMinutes(place.distance_m)} dk
+                {t("{distance} · yürüyerek {min} dk", {
+                  distance: formatDistance(place.distance_m),
+                  min: walkingMinutes(place.distance_m),
+                })}
               </span>
             )}
-            <span>{place.price_type === "free" ? "Ücretsiz" : place.price_type === "paid" ? "Ücretli" : "Ücret bilgisi yok"}</span>
+            <span>{place.price_type === "free" ? t("Ücretsiz") : place.price_type === "paid" ? t("Ücretli") : t("Ücret bilgisi yok")}</span>
             <span
               style={{
                 color:
@@ -173,7 +203,7 @@ export function PlaceDetail({
                       : "var(--text-muted)",
               }}
             >
-              {openStateLabel(openState)}
+              {t(openStateLabel(openState))}
             </span>
           </p>
 
@@ -192,8 +222,8 @@ export function PlaceDetail({
               style={{ background: "var(--warning-soft)", color: "var(--text)" }}
             >
               {place.access === "customers"
-                ? "OpenStreetMap kaydına göre burası müşterilere açık — girmeden önce bir şey almanız gerekebilir."
-                : "OpenStreetMap kaydına göre burası izinle giriliyor — herkese açık olmayabilir."}
+                ? t("OpenStreetMap kaydına göre burası müşterilere açık — girmeden önce bir şey almanız gerekebilir.")
+                : t("OpenStreetMap kaydına göre burası izinle giriliyor — herkese açık olmayabilir.")}
             </p>
           )}
 
@@ -202,7 +232,7 @@ export function PlaceDetail({
               real information from the people who most need it. */}
           {place.raw_tags?.wheelchair === "limited" && (
             <p className="mt-2 text-[12.5px] leading-relaxed text-text-secondary">
-              Tekerlekli sandalye erişimi <strong>kısmen</strong> mümkün olarak kaydedilmiş.
+              {t("Tekerlekli sandalye erişimi kısmen mümkün olarak kaydedilmiş.")}
             </p>
           )}
 
@@ -214,14 +244,14 @@ export function PlaceDetail({
               className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-brand text-[15px] font-semibold text-brand-contrast transition-colors hover:bg-brand-hover"
             >
               <Navigation size={18} />
-              Yol tarifi
+              {t("Yol tarifi")}
             </a>
             <button
               type="button"
               onClick={() => onToggleFavorite?.(place.id)}
               aria-pressed={isFavorite}
               className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-border transition-colors hover:bg-surface-sunken"
-              aria-label={isFavorite ? "Kayıtlılardan çıkar" : "Kaydet"}
+              aria-label={isFavorite ? t("Kayıtlılardan çıkar") : t("Kaydet")}
               style={{ color: isFavorite ? "var(--brand)" : "var(--text-secondary)" }}
             >
               <Bookmark size={18} fill={isFavorite ? "currentColor" : "none"} />
@@ -230,7 +260,7 @@ export function PlaceDetail({
               type="button"
               onClick={share}
               className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-border text-text-secondary transition-colors hover:bg-surface-sunken"
-              aria-label="Bu yeri paylaş"
+              aria-label={t("Bu yeri paylaş")}
             >
               {shared ? <Check size={18} style={{ color: "var(--success)" }} /> : <Share2 size={18} />}
             </button>
@@ -240,7 +270,7 @@ export function PlaceDetail({
               className="flex h-12 items-center justify-center gap-2 rounded-xl border border-border px-4 text-[14px] font-medium text-text-secondary transition-colors hover:bg-surface-sunken"
             >
               <Flag size={16} />
-              Sorun bildir
+              {t("Sorun bildir")}
             </button>
           </div>
 
@@ -250,15 +280,31 @@ export function PlaceDetail({
               buried in a menu. */}
           <div className="mt-3 rounded-xl border border-border p-3">
             {verifyState === "done" ? (
-              <p className="flex items-center gap-2 text-[13.5px] font-medium" style={{ color: "var(--success)" }}>
-                <BadgeCheck size={16} />
-                Teşekkürler, kaydettik. Bugün doğrulandı olarak işaretlendi.
-              </p>
+              // role=status: the result is announced without stealing focus
+              // from anything else; the ref moves focus here once, after a tap.
+              <div role="status" className="space-y-1">
+                <p
+                  ref={verifiedRef}
+                  tabIndex={-1}
+                  className="flex items-center gap-2 text-[13.5px] font-medium outline-none"
+                  style={{ color: "var(--success)" }}
+                >
+                  <BadgeCheck size={16} aria-hidden />
+                  {t("Teşekkürler, doğrulaman kaydedildi. Bu yer bugün senin tarafından doğrulandı.")}
+                </p>
+                {place.verification_count > 0 && (
+                  <p className="text-[12.5px] text-text-secondary">
+                    {t("Şu an {n} kişi bu yerin hâlâ burada olduğunu doğruladı.", {
+                      n: place.verification_count,
+                    })}
+                  </p>
+                )}
+              </div>
             ) : (
               <>
-                <p className="text-[13.5px] font-medium text-text">Bu yer hâlâ burada mı?</p>
+                <p className="text-[13.5px] font-medium text-text">{t("Bu yer hâlâ burada mı?")}</p>
                 <p className="mt-0.5 text-[12.5px] text-text-secondary">
-                  Şu an oradaysan tek dokunuşla herkes için güncelleyebilirsin.
+                  {t("Şu an oradaysan tek dokunuşla herkes için güncelleyebilirsin.")}
                 </p>
                 <div className="mt-2.5 flex gap-2">
                   <button
@@ -268,19 +314,19 @@ export function PlaceDetail({
                     className="h-10 flex-1 rounded-lg text-[13.5px] font-semibold transition-opacity disabled:opacity-50"
                     style={{ background: "var(--success-soft)", color: "var(--success)" }}
                   >
-                    {verifyState === "sending" ? "Gönderiliyor…" : "Evet, burada"}
+                    {verifyState === "sending" ? t("Gönderiliyor…") : t("Evet, burada")}
                   </button>
                   <button
                     type="button"
                     onClick={() => setReportOpen(true)}
                     className="h-10 flex-1 rounded-lg border border-border text-[13.5px] font-medium text-text-secondary transition-colors hover:bg-surface-sunken"
                   >
-                    Yok, kapanmış
+                    {t("Yok, kapanmış")}
                   </button>
                 </div>
                 {verifyState === "error" && (
                   <p className="mt-2 text-[12.5px]" style={{ color: "var(--danger)" }} role="alert">
-                    Gönderilemedi, tekrar dener misin?
+                    {t("Gönderilemedi, tekrar dener misin?")}
                   </p>
                 )}
               </>
@@ -293,7 +339,7 @@ export function PlaceDetail({
               style={{ background: "var(--danger-soft)", color: "var(--danger)" }}
             >
               <CircleAlert size={16} className="mt-0.5 shrink-0" />
-              <span>Bu mekan için &quot;kapalı&quot; bildirimi onaylandı. Gitmeden önce teyit etmenizi öneririz.</span>
+              <span>{t("Bu mekan için “kapalı” bildirimi onaylandı. Gitmeden önce teyit etmenizi öneririz.")}</span>
             </div>
           )}
 
@@ -350,7 +396,7 @@ export function PlaceDetail({
           )}
 
           {known.length > 0 && (
-            <Section title="Özellikler">
+            <Section title={t("Özellikler")}>
               <ul className="grid grid-cols-2 gap-2">
                 {known.map((amenity) => {
                   const AIcon = amenity.icon;
@@ -360,7 +406,7 @@ export function PlaceDetail({
                       className="flex items-center gap-2 rounded-xl bg-surface-sunken px-3 py-2 text-[13px] text-text"
                     >
                       <AIcon size={15} className="shrink-0 text-brand" aria-hidden />
-                      {amenity.label}
+                      {t(amenity.label)}
                     </li>
                   );
                 })}
@@ -369,33 +415,33 @@ export function PlaceDetail({
           )}
 
           {absent.length > 0 && (
-            <Section title="Bulunmayan özellikler">
+            <Section title={t("Bulunmayan özellikler")}>
               <p className="text-[13px] text-text-secondary">
-                {absent.map((a) => a.label).join(" · ")}
+                {absent.map((a) => t(a.label)).join(" · ")}
               </p>
             </Section>
           )}
 
           {unknown.length > 0 && (
-            <Section title="Bilinmeyen bilgiler">
+            <Section title={t("Bilinmeyen bilgiler")}>
               <p className="text-[13px] text-text-secondary">
-                {unknown.map((a) => a.label).join(" · ")} bilgisi kayıtlarda yok.
+                {t("{list} bilgisi kayıtlarda yok.", { list: unknown.map((a) => t(a.label)).join(" · ") })}
               </p>
               <p className="mt-1.5 text-[12.5px] text-text-muted">
-                Buradaysanız bildirerek herkese yardımcı olabilirsiniz.
+                {t("Buradaysanız bildirerek herkese yardımcı olabilirsiniz.")}
               </p>
             </Section>
           )}
 
-          <Section title="Güvenilirlik ve kaynak">
+          <Section title={t("Güvenilirlik ve kaynak")}>
             <div className="space-y-2.5 rounded-xl border border-border p-3">
               <div className="flex items-center justify-between gap-3">
                 <span className="flex items-center gap-2 text-[13px] text-text-secondary">
                   <ShieldCheck size={16} className="text-brand" aria-hidden />
-                  Güvenilirlik
+                  {t("Güvenilirlik")}
                 </span>
                 <span className="text-[13px] font-semibold tabular-nums text-text">
-                  %{Math.round(place.reliability_score * 100)}
+                  {t("%{n}", { n: Math.round(place.reliability_score * 100) })}
                 </span>
               </div>
               <div className="h-1.5 overflow-hidden rounded-full bg-surface-sunken" role="presentation">
@@ -418,11 +464,11 @@ export function PlaceDetail({
                 ) : (
                   <Info size={14} aria-hidden />
                 )}
-                {place.freshness_label}
-                {place.verification_count > 0 && <> · {place.verification_count} kişi doğruladı</>}
+                {t(place.freshness_label)}
+                {place.verification_count > 0 && <> · {t("{n} kişi doğruladı", { n: place.verification_count })}</>}
               </p>
               <p className="text-[12.5px] text-text-muted">
-                Kaynak: {place.source.name} ({place.source.license})
+                {t("Kaynak: {name} ({license})", { name: place.source.name, license: place.source.license })}
               </p>
               <a
                 href={osmUrl(place)}
@@ -430,7 +476,7 @@ export function PlaceDetail({
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 text-[12.5px] font-medium text-brand underline-offset-2 hover:underline"
               >
-                Kaynak kaydını gör
+                {t("Kaynak kaydını gör")}
                 <ExternalLink size={12} />
               </a>
             </div>

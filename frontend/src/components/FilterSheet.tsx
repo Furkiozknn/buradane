@@ -6,6 +6,7 @@ import { X } from "lucide-react";
 import { EXTRA_FILTERS, FILTERABLE_AMENITIES } from "@/lib/categories";
 import type { AmenityKey, PlaceQueryResult } from "@/lib/types";
 import { useModalDialog } from "@/lib/use-modal-dialog";
+import { useT } from "@/lib/use-locale";
 
 export interface FilterState {
   amenities: AmenityKey[];
@@ -59,6 +60,7 @@ export function FilterSheet({
   onChange: (next: FilterState) => void;
   onClose: () => void;
 }) {
+  const { t, num } = useT();
   const dialogRef = useRef<HTMLDivElement>(null);
   useModalDialog(dialogRef, onClose);
 
@@ -84,7 +86,7 @@ export function FilterSheet({
       >
         <div className="flex items-center justify-between border-b border-border px-5 py-3.5">
           <h2 id="filters-title" className="text-[17px] font-bold text-text">
-            Filtreler
+            {t("Filtreler")}
           </h2>
           <div className="flex items-center gap-1">
             <button
@@ -92,13 +94,13 @@ export function FilterSheet({
               onClick={() => onChange(EMPTY_FILTERS)}
               className="rounded-full px-3 py-1.5 text-[13px] font-medium text-brand hover:bg-brand-soft"
             >
-              Temizle
+              {t("Temizle")}
             </button>
             <button
               type="button"
               onClick={onClose}
               className="flex h-9 w-9 items-center justify-center rounded-full hover:bg-surface-sunken"
-              aria-label="Kapat"
+              aria-label={t("Kapat")}
             >
               <X size={18} />
             </button>
@@ -107,7 +109,7 @@ export function FilterSheet({
 
         <div className="max-h-[60vh] overflow-y-auto px-5 py-4">
           <h3 className="mb-2 text-[12.5px] font-semibold uppercase tracking-wide text-text-muted">
-            Durum
+            {t("Durum")}
           </h3>
           <div className="mb-5 flex flex-wrap gap-2">
             {EXTRA_FILTERS.map((filter) => {
@@ -126,8 +128,11 @@ export function FilterSheet({
                   aria-pressed={isActive}
                   aria-label={
                     remaining === null
-                      ? filter.label
-                      : `${filter.label} — mevcut sonuçlardan ${remaining} tanesi kalır`
+                      ? t(filter.label)
+                      : t("{label} — mevcut sonuçlardan {n} tanesi kalır", {
+                          label: t(filter.label),
+                          n: remaining,
+                        })
                   }
                   className="flex h-10 items-center gap-2 rounded-full border px-3.5 text-[13.5px] font-medium transition-colors"
                   style={{
@@ -137,7 +142,7 @@ export function FilterSheet({
                   }}
                 >
                   <Icon size={15} aria-hidden />
-                  {filter.label}
+                  {t(filter.label)}
                   <FilterCount value={remaining} active={isActive} />
                 </button>
               );
@@ -148,14 +153,13 @@ export function FilterSheet({
               that difference decides what the user gets back - so it is
               stated rather than left to be discovered. */}
           <p className="-mt-3 mb-5 text-[12.5px] leading-relaxed text-text-muted">
-            <strong>Kapalıları gizle</strong>, yalnızca çalışma saati bilinen ve şu an{" "}
-            <strong>kapalı</strong> olan mekanları çıkarır. Saati bilinmeyen mekanlar listede
-            kalır — açık kaynak verinin %94&apos;ünde çalışma saati yok, onları da elemek
-            kapalı olduklarını iddia etmek olurdu.
+            {t(
+              "“Kapalıları gizle” yalnızca çalışma saati bilinen ve şu an kapalı olan mekanları çıkarır. Saati bilinmeyen mekanlar listede kalır — açık kaynak verinin %98’inde çalışma saati yok, onları da elemek kapalı olduklarını iddia etmek olurdu.",
+            )}
           </p>
 
           <h3 className="mb-2 text-[12.5px] font-semibold uppercase tracking-wide text-text-muted">
-            Özellikler
+            {t("Özellikler")}
           </h3>
           <div className="flex flex-wrap gap-2">
             {FILTERABLE_AMENITIES.map((amenity) => {
@@ -181,8 +185,11 @@ export function FilterSheet({
                   aria-pressed={isActive}
                   aria-label={
                     remaining === null
-                      ? amenity.filterLabel
-                      : `${amenity.filterLabel} — mevcut sonuçlardan ${remaining} tanesinde var`
+                      ? t(amenity.filterLabel)
+                      : t("{label} — mevcut sonuçlardan {n} tanesinde var", {
+                          label: t(amenity.filterLabel),
+                          n: remaining,
+                        })
                   }
                   className="flex h-10 items-center gap-2 rounded-full border px-3.5 text-[13.5px] font-medium transition-colors"
                   style={{
@@ -192,7 +199,7 @@ export function FilterSheet({
                   }}
                 >
                   <Icon size={15} aria-hidden />
-                  {amenity.filterLabel}
+                  {t(amenity.filterLabel)}
                   <FilterCount value={remaining} active={isActive} />
                 </button>
               );
@@ -200,8 +207,9 @@ export function FilterSheet({
           </div>
 
           <p className="mt-4 text-[12.5px] leading-relaxed text-text-muted">
-            Bir özellik filtresi yalnızca o bilginin <strong>doğrulanmış</strong> olduğu mekanları
-            gösterir. Bilgisi olmayan mekanlar listeden çıkar — bu, olmadığı anlamına gelmez.
+            {t(
+              "Bir özellik filtresi yalnızca o bilginin doğrulanmış olduğu mekanları gösterir. Bilgisi olmayan mekanlar listeden çıkar — bu, olmadığı anlamına gelmez.",
+            )}
           </p>
         </div>
 
@@ -215,7 +223,7 @@ export function FilterSheet({
             onClick={onClose}
             className="h-12 w-full rounded-xl bg-brand text-[15px] font-semibold text-brand-contrast"
           >
-            {resultCount === 0 ? "Sonuç yok — geri dön" : `${resultCount} sonucu göster`}
+            {resultCount === 0 ? t("Sonuç yok — geri dön") : t("{n} sonucu göster", { n: num(resultCount) })}
           </button>
         </div>
       </div>
