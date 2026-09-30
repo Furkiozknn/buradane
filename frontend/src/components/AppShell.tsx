@@ -27,6 +27,8 @@ import { buildUrlSearch, type UrlState } from "@/lib/url-state";
 import { formatDistance, haversineMeters } from "@/lib/geo";
 import { useFavorites } from "@/lib/use-favorites";
 import { useOnlineStatus } from "@/lib/use-online-status";
+import { LocaleProvider, useT } from "@/lib/use-locale";
+import type { Locale } from "@/lib/i18n";
 import type { CategorySlug, Place, PlaceQueryResult, SortKey } from "@/lib/types";
 
 // The map is browser-only (WebGL + window). Loading it without SSR is
@@ -82,21 +84,25 @@ function dativeSuffix(name: string): string {
   return `${endsWithVowel ? "y" : ""}${back ? "a" : "e"}`;
 }
 
-/** Turns the query engine's relaxation report into one short Turkish phrase. */
-function relaxationDetail(relaxedBy: PlaceQueryResult["applied"]["relaxedBy"]): string {
+/** Turns the query engine's relaxation report into one short phrase. */
+function relaxationDetail(
+  relaxedBy: PlaceQueryResult["applied"]["relaxedBy"],
+  t: (key: string, vars?: Record<string, string | number>) => string,
+  locale: Locale,
+): string {
   const dropped = relaxedBy?.amenities ?? [];
   if (dropped.length > 0) {
-    const labels = dropped.map((key) => AMENITY_BY_KEY[key]?.filterLabel ?? key);
-    return `${labels.join(", ").toLocaleLowerCase("tr-TR")} filtresi kaldırıldı`;
+    const labels = dropped.map((key) => t(AMENITY_BY_KEY[key]?.filterLabel ?? key));
+    const joined = labels.join(", ");
+    return t("{list} filtresi kaldırıldı", {
+      list: joined.toLocaleLowerCase(locale === "tr" ? "tr-TR" : "en-US"),
+    });
   }
-  if (relaxedBy?.needle) return `“${relaxedBy.needle}” aranmadı`;
-  return "arama genişletildi";
+  if (relaxedBy?.needle) return t("“{needle}” aranmadı", { needle: relaxedBy.needle });
+  return t("arama genişletildi");
 }
 
-export function AppShell({
-  datasetMeta,
-  initialState,
-}: {
+type ShellProps = {
   datasetMeta: {
     attribution: string;
     generatedAt: string;
@@ -107,7 +113,23 @@ export function AppShell({
    * server and client agree on the first paint - reading `window` here
    * instead produces a hydration mismatch and a visible state jump. */
   initialState: UrlState;
-}) {
+  /** Language the server derived from Accept-Language (see app/page.tsx). */
+  initialLocale?: Locale;
+  /** Server's guess at the device class, so a desktop visitor's first paint is
+   * already the sidebar layout (no jump after hydration). */
+  initialDesktop?: boolean;
+};
+
+export function AppShell({ initialLocale = "tr", ...props }: ShellProps) {
+  return (
+    <LocaleProvider initial={initialLocale}>
+      <AppShellInner {...props} />
+    </LocaleProvider>
+  );
+}
+
+function AppShellInner({ datasetMeta, initialState, initialDesktop = false }: Omit<ShellProps, "initialLocale">) {
+  const { t, locale, num, setLocale } = useT();
   const initial = initialState;
 
   const [category, setCategory] = useState<CategorySlug | null>(initial?.category ?? null);
@@ -129,7 +151,24 @@ export function AppShell({
   // A link that opens a place starts expanded. Letting it settle at "peek"
   // and then jump to "full" once the fetch resolves is a large, avoidable
   // layout shift on the exact page people share.
-  const [snap, setSnap] = useState<SheetSnap>(initial?.placeId ? "full" : "peek");
+  //
+  // A first visit with no link state starts at "half": the sheet has to carry
+  // the one-sentence pitch and the locate button, and at "peek" (190px) it
+  // can only show a chip row. Anything that arrives with state - a shared
+  // link, a reload on a city - keeps the small sheet and its map.
+  const coldStart =
+    !initial?.placeId &&
+    !initial?.center &&
+    !initial?.category &&
+    !initial?.query &&
+    (initial?.amenities.length ?? 0) === 0 &&
+    !initial?.freeOnly &&
+    !initial?.openNow;
+  const [snap, setSnap] = useState<SheetSnap>(initial?.placeId ? "full" : coldStart ? "half" : "peek");
+  const [welcomeDismissed, setWelcomeDismissed] = useState(!coldStart);
+  // Set by the first category change so the list can ease in from then on.
+  // Not on load: an entrance animation there would only delay the first paint.
+  const [listSwapped, setListSwapped] = useState(false);
   const [viewport, setViewport] = useState<{
     bbox: [number, number, number, number];
     zoom: number;
@@ -139,10 +178,15 @@ export function AppShell({
 
   const sheetRef = useRef<HTMLDivElement>(null);
   const requestIdRef = useRef(0);
-  const isDesktop = useMediaQuery(DESKTOP_QUERY);
+  const isDesktop = useMediaQuery(DESKTOP_QUERY, initialDesktop);
   const { favoriteIds, toggle: toggleFavorite, isFavorite, count: favoriteCount } = useFavorites();
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [sort, setSort] = useState<SortKey>("distance");
+  const selectCategory = useCallback((next: CategorySlug | null) => {
+    setCategory(next);
+    setListSwapped(true);
+    setWelcomeDismissed(true);
+  }, []);
   // A shared link's coordinates decide the city, not the default.
   //
   // MapCanvas honours the URL's y/x/z, so without this the map flew to the
@@ -267,7 +311,7 @@ export function AppShell({
         if (response.status === 503 && wasOffline) {
           if (requestId !== requestIdRef.current) return;
           setServedFromCache(true);
-          setError("Çevrimdışısınız ve bu arama daha önce yüklenmemiş");
+          setError(t("Çevrimdışısınız ve bu arama daha önce yüklenmemiş"));
           return;
         }
         if (!response.ok) {
@@ -276,7 +320,7 @@ export function AppShell({
           // "Sunucu 400 döndü" would throw away, leaving the user with a dead
           // end instead of an instruction.
           const body = (await response.json().catch(() => null)) as { error?: string } | null;
-          throw new Error(body?.error ?? `Sunucu ${response.status} döndü`);
+          throw new Error(body?.error ?? t("Sunucu {status} döndü", { status: response.status }));
         }
         const data = (await response.json()) as PlaceQueryResult;
         // A slower earlier request must never overwrite a newer result.
@@ -292,11 +336,12 @@ export function AppShell({
         // explanation behind it.
         const networkFailure = err instanceof TypeError;
         if (networkFailure) setServedFromCache(true);
-        setError(err instanceof Error ? err.message : "Sonuçlar getirilemedi");
+        setError(err instanceof Error ? err.message : t("Sonuçlar getirilemedi"));
       } finally {
         if (requestId === requestIdRef.current) setLoading(false);
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `t` only words the error text; a language change must not re-query
     [category, filters, query, sort, center.lat, center.lon],
   );
 
@@ -579,6 +624,10 @@ export function AppShell({
   const hasStructuralFilter = filterCount > 0 || category !== null;
   const searchText = query.trim();
   const hasAnyFilter = hasStructuralFilter || searchText.length > 0;
+  // The pitch and the one big action, until the person has done anything of
+  // their own: located, chosen a city, picked a category or typed a search.
+  const showWelcome =
+    !welcomeDismissed && !hasAnyFilter && location.status !== "granted" && !detailPlace;
 
   // Where a suggested place would land: the map's own centre, which accounts
   // for the sheet/sidebar padding. The bbox midpoint would be the centre of
@@ -589,12 +638,23 @@ export function AppShell({
   return (
     <main
       className="relative h-[100dvh] w-full overflow-hidden bg-bg"
+      lang={locale}
       // When the sheet is fully expanded on mobile it covers the map, and
       // MapLibre's zoom buttons end up underneath it - unreachable, and
       // flagged as obscured touch targets. Hiding them in that one state is
       // honest: there is no map to zoom while the panel owns the screen.
       data-sheet={isDesktop ? "sidebar" : snap}
     >
+      {/* Lives here, not in the root layout: its target (#sonuclar) exists only
+          in this view, so on every other page the layout's copy pointed at
+          nothing - and here it can follow the chosen language. */}
+      <a
+        href="#sonuclar"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-surface focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:shadow-lg"
+      >
+        {t("Sonuç listesine geç")}
+      </a>
+      <h1 className="sr-only">buradane — {t("Yakınımda ne var?")}</h1>
       <MapCanvas
         places={places}
         selectedId={selectedId}
@@ -635,8 +695,10 @@ export function AppShell({
             <input
               value={searchInput}
               onChange={(event) => setSearchInput(event.target.value)}
-              placeholder="Ne arıyorsun? Örn. ücretsiz tuvalet"
-              aria-label="Mekan ara"
+              // Search matches Turkish words (tuvalet, eczane, çeşme ...), so the
+              // English hint says so rather than inviting "toilet".
+              placeholder={t("Ne arıyorsun? Örn. ücretsiz tuvalet")}
+              aria-label={t("Mekan ara")}
               // 16px is a hard floor for form controls: iOS Safari auto-zooms
               // the whole layout when a focused input is smaller, and it does
               // not zoom back out on blur.
@@ -646,8 +708,8 @@ export function AppShell({
               <button
                 type="button"
                 onClick={() => setSearchInput("")}
-                className="shrink-0 text-text-muted hover:text-text"
-                aria-label="Aramayı temizle"
+                className="flex h-11 w-9 shrink-0 items-center justify-center text-text-muted hover:text-text"
+                aria-label={t("Aramayı temizle")}
               >
                 <X size={16} />
               </button>
@@ -657,7 +719,11 @@ export function AppShell({
             type="button"
             onClick={() => setFiltersOpen(true)}
             className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-border bg-surface shadow"
-            aria-label={`Filtreler${filterCount > 0 ? `, ${filterCount} aktif` : ""}`}
+            aria-label={
+              filterCount > 0
+                ? t("Filtreler, {n} aktif", { n: filterCount })
+                : t("Filtreler")
+            }
           >
             <SlidersHorizontal size={18} />
             {filterCount > 0 && (
@@ -726,19 +792,19 @@ export function AppShell({
                 whole and tappable. */}
             <span className="min-w-0 truncate">
               {followingUser
-                ? "Konumundasın"
+                ? t("Konumundasın")
                 : location.status === "granted"
                   ? activeCityLabel
                   : location.status === "denied"
-                    ? `Konum kapalı — ${activeCityLabel}`
+                    ? t("Konum kapalı — {city}", { city: activeCityLabel })
                     : // "Yaklaşık konum" claimed we had approximated where the
                       // user is. We had not: nothing has asked the browser yet,
                       // and the city is a hardcoded default, which for 80 of 81
                       // provinces points 500-1400 km away. Say what is true.
-                      `Konum sorulmadı — ${activeCityLabel}`}
+                      t("Konum sorulmadı — {city}", { city: activeCityLabel })}
             </span>
             <span className="shrink-0 text-brand">
-              &middot; {followingUser ? "şehir seç" : "değiştir"}
+              &middot; {followingUser ? t("şehir seç") : t("değiştir")}
             </span>
           </button>
         </div>
@@ -768,7 +834,7 @@ export function AppShell({
         >
           <span className="flex items-center gap-1.5">
             <RefreshCw size={14} aria-hidden />
-            Bu alanda ara
+            {t("Bu alanda ara")}
           </span>
         </button>
       )}
@@ -792,10 +858,13 @@ export function AppShell({
         className="absolute right-3 z-20 flex h-12 w-12 items-center justify-center rounded-full border border-border bg-surface shadow transition-transform"
         style={{
           bottom: isDesktop
-            ? "calc(1.5rem + env(safe-area-inset-bottom))"
+            ? // Clear of MapLibre's attribution control, which sits in the same
+              // corner: at 1.5rem the two overlapped and Lighthouse's
+              // target-size audit failed (desktop accessibility 96, not 100).
+              "calc(4rem + env(safe-area-inset-bottom))"
             : `calc(${SNAP_HEIGHT[snap]} + 12px)`,
         }}
-        aria-label={followingUser ? "Konumumu yeniden ortala" : "Konumuma dön"}
+        aria-label={followingUser ? t("Konumumu yeniden ortala") : t("Konumuma dön")}
       >
         <LocateFixed
           size={20}
@@ -808,7 +877,7 @@ export function AppShell({
       <section
         ref={sheetRef}
         id="sonuclar"
-        aria-label="Sonuçlar"
+        aria-label={t("Sonuçlar")}
         className={
           isDesktop
             ? "absolute bottom-3 left-3 z-30 flex w-[400px] flex-col overflow-hidden rounded-3xl border border-border bg-surface shadow-lg"
@@ -827,7 +896,7 @@ export function AppShell({
             type="button"
             onClick={() => setSnap((s) => (s === "peek" ? "half" : s === "half" ? "full" : "peek"))}
             className="flex h-7 w-full shrink-0 items-center justify-center"
-            aria-label={snap === "full" ? "Paneli küçült" : "Paneli büyüt"}
+            aria-label={snap === "full" ? t("Paneli küçült") : t("Paneli büyüt")}
           >
             <span className="h-1 w-9 rounded-full bg-border-strong" />
           </button>
@@ -856,8 +925,10 @@ export function AppShell({
                 >
                   <WifiOff size={14} className="shrink-0" aria-hidden />
                   <span>
-                    Çevrimdışısınız
-                    {result ? " — daha önce yüklenen sonuçlar gösteriliyor." : " — bağlantı gelince yenilenecek."}
+                    {t("Çevrimdışısınız")}
+                    {result
+                      ? t(" — daha önce yüklenen sonuçlar gösteriliyor.")
+                      : t(" — bağlantı gelince yenilenecek.")}
                   </span>
                 </div>
               )}
@@ -875,7 +946,7 @@ export function AppShell({
                     className="mx-4 mb-1 mt-2 rounded-lg px-3 py-2 text-[12.5px] leading-relaxed"
                     style={{ background: "var(--warning-soft)", color: "var(--text)" }}
                   >
-                    {content.text}{" "}
+                    {t(content.text)}{" "}
                     <a
                       href={content.href}
                       target="_blank"
@@ -883,7 +954,7 @@ export function AppShell({
                       className="font-semibold underline underline-offset-2"
                       style={{ color: "var(--text)" }}
                     >
-                      {content.linkLabel}
+                      {t(content.linkLabel)}
                     </a>
                   </div>
                 );
@@ -903,7 +974,7 @@ export function AppShell({
                   style={{ background: "var(--warning-soft)", color: "var(--text)" }}
                   role="status"
                 >
-                  Sonuçlar <strong>{activeCityLabel}</strong> çevresinden.{" "}
+                  {t("Sonuçlar {city} çevresinden.", { city: activeCityLabel })}{" "}
                   <button
                     type="button"
                     onClick={() => {
@@ -920,9 +991,12 @@ export function AppShell({
                     }}
                     className="font-semibold underline underline-offset-2"
                   >
-                    {droppedPlace.label}
-                    {droppedPlace.province !== droppedPlace.label ? ` (${droppedPlace.province})` : ""}
-                    &apos;{dativeSuffix(droppedPlace.label)} git
+                    {t("{name}’{suffix} git", {
+                      name: `${droppedPlace.label}${
+                        droppedPlace.province !== droppedPlace.label ? ` (${droppedPlace.province})` : ""
+                      }`,
+                      suffix: dativeSuffix(droppedPlace.label),
+                    })}
                   </button>
                 </div>
               )}
@@ -944,10 +1018,77 @@ export function AppShell({
                   what the list needs the space for. The sidebar keeps the
                   grid: five columns there is three rows, and it sits beside
                   the results rather than on top of them. */}
-              {category === null && isDesktop ? (
-                <CategoryGrid selected={category} onSelect={setCategory} counts={counts} />
+              {(isDesktop || snap !== "peek") && (
+                <div className="flex min-h-11 items-center justify-between gap-2 px-4">
+                  <span className="text-[15px] font-bold tracking-[-0.01em] text-text">buradane</span>
+                  <div
+                    role="group"
+                    aria-label={t("Dil")}
+                    className="flex items-center overflow-hidden rounded-full border border-border text-[12px] font-semibold"
+                  >
+                    {(["tr", "en"] as const).map((code) => (
+                      <button
+                        key={code}
+                        type="button"
+                        lang={code}
+                        onClick={() => setLocale(code)}
+                        aria-pressed={locale === code}
+                        aria-label={code === "tr" ? "Türkçe" : "English"}
+                        className="h-11 min-w-11 px-3"
+                        style={{
+                          background: locale === code ? "var(--brand)" : "transparent",
+                          color: locale === code ? "var(--brand-contrast)" : "var(--text-secondary)",
+                        }}
+                      >
+                        {code.toUpperCase()}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {showWelcome && (
+                <div className="px-4 pb-3 pt-1">
+                  <h2 className="text-[17px] font-bold leading-snug tracking-[-0.01em] text-text">
+                    {t("Yakınındaki tuvalet, su, park ve eczaneyi bul: yönü, mesafesi, hâlâ orada mı?")}
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (location.status === "denied" || location.status === "unavailable") {
+                        setCityPickerOpen(true);
+                        return;
+                      }
+                      setFollowUser(true);
+                      setSharedCenter(null);
+                      requestLocation();
+                    }}
+                    disabled={location.status === "locating"}
+                    className="mt-2.5 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-brand text-[15px] font-semibold text-brand-contrast transition-colors hover:bg-brand-hover"
+                  >
+                    <LocateFixed size={18} aria-hidden />
+                    {location.status === "denied" || location.status === "unavailable"
+                      ? t("Şehir seç")
+                      : location.status === "locating"
+                        ? t("Konum aranıyor…")
+                        : t("Yakınımdakileri bul")}
+                  </button>
+                  <p className="mt-1.5 text-[12px] text-text-muted">
+                    {location.status === "denied" || location.status === "unavailable"
+                      ? t("Konum alınamadı. Şehrini seçerek devam edebilirsin.")
+                      : t("Hesap gerekmez · konum yalnızca yakındakileri bulmak için.")}
+                  </p>
+                </div>
+              )}
+
+              {/* Once someone has typed a search the grid has done its job: keeping
+                  it pushed the first result below the fold (list started at
+                  y=590 of 738 on a laptop) and the answer is what they asked
+                  for. The chip row is the same choice in one line. */}
+              {category === null && isDesktop && !searchText ? (
+                <CategoryGrid selected={category} onSelect={selectCategory} counts={counts} />
               ) : (
-                <CategoryChips selected={category} onSelect={setCategory} counts={counts} />
+                <CategoryChips selected={category} onSelect={selectCategory} counts={counts} />
               )}
 
               <div className="flex items-center justify-between gap-2 px-4 pb-2 pt-2">
@@ -964,14 +1105,14 @@ export function AppShell({
                     }}
                   >
                     <Bookmark size={12} fill={showFavoritesOnly ? "currentColor" : "none"} aria-hidden />
-                    Kayıtlı {favoriteCount}
+                    {t("Kayıtlı {n}", { n: favoriteCount })}
                   </button>
                 )}
                 <p className="min-w-0 truncate text-[13px] font-medium text-text-secondary" aria-live="polite">
                   {loading
-                    ? "Yakındakiler aranıyor…"
+                    ? t("Yakındakiler aranıyor…")
                     : error
-                      ? "Sonuçlar getirilemedi"
+                      ? t("Sonuçlar getirilemedi")
                       : // The count is the whole match set but the list holds
                         // at most `limit`, and saying only "47.319 sonuç"
                         // over 200 cards is a 236x disagreement the reader
@@ -983,15 +1124,19 @@ export function AppShell({
                         // the first number is neither - it is how many of the
                         // matches are in the list. Same fact, same honesty,
                         // no decoding.
-                        `${
-                          result && result.total > places.length
-                            ? `${result.total.toLocaleString("tr-TR")} sonuçtan ${places.length}'i`
-                            : `${(result?.total ?? 0).toLocaleString("tr-TR")} sonuç`
-                        }${
-                          places[0]?.distance_m != null
-                            ? ` · en yakın ${formatDistance(places[0].distance_m)}`
-                            : ""
-                        }`}
+                        // Keyed on the text so the colour flow (globals.css)
+                        // replays when the answer changes, and only then.
+                        <span key={`${result?.total}-${places.length}`} className={listSwapped ? "count-flow" : undefined}>
+                          {result && result.total > places.length
+                            ? t("{total} sonuçtan {shown} tanesi", {
+                                total: num(result.total),
+                                shown: places.length,
+                              })
+                            : t("{n} sonuç", { n: num(result?.total ?? 0) })}
+                          {places[0]?.distance_m != null
+                            ? ` · ${t("en yakın {distance}", { distance: formatDistance(places[0].distance_m) })}`
+                            : ""}
+                        </span>}
                 </p>
                 {result?.applied.relaxed && !loading && (
                   // Naming what was dropped matters more than admitting that
@@ -999,8 +1144,11 @@ export function AppShell({
                   // wondering whether these results still answer their
                   // question. Saying "bebek bakım filtresi kaldırıldı" lets
                   // them judge it themselves.
-                  <span className="shrink-0 text-[11.5px] text-text-muted" title={relaxationDetail(result.applied.relaxedBy)}>
-                    {relaxationDetail(result.applied.relaxedBy)}
+                  <span
+                    className="shrink-0 text-[11.5px] text-text-muted"
+                    title={relaxationDetail(result.applied.relaxedBy, t, locale)}
+                  >
+                    {relaxationDetail(result.applied.relaxedBy, t, locale)}
                   </span>
                 )}
                 {/* Sorting matters here in a way it wouldn't in a normal
@@ -1011,10 +1159,14 @@ export function AppShell({
                   type="button"
                   onClick={() => setSort((s) => (s === "distance" ? "reliability" : "distance"))}
                   className="flex min-h-11 shrink-0 items-center gap-1 px-1 text-[12.5px] font-medium text-text-secondary"
-                  aria-label={`Sıralama: ${sort === "distance" ? "en yakın" : "en güvenilir"}. Değiştir.`}
+                  aria-label={
+                    sort === "distance"
+                      ? t("Sıralama: en yakın. Değiştir.")
+                      : t("Sıralama: en güvenilir. Değiştir.")
+                  }
                 >
                   <ArrowUpDown size={12} aria-hidden />
-                  {sort === "distance" ? "En yakın" : "En güvenilir"}
+                  {sort === "distance" ? t("En yakın") : t("En güvenilir")}
                 </button>
                 {hasAnyFilter && !loading && (
                   <button
@@ -1026,7 +1178,7 @@ export function AppShell({
                     }}
                     className="min-h-11 shrink-0 px-1 text-[12.5px] font-medium text-brand"
                   >
-                    Temizle
+                    {t("Temizle")}
                   </button>
                 )}
               </div>
@@ -1040,7 +1192,10 @@ export function AppShell({
                   requires it to be reasonably visible, so it is now on
                   screen whatever the result set does. */}
               <p className="truncate px-4 pb-2 text-[11px] text-text-muted">
-                {datasetMeta.attribution} · {datasetMeta.count.toLocaleString("tr-TR")} kayıt · ODbL
+                {t("{attribution} · {n} kayıt · ODbL", {
+                  attribution: t(datasetMeta.attribution),
+                  n: num(datasetMeta.count),
+                })}
               </p>
             </div>
 
@@ -1053,7 +1208,10 @@ export function AppShell({
                 selection. Tabbing through 200 cards to reach the fifth one
                 is not navigation. */}
             <div
-              className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain px-4"
+              // Re-keyed by category: the list starts at the top and eases in
+              // (globals.css .list-swap) instead of swapping under the finger.
+              key={category ?? "all"}
+              className={`min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain px-4${listSwapped ? " list-swap" : ""}`}
               style={{ paddingBottom: "calc(1.5rem + env(safe-area-inset-bottom))" }}
               onKeyDown={handleListKeyDown}
             >
@@ -1061,7 +1219,7 @@ export function AppShell({
                 Array.from({ length: 4 }).map((_, index) => <PlaceCardSkeleton key={index} />)
               ) : error ? (
                 <EmptyState
-                  title="Bir şeyler ters gitti"
+                  title={t("Bir şeyler ters gitti")}
                   // The server's own sentence, which fetchPlaces already went
                   // to the trouble of extracting and which this component
                   // then threw away for a generic one. The API says useful
@@ -1069,15 +1227,15 @@ export function AppShell({
                   // a user who instead reads "Sonuçları getiremedik" plus a
                   // retry button will press it forever.
                   body={error}
-                  actionLabel="Tekrar dene"
+                  actionLabel={t("Tekrar dene")}
                   onAction={() => fetchPlaces(viewport ? { bbox: viewport.bbox } : {})}
                 />
               ) : places.length === 0 ? (
                 filterCount > 0 ? (
                   <EmptyState
-                    title="Filtrelere uyan yer yok"
-                    body="Seçtiğin filtreleri gevşetmeyi ya da haritayı biraz kaydırmayı dene."
-                    actionLabel="Filtreleri temizle"
+                    title={t("Filtrelere uyan yer yok")}
+                    body={t("Seçtiğin filtreleri gevşetmeyi ya da haritayı biraz kaydırmayı dene.")}
+                    actionLabel={t("Filtreleri temizle")}
                     onAction={() => {
                       setCategory(null);
                       setFilters(EMPTY_FILTERS);
@@ -1086,7 +1244,7 @@ export function AppShell({
                     // A dead end is the worst possible outcome here: if we
                     // genuinely have nothing, the useful move is letting the
                     // user add what they know is there.
-                    secondaryLabel="Yer öner"
+                    secondaryLabel={t("Yer öner")}
                     onSecondary={() => setSuggestOpen(true)}
                   />
                 ) : category !== null ? (
@@ -1103,12 +1261,14 @@ export function AppShell({
                   // So the primary action becomes the one that can actually
                   // change the outcome: adding the place they know is there.
                   <EmptyState
-                    title={`Bu alanda kayıtlı ${categoryMeta(category).label.toLocaleLowerCase("tr-TR")} yok`}
-                    body="Bu, çevrede öyle bir yer olmadığı anlamına gelmez — OpenStreetMap'te henüz kayıtlı değil demek. Bildiğin bir yer varsa ekleyebilirsin."
-                    actionLabel="Yer öner"
+                    title={t("Bu alanda kayıtlı {category} yok", {
+                      category: t(categoryMeta(category).label).toLocaleLowerCase(locale === "tr" ? "tr-TR" : "en-US"),
+                    })}
+                    body={t("Bu, çevrede öyle bir yer olmadığı anlamına gelmez — OpenStreetMap’te henüz kayıtlı değil demek. Bildiğin bir yer varsa ekleyebilirsin.")}
+                    actionLabel={t("Yer öner")}
                     onAction={() => setSuggestOpen(true)}
-                    secondaryLabel="Tüm kategoriler"
-                    onSecondary={() => setCategory(null)}
+                    secondaryLabel={t("Tüm kategoriler")}
+                    onSecondary={() => selectCategory(null)}
                   />
                 ) : searchText ? (
                   // A name the snapshot does not carry. Most Turkish POIs in
@@ -1117,20 +1277,20 @@ export function AppShell({
                   // be the one that applies. Quoting what they typed also
                   // catches the everyday cause: a typo they can now see.
                   <EmptyState
-                    title={`"${searchText.slice(0, 40)}" için sonuç yok`}
-                    body="Bu ad çevredeki kayıtlarda geçmiyor. Yazımı kontrol edebilir ya da ne aradığını yazabilirsin — örneğin “tuvalet”, “eczane”, “park”."
-                    actionLabel="Aramayı temizle"
+                    title={t("“{text}” için sonuç yok", { text: searchText.slice(0, 40) })}
+                    body={t("Bu ad çevredeki kayıtlarda geçmiyor. Yazımı kontrol edebilir ya da ne aradığını yazabilirsin — örneğin “tuvalet”, “eczane”, “park”.")}
+                    actionLabel={t("Aramayı temizle")}
                     onAction={() => setSearchInput("")}
-                    secondaryLabel="Yer öner"
+                    secondaryLabel={t("Yer öner")}
                     onSecondary={() => setSuggestOpen(true)}
                   />
                 ) : (
                   <EmptyState
-                    title="Bu bölgede sonuç yok"
-                    body="Haritayı biraz kaydır ya da uzaklaştır."
-                    actionLabel="Bu alanda ara"
+                    title={t("Bu bölgede sonuç yok")}
+                    body={t("Haritayı biraz kaydır ya da uzaklaştır.")}
+                    actionLabel={t("Bu alanda ara")}
                     onAction={() => viewport && fetchPlaces({ bbox: viewport.bbox })}
-                    secondaryLabel="Yer öner"
+                    secondaryLabel={t("Yer öner")}
                     onSecondary={() => setSuggestOpen(true)}
                   />
                 )
@@ -1155,10 +1315,23 @@ export function AppShell({
                     className="inline-flex h-10 items-center gap-1.5 rounded-full border border-border px-4 text-[13px] font-medium text-text-secondary transition-colors hover:bg-surface-sunken"
                   >
                     <Plus size={15} aria-hidden />
-                    Eksik bir yer mi var? Öner
+                    {t("Eksik bir yer mi var? Öner")}
                   </button>
                 </div>
               )}
+
+              {/* The one place the maker's mark lives in the product. */}
+              <p className="pt-4 text-center font-mono text-[11px] tracking-wide text-text-muted">
+                buradane &middot;{" "}
+                <a
+                  href="https://github.com/Furkiozknn"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex min-h-11 items-center underline-offset-2 hover:underline"
+                >
+                  FRK-OS
+                </a>
+              </p>
             </div>
           </>
         )}
@@ -1166,7 +1339,12 @@ export function AppShell({
 
       {/* Selected-place quick card floating above the sheet, so tapping a pin
           answers the question without forcing a trip into the list. */}
-      {selectedPlace && !detailPlace && !isDesktop && (
+      {/* Not at "full": that snap has no map left to float over, and the card's
+          bottom edge (sheet height + 68px) lands at the very top of the
+          screen, on top of the search box and the filter button. Backing out
+          of a place's detail leaves it selected at "full", so on a phone the
+          filters became untappable until the selection was cleared. */}
+      {selectedPlace && !detailPlace && !isDesktop && snap !== "full" && (
         <div
           className="absolute inset-x-3 z-20 mx-auto max-w-md"
           style={{ bottom: `calc(${SNAP_HEIGHT[snap]} + 68px)` }}
@@ -1202,6 +1380,7 @@ export function AppShell({
           nearestCity={nearestCity}
           onSelect={(city, district) => {
             setActiveCity(city.slug);
+            setWelcomeDismissed(true);
             // The shared link's coordinates stop being the query origin the
             // moment the user names somewhere else - otherwise picking a
             // city would move the map and leave the results where the link

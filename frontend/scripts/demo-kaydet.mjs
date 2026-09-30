@@ -70,7 +70,9 @@ const kayit = [];
   fs.mkdirSync(OUT, { recursive: true });
 
   const browser = await chromium.launch();
-  const page = await browser.newPage({ viewport: { width: 1000, height: 640 } });
+  const page = await browser.newPage({ // 1152 >= 1024: masaustu yerlesimi (yan panel). 1000 px genislik telefon
+  // yerlesimine dusuyordu ve README'deki yan paneli gostermiyordu.
+  viewport: { width: 1152, height: 738 } });
   const hatalar = [];
   page.on("console", (m) => m.type() === "error" && hatalar.push(m.text()));
 

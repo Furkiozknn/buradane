@@ -2,6 +2,7 @@
 
 import { CATEGORIES } from "@/lib/categories";
 import type { CategorySlug } from "@/lib/types";
+import { useT } from "@/lib/use-locale";
 
 interface Props {
   selected: CategorySlug | null;
@@ -27,9 +28,10 @@ function categoriesByAvailability(counts: Props["counts"]) {
  * row of small chips does not communicate on a cold start.
  */
 export function CategoryGrid({ selected, onSelect, counts }: Props) {
+  const { t, num } = useT();
   return (
     <div className="px-4 pb-2">
-      <h2 className="mb-3 text-[15px] font-semibold text-text">Ne arıyorsun?</h2>
+      <h2 className="mb-3 text-[15px] font-semibold text-text">{t("Ne arıyorsun?")}</h2>
       <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-5">
         {CATEGORIES.map((category) => {
           const Icon = category.icon;
@@ -57,13 +59,13 @@ export function CategoryGrid({ selected, onSelect, counts }: Props) {
                 className="text-center text-[12px] font-medium leading-tight"
                 style={{ color: isSelected ? category.onTint : "var(--text-secondary)" }}
               >
-                {category.shortLabel}
+                {t(category.shortLabel)}
               </span>
               {/* `count > 0` matches CategoryChips: a bare "0" under every
                   category the current viewport happens not to contain is
                   noise, not information. */}
               {count !== undefined && count > 0 && (
-                <span className="text-[11px] tabular-nums text-text-secondary">{count}</span>
+                <span className="text-[11px] tabular-nums text-text-secondary">{num(count)}</span>
               )}
             </button>
           );
@@ -80,11 +82,12 @@ export function CategoryGrid({ selected, onSelect, counts }: Props) {
  * confetti and answers no actual question.
  */
 export function CategoryChips({ selected, onSelect, counts }: Props) {
+  const { t, num } = useT();
   return (
     <div
       className="no-scrollbar flex gap-2 overflow-x-auto px-4 pb-1"
       role="group"
-      aria-label="Kategori seçimi"
+      aria-label={t("Kategori seçimi")}
     >
       <button
         type="button"
@@ -97,7 +100,7 @@ export function CategoryChips({ selected, onSelect, counts }: Props) {
           color: selected === null ? "var(--brand-contrast)" : "var(--text-secondary)",
         }}
       >
-        Tümü
+        {t("Tümü")}
       </button>
 
       {/* Empty chips last. The row is a hidden-scrollbar horizontal strip
@@ -124,7 +127,7 @@ export function CategoryChips({ selected, onSelect, counts }: Props) {
             }}
           >
             <Icon size={15} color={isSelected ? category.onTint : category.pin} aria-hidden />
-            {category.shortLabel}
+            {t(category.shortLabel)}
             {count !== undefined && count > 0 && (
               // Follows the chip's own foreground rather than a fixed token:
               // an unselected chip is on --surface (where --text-secondary
@@ -132,7 +135,7 @@ export function CategoryChips({ selected, onSelect, counts }: Props) {
               // `tint`, which has no dark variant - pinning the count to
               // --text-secondary there drops it to ~1.2:1 in dark mode.
               <span className="tabular-nums text-[11px]" style={{ color: isSelected ? category.onTint : "var(--text-secondary)" }}>
-                {count}
+                {num(count)}
               </span>
             )}
           </button>

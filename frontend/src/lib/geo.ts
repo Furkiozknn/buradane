@@ -82,12 +82,24 @@ const COMPASS_TR = [
   "kuzeybatı",
 ] as const;
 
+const COMPASS_EN = [
+  "north",
+  "northeast",
+  "east",
+  "southeast",
+  "south",
+  "southwest",
+  "west",
+  "northwest",
+] as const;
+
 /**
- * Bearing as a Turkish compass word. The arrow is a visual-only channel, so
+ * Bearing as a compass word. The arrow is a visual-only channel, so
  * screen-reader users get the direction in words - a rotated glyph conveys
- * nothing to them.
+ * nothing to them. Turkish unless asked otherwise, so existing callers keep
+ * their exact wording.
  */
-export function bearingLabel(degrees: number): string {
+export function bearingLabel(degrees: number, locale: "tr" | "en" = "tr"): string {
   const index = Math.round(degrees / 45) % 8;
-  return COMPASS_TR[index];
+  return (locale === "en" ? COMPASS_EN : COMPASS_TR)[index];
 }

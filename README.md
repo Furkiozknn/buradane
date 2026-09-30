@@ -2,12 +2,14 @@
 
 # buradane
 
-![buradane demo: İstanbul haritasında kategori seçimi ve serbest metin araması; "ücretsiz tuvalet" yazılınca sonuçlar 19'a iniyor ve harita yeniden kümeleniyor](assets/demo.gif)
+![buradane demo: açılışta tek cümlelik tanım ve "Yakınımdakileri bul" düğmesi, sonra İstanbul haritasında kategori seçimi ve serbest metin araması; "ücretsiz tuvalet" yazılınca sonuçlar 21'e iniyor ve harita yeniden kümeleniyor](assets/demo.gif)
 
 <sub>Gerçek kullanım, montaj değil: <code>node frontend/scripts/demo-kaydet.mjs</code>
-çalışan uygulamayı açıp kendisi kullanıyor. Kayıttaki sayılar da gerçek —
-Park 248 sonuç, Cami 454, Tuvalet 121, ve "ücretsiz tuvalet" araması 19.
-Hepsi 167.829 kayıtlık OpenStreetMap anlık görüntüsünden.</sub>
+çalışan uygulamayı açıp kendisi kullanıyor (1152x738 pencere, konum
+sorulmamış: harita İstanbul'da açılır). Kayıttaki sayılar da gerçek —
+Park 343 sonuç, Cami 565, Tuvalet 130, ve "ücretsiz tuvalet" araması 21.
+Hepsi 167.829 kayıtlık OpenStreetMap anlık görüntüsünden. Sonuçlar görünen
+harita alanına göre sayılır; pencere boyutu değişince sayılar da değişir.</sub>
 
 <details>
 <summary><b>In English</b></summary>
@@ -18,7 +20,9 @@ Hepsi 167.829 kayıtlık OpenStreetMap anlık görüntüsünden.</sub>
 
 - **167,829 real OpenStreetMap places across all 81 provinces.** Each province is fetched from its own official OSM boundary rather than a box around its capital; the box approach saw only 2.2% of the country. 973 of 973 district centres have data within 15 km.
 - **Every result answers two questions:** which way to go (a bearing arrow, distance and walking time) and whether the information is still true (one-tap "yes, it's here" confirmation, a freshness label, the source and a reliability score).
-- **Free-text search in Turkish.** Typing *ücretsiz tuvalet* ("free toilet") narrows the map in the demo above to the 19 nearest. Turkish casing and suffixes are handled: "KADIKÖY" matches "Kadıköy", and *çocuğumla* ("with my child") is recognised as *çocuk*.
+- **Free-text search in Turkish.** Typing *ücretsiz tuvalet* ("free toilet") narrows the map in the demo above to the 21 nearest. Turkish casing and suffixes are handled: "KADIKÖY" matches "Kadıköy", and *çocuğumla* ("with my child") is recognised as *çocuk*.
+- **The interface speaks Turkish and English.** It follows the browser language (any `tr*` is Turkish) and a TR/EN switch in the panel remembers the choice. Place names come from OpenStreetMap and are never translated; free-text search understands Turkish words.
+- **One sentence, one button.** The first screen says what the app does and offers a single big action, "Find places near me"; no account, no sign-in.
 - **Two parts, one query contract.** There is a FastAPI + PostGIS backend and a Next.js + MapLibre GL JS demo that already runs end to end on the real data.
 
 ```bash
@@ -49,7 +53,14 @@ bağlanacak şekilde tasarlandı.
 süresi) ve **"bu bilgi hâlâ doğru mu?"** (tek dokunuşla "Evet, burada"
 doğrulaması, tazelik etiketi, kaynak ve güvenilirlik skoru).
 
-![buradane demo: İstanbul Sultanahmet çevresinde gerçek OSM mekanları — tuvalet, otopark, çeşme, cami; sol panelde kategori sayıları](assets/harita-ekran-goruntusu.png)
+![buradane ilk ekran: tek cümlelik tanım, "Yakınımdakileri bul" düğmesi ve İstanbul Sultanahmet çevresinde gerçek OSM mekanlarının kategori sayıları](assets/harita-ekran-goruntusu.png)
+
+Arayüz **Türkçe ve İngilizce**: varsayılan tarayıcı dilidir (`tr*` ise
+Türkçe), panelin üstündeki TR/EN düğmesi tercihi `localStorage`'da
+(`buradane:dil`) saklar. Mekân adları OpenStreetMap'ten geldiği gibi kalır,
+çevrilmez; arama sözcükleri Türkçe'dir. İngilizce görünüm:
+
+![buradane, İngilizce arayüz: "Find the nearest toilet, water, park or pharmacy" tanımı, "Find places near me" düğmesi ve İngilizce kategori adları](assets/harita-ekran-goruntusu-en.png)
 
 > **Kapsam tamamlandı (2026-09-06): 81/81 il**, her biri kendi resmî OSM il
 > sınırından çekildi - il merkezine çizilmiş bir kutudan değil. Ölçülen
@@ -250,7 +261,7 @@ buradane/
 │   │   │   ├── manifest.ts                    # PWA manifest
 │   │   │   └── page.tsx                       # Ana sayfa (URL state'i sunucuda ayrıştırır)
 │   │   ├── components/                        # MapCanvas, AppShell, PlaceCard, PlaceDetail, FilterSheet, CategoryPicker, CityPicker, DirectionArrow, AdminPlaceEditor, ...
-│   │   └── lib/                                # types, places-repository (demo adaptörü), categories, contributions-store, geo, opening-hours, directions, url-state, use-favorites, use-media-query
+│   │   └── lib/                                # types, places-repository (demo adaptörü), categories, contributions-store, geo, opening-hours, directions, url-state, use-favorites, use-media-query, i18n + i18n-en + use-locale (TR/EN), verified-store, device
 │   ├── data/
 │   │   ├── places.<il>.json                   # 81 il dosyası, 167.829 gerçek OSM mekanı
 │   │   ├── meta.json                          # Üretim damgası, lisans, il ve kategori sayıları
@@ -258,7 +269,7 @@ buradane/
 │   │   ├── place-index.json                   # id → il eşlemesi (yalnız id aramasında)
 │   │   └── contributions.json                 # Kullanıcı katkıları + admin override'ları (git'te değil)
 │   ├── public/maplibre/                        # MapLibre worker dosyaları (bkz. "Bilinen Tuhaflıklar")
-│   └── scripts/copy-maplibre-worker.mjs        # predev/prebuild'de otomatik çalışır
+│   └── scripts/                                # copy-maplibre-worker.mjs (predev/prebuild), demo-kaydet.mjs (README kaydı), akis-dogrula.mjs (tarayıcı akışı)
 ├── assets/                   # banner, konsensüs ve bedel diyagramları (bu README'nin görselleri)
 ├── scripts/                  # Demo veri pipeline'ı (bkz. "Veri Pipeline") - backend/app/ingest'ten ayrı, PostGIS'e değil düz JSON'a yazar
 │   ├── fetch_demo_data.py
@@ -435,8 +446,20 @@ uv run pytest tests/ -v
 - **Saf mantık testleri** (`test_reliability.py`, `test_dedup_math.py`) - veritabanı gerektirmez, her ortamda çalışır.
 - **Veritabanı-bağımlı testler** (`test_search.py`, `test_dedup_integration.py`, `test_moderation.py`) - gerçek bir PostGIS bağlantısı gerektirir; `docker compose up -d` çalışıyorsa yerelde, yoksa CI'da (`.github/workflows/ci.yml`, `postgis/postgis` servis konteyneri ile) çalışır. Veritabanı yoksa bu testler **skip** edilir, başarısız olmaz - sahte bir "yeşil" göstermek yerine dürüst bir sinyal.
 
-Frontend tarafında ayrı bir katman daha var: `npm test` Vitest ile bileşen ve
-mantık testlerini, `npm run lint` ise statik denetimi (ESLint) çalıştırır.
+Frontend tarafında ayrı bir katman daha var: `npm test` Vitest ile mantık
+testlerini (dil kabuğu ve çeviri kapsamı, kontrast, cihaz tahmini, doğrulama
+hafızası dahil), `npm run lint` ise statik denetimi (ESLint) çalıştırır.
+
+Ana akış (konum, kategori, yön ve mesafe, "Evet, burada" doğrulaması, dil
+değiştirme, Türkçe arama) gerçek tarayıcıda `frontend/scripts/akis-dogrula.mjs`
+ile doğrulanır. Depo Playwright'ı bağımlılık olarak taşımaz (bkz.
+`demo-kaydet.mjs`); betik onu çalışma anında arar. **Dikkat:** doğrulama adımı
+gerçek bir katkı yazar (`frontend/data/contributions.json`, git'te değil).
+
+```bash
+cd frontend && npm run dev            # başka bir terminalde
+node scripts/akis-dogrula.mjs         # ya da: PLAYWRIGHT_PATH=.../playwright/index.mjs node scripts/akis-dogrula.mjs
+```
 
 ## Güvenlik
 
@@ -514,6 +537,10 @@ sorgunun anlamını sessizce değiştirmek yerine.
 
 <img src="assets/bedel.svg" alt="Konsensüs savunmasının kazandırdığı ve kaybettirdiği: tek bir telefon artık bir mekânın erişilebilirlik verisini tek başına çeviremiyor ve bir adres pencere başına en fazla consensus-1 doğrulama yapabiliyor; buna karşılık tek bir CGNAT adresi arkasındaki ikinci hane aynı mekân için geri çevriliyor, o mekânın konsensüsü başka bir ağdan gelmek zorunda kalıyor." width="100%">
 
+- **Arayüz iki dilli, arama değil.** Serbest metin araması Türkçe sözcükleri
+  anlar (`tuvalet`, `eczane`, `çeşme`); İngilizce eşanlamlı eklenmedi, arama
+  kutusu bunu söyler. Paylaşım sayfası `/yer/[id]` ve yönetim paneli yalnızca
+  Türkçedir. Mekân adları ve adresler OSM'den geldiği gibi gösterilir.
 - ~~Yönetim panelinin görüntülenmesi token istemez~~ **Çözüldü.** Kuyruk
   içerikleri artık `AdminTokenGate` arkasında ve `GET /api/contributions`
   admin token'ı ister; token'sız bir istek hiçbir katkı satırı, not ya da ad

@@ -1,6 +1,7 @@
 "use client";
 
 import { bearingLabel } from "@/lib/geo";
+import { useT } from "@/lib/use-locale";
 
 /**
  * The "which way?" indicator: a north-referenced arrow plus the direction
@@ -21,13 +22,14 @@ export function DirectionArrow({
   size?: number;
   className?: string;
 }) {
-  const label = bearingLabel(degrees);
+  const { t, locale } = useT();
+  const label = bearingLabel(degrees, locale);
   return (
     <span
       className={className}
       // The rotation is decorative; the direction is announced as text by the
       // caller (or by this title for pointer users).
-      title={`${label} yönünde`}
+      title={t("{direction} yönünde", { direction: label })}
       aria-hidden="true"
       style={{ display: "inline-flex", transform: `rotate(${degrees}deg)`, lineHeight: 0 }}
     >

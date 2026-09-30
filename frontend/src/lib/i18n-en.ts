@@ -1,0 +1,271 @@
+/**
+ * English for every Turkish sentence the interface shows (see i18n.ts).
+ * tests/i18n.test.ts fails if a sentence has no entry here, if an entry is
+ * unused, or if a translation drops a {placeholder}.
+ *
+ * Place names, addresses and other OpenStreetMap text are never translated.
+ */
+
+export const EN: Record<string, string> = {
+  // --- search, location, sheet -------------------------------------------
+  "Ne arıyorsun? Örn. ücretsiz tuvalet": "e.g. ücretsiz tuvalet (Turkish)",
+  "Mekan ara": "Search places",
+  "Aramayı temizle": "Clear search",
+  "Filtreler": "Filters",
+  "Filtreler, {n} aktif": "Filters, {n} active",
+  "Sonuç listesine geç": "Skip to results",
+  "Yakınımda ne var?": "What's near me?",
+  "Konumundasın": "You are here",
+  "Konum kapalı — {city}": "Location off — {city}",
+  "Konum sorulmadı — {city}": "Location not asked — {city}",
+  "şehir seç": "choose city",
+  "değiştir": "change",
+  "Bu alanda ara": "Search this area",
+  "Konumumu yeniden ortala": "Re-centre on my location",
+  "Konumuma dön": "Back to my location",
+  "Sonuçlar": "Results",
+  "Paneli küçült": "Collapse panel",
+  "Paneli büyüt": "Expand panel",
+  "Dil": "Language",
+  "Çevrimdışısınız": "You are offline",
+  " — daha önce yüklenen sonuçlar gösteriliyor.": " — showing results loaded earlier.",
+  " — bağlantı gelince yenilenecek.": " — will refresh when you are back online.",
+  "Sonuçlar {city} çevresinden.": "Results are from around {city}.",
+  "{name}’{suffix} git": "Go to {name}",
+
+  // --- first screen -------------------------------------------------------
+  "Yakınındaki tuvalet, su, park ve eczaneyi bul: yönü, mesafesi, hâlâ orada mı?":
+    "Find the nearest toilet, water, park or pharmacy: which way, how far, still there?",
+  "Yakınımdakileri bul": "Find places near me",
+  "Konum aranıyor…": "Finding your location…",
+  "Şehir seç": "Choose city",
+  "Konum alınamadı. Şehrini seçerek devam edebilirsin.": "Location unavailable. Choose your city to continue.",
+  "Hesap gerekmez · konum yalnızca yakındakileri bulmak için.":
+    "No account needed · location only used to find what is nearby.",
+  "Ne arıyorsun?": "What do you need?",
+  "Kategori seçimi": "Category",
+  "Tümü": "All",
+
+  // --- result line and states ---------------------------------------------
+  "Kayıtlı {n}": "Saved {n}",
+  "Yakındakiler aranıyor…": "Searching nearby…",
+  "Sonuçlar getirilemedi": "Could not load results",
+  "{total} sonuçtan {shown} tanesi": "{shown} of {total} results",
+  "{n} sonuç": "{n} results",
+  "en yakın {distance}": "nearest {distance}",
+  "Sıralama: en yakın. Değiştir.": "Sorted by nearest. Change.",
+  "Sıralama: en güvenilir. Değiştir.": "Sorted by most reliable. Change.",
+  "En yakın": "Nearest",
+  "En güvenilir": "Most reliable",
+  "Temizle": "Clear",
+  "{attribution} · {n} kayıt · ODbL": "{attribution} · {n} records · ODbL",
+  "© OpenStreetMap katkıda bulunanları": "© OpenStreetMap contributors",
+  "{list} filtresi kaldırıldı": "{list} filter removed",
+  "“{needle}” aranmadı": "“{needle}” was not searched",
+  "arama genişletildi": "search widened",
+  "Çevrimdışısınız ve bu arama daha önce yüklenmemiş": "You are offline and this search was not loaded before",
+  "Sunucu {status} döndü": "The server answered {status}",
+  "Bir şeyler ters gitti": "Something went wrong",
+  "Tekrar dene": "Try again",
+  "Filtrelere uyan yer yok": "No place matches the filters",
+  "Seçtiğin filtreleri gevşetmeyi ya da haritayı biraz kaydırmayı dene.":
+    "Try loosening the filters or moving the map a little.",
+  "Filtreleri temizle": "Clear filters",
+  "Yer öner": "Suggest a place",
+  "Bu alanda kayıtlı {category} yok": "No {category} recorded in this area",
+  "Bu, çevrede öyle bir yer olmadığı anlamına gelmez — OpenStreetMap’te henüz kayıtlı değil demek. Bildiğin bir yer varsa ekleyebilirsin.":
+    "That does not mean there is none nearby, only that OpenStreetMap has none recorded yet. If you know of one, you can add it.",
+  "Tüm kategoriler": "All categories",
+  "“{text}” için sonuç yok": "No results for “{text}”",
+  "Bu ad çevredeki kayıtlarda geçmiyor. Yazımı kontrol edebilir ya da ne aradığını yazabilirsin — örneğin “tuvalet”, “eczane”, “park”.":
+    "That name is not in the nearby records. Check the spelling, or type what you need in Turkish, for example “tuvalet”, “eczane”, “park”.",
+  "Bu bölgede sonuç yok": "No results in this area",
+  "Haritayı biraz kaydır ya da uzaklaştır.": "Move the map a little or zoom out.",
+  "Eksik bir yer mi var? Öner": "Missing a place? Suggest it",
+
+  // --- map ----------------------------------------------------------------
+  "Kamusal alan haritası": "Public places map",
+  "Haritadaki işaretçilerde klavye ile gezinme": "Keyboard navigation of the map markers",
+  "Haritadaki işaretçilerde gezin. Ok tuşları ilerletir, Enter seçer, Escape vurguyu kaldırır.":
+    "Move through the map markers. Arrow keys step, Enter selects, Escape clears the highlight.",
+  "İşaretçilerde gezin: ← → tuşları, Enter seç": "Step through markers: ← → keys, Enter to select",
+  "Görünür alanda tekil işaretçi yok. Yakınlaştırıp tekrar deneyin - kümeler yakınlaşınca işaretçilere ayrılır.":
+    "No single marker in view. Zoom in and try again - clusters split into markers as you zoom.",
+  "{n} işaretçi gezilebilir. Ok tuşlarıyla ilerleyin, Enter ile seçin.":
+    "{n} markers to step through. Use the arrow keys, Enter to select.",
+  "İsimsiz mekan": "Unnamed place",
+
+  // --- categories and amenities (fixed vocabulary of the interface) --------
+  "Tuvalet": "Toilet",
+  "Park": "Park",
+  "İçme Suyu": "Drinking water",
+  "Su": "Water",
+  "Dinlenme Alanı": "Rest area",
+  "Dinlenme": "Rest",
+  "Çocuk Alanı": "Children's area",
+  "Çocuk": "Kids",
+  "Spor Alanı": "Sports area",
+  "Spor": "Sports",
+  "Otopark": "Car park",
+  "Duş": "Shower",
+  "Ücretsiz Wi-Fi": "Free Wi-Fi",
+  "Wi-Fi": "Wi-Fi",
+  "Cami": "Mosque",
+  "Eczane": "Pharmacy",
+  "Acil Toplanma Alanı": "Emergency assembly area",
+  "Toplanma": "Assembly",
+  "Kütüphane": "Library",
+  "Elektrikli Şarj": "EV charging",
+  "Şarj": "Charging",
+  "Tekerlekli sandalye erişimi": "Wheelchair access",
+  "Engelli erişimli": "Accessible",
+  "Rampa": "Ramp",
+  "Rampalı": "Has ramp",
+  "Bebek bakım alanı": "Baby changing area",
+  "Bebek bakım": "Baby changing",
+  "Çocuk dostu": "Child-friendly",
+  "Evcil hayvan dostu": "Pet-friendly",
+  "Evcil hayvan": "Pets",
+  "İçme suyu": "Drinking water",
+  "Oturma alanı": "Seating area",
+  "Oturma": "Seating",
+  "Gölgelik": "Shade",
+  "Otoparklı": "Has parking",
+  "Sakin": "Quiet",
+  "Kapalıları gizle": "Hide closed",
+  "Ücretsiz": "Free",
+  "Nöbetçi eczane listesi her gün değişir ve açık haritalama verisinde yer almaz. Aşağıda bölgedeki tüm eczaneler var.":
+    "The duty-pharmacy roster changes every day and is not in open map data. Below are all the pharmacies in the area.",
+  "Bugünün resmî nöbetçi listesi (e-Devlet)": "Today's official duty-pharmacy list (e-Devlet)",
+
+  // --- place card ----------------------------------------------------------
+  "{distance} uzaklıkta, {direction} yönünde.": "{distance} away, to the {direction}.",
+  "{distance} uzaklıkta.": "{distance} away.",
+  "Detayları aç.": "Open details.",
+  "{direction} yönünde": "to the {direction}",
+  "Ücretli": "Paid",
+  "Geçici olarak kapalı": "Temporarily closed",
+  "Şu an açık": "Open now",
+  "Şu an kapalı": "Closed now",
+  "Saat bilgisi yok": "No opening hours",
+  "Müşterilere açık": "Customers only",
+  "İzinle girilir": "Permit required",
+  "Bilgi güncelliği düşük": "Information may be out of date",
+  "{n} kişi doğruladı": "{n} people confirmed this",
+  "{name} için yol tarifi al": "Get directions to {name}",
+
+  // --- place detail --------------------------------------------------------
+  "Listeye dön": "Back to list",
+  "Mekan detayı": "Place details",
+  "{distance} · yürüyerek {min} dk": "{distance} · {min} min walk",
+  "Ücret bilgisi yok": "No price information",
+  "OpenStreetMap kaydına göre burası müşterilere açık — girmeden önce bir şey almanız gerekebilir.":
+    "According to the OpenStreetMap record this place is for customers - you may need to buy something before going in.",
+  "OpenStreetMap kaydına göre burası izinle giriliyor — herkese açık olmayabilir.":
+    "According to the OpenStreetMap record entry needs a permit - it may not be open to everyone.",
+  "Tekerlekli sandalye erişimi kısmen mümkün olarak kaydedilmiş.":
+    "Wheelchair access is recorded as partially possible.",
+  "Yol tarifi": "Directions",
+  "Kaydet": "Save",
+  "Kayıtlılardan çıkar": "Remove from saved",
+  "Bu yeri paylaş": "Share this place",
+  "Sorun bildir": "Report issue",
+  "Bu yer hâlâ burada mı?": "Is this place still here?",
+  "Şu an oradaysan tek dokunuşla herkes için güncelleyebilirsin.":
+    "If you are there now, one tap updates it for everyone.",
+  "Evet, burada": "Yes, it's here",
+  "Yok, kapanmış": "No, it's closed",
+  "Gönderiliyor…": "Sending…",
+  "Gönderilemedi, tekrar dener misin?": "Could not send, please try again.",
+  "Teşekkürler, doğrulaman kaydedildi. Bu yer bugün senin tarafından doğrulandı.":
+    "Thank you, your confirmation is saved. You confirmed this place today.",
+  "Şu an {n} kişi bu yerin hâlâ burada olduğunu doğruladı.":
+    "{n} people have now confirmed this place is still here.",
+  "Bu mekan için “kapalı” bildirimi onaylandı. Gitmeden önce teyit etmenizi öneririz.":
+    "A “closed” report for this place was approved. We suggest checking before you go.",
+  "Özellikler": "Features",
+  "Bulunmayan özellikler": "Features it does not have",
+  "Bilinmeyen bilgiler": "Unknown information",
+  "{list} bilgisi kayıtlarda yok.": "No record of: {list}.",
+  "Buradaysanız bildirerek herkese yardımcı olabilirsiniz.": "If you are there, you can help everyone by reporting it.",
+  "Güvenilirlik ve kaynak": "Reliability and source",
+  "Güvenilirlik": "Reliability",
+  "%{n}": "{n}%",
+  "Topluluk doğrulaması yok": "Not confirmed by the community",
+  "Bugün doğrulandı": "Confirmed today",
+  "Topluluk tarafından eklendi": "Added by the community",
+  "Kaynak: {name} ({license})": "Source: {name} ({license})",
+  "Kaynak kaydını gör": "View source record",
+
+  // --- filters -------------------------------------------------------------
+  "Durum": "Status",
+  "Kapat": "Close",
+  "{label} — mevcut sonuçlardan {n} tanesi kalır": "{label} — {n} of the current results would remain",
+  "{label} — mevcut sonuçlardan {n} tanesinde var": "{label} — {n} of the current results have it",
+  "“Kapalıları gizle” yalnızca çalışma saati bilinen ve şu an kapalı olan mekanları çıkarır. Saati bilinmeyen mekanlar listede kalır — açık kaynak verinin %98’inde çalışma saati yok, onları da elemek kapalı olduklarını iddia etmek olurdu.":
+    "“Hide closed” only removes places whose opening hours are known and that are closed right now. Places with unknown hours stay in the list - 98% of the open data has no opening hours, and dropping them would claim they are closed.",
+  "Bir özellik filtresi yalnızca o bilginin doğrulanmış olduğu mekanları gösterir. Bilgisi olmayan mekanlar listeden çıkar — bu, olmadığı anlamına gelmez.":
+    "A feature filter only shows places where that information is confirmed. Places with no information drop out - that does not mean the feature is absent.",
+  "Sonuç yok — geri dön": "No results - go back",
+  "{n} sonucu göster": "Show {n} results",
+
+  // --- city picker ---------------------------------------------------------
+  "{name} — ilçe seç": "{name} — choose district",
+  "← Tüm iller": "← All provinces",
+  "Başka bir şehre bakabilir, konumun kapalıysa buradan devam edebilirsin.":
+    "Look at another city, or continue from here if your location is off.",
+  "İl ara…": "Search provinces…",
+  "İl ara": "Search provinces",
+  "İlçe ara…": "Search districts…",
+  "İlçe ara": "Search districts",
+  "“{filter}” ile eşleşen il yok.": "No province matches “{filter}”.",
+  "“{filter}” ile eşleşen ilçe yok.": "No district matches “{filter}”.",
+  "Tüm {name}": "All of {name}",
+  "{n} kayıtlı yer": "{n} recorded places",
+  "İlçeler yükleniyor…": "Loading districts…",
+  "İlçe listesi getirilemedi — il genelinde arayabilirsiniz.":
+    "Could not load districts - you can search the whole province.",
+  "en yakın": "nearest",
+  "Türkiye’deki {total} ilin {covered} tanesi kapsanıyor.": "{covered} of Türkiye’s {total} provinces are covered.",
+
+  // --- report and suggest dialogs -----------------------------------------
+  "Kapalı / artık burada değil": "Closed / no longer here",
+  "Bilgiler yanlış": "Information is wrong",
+  "Erişilebilir değil": "Not accessible",
+  "Artık ücretli": "Now paid",
+  "Kilitli / girilemiyor": "Locked / cannot get in",
+  "Sorun türü": "Type of problem",
+  "Ek not (isteğe bağlı)": "Extra note (optional)",
+  "Ne gördüğünü kısaca yazabilirsin": "You can briefly write what you saw",
+  "Bildir": "Report",
+  "Bildirim gönderilemedi": "Could not send the report",
+  "Bilinmeyen bir hata oluştu": "An unknown error occurred",
+  "Bildirimin alındı, teşekkürler.": "Report received, thank you.",
+  "Moderasyon ekibi kontrol edene kadar mekan bilgisi değişmez.":
+    "The place information stays as it is until a moderator has checked.",
+  "Doğrulama gönderilemedi": "Could not send the confirmation",
+  "Öneri gönderilemedi": "Could not send the suggestion",
+  "Bildiğin bir yeri ekleyerek herkese yardımcı ol.": "Help everyone by adding a place you know.",
+  "Doğrulama kaydedildi, teşekkürler.": "Confirmation saved, thank you.",
+  "Mevcut kaydın hâlâ yerinde olduğunu işaretledin — bu, tazelik sinyalinin ta kendisi.":
+    "You marked the existing record as still there - that is exactly the freshness signal.",
+  "Bu noktanın yakınında aynı türden {n} kayıt zaten var. Önerdiğin bunlardan biri mi?":
+    "There are already {n} records of the same kind near this point. Is yours one of them?",
+  "Bu o": "That's it",
+  "Hayır, bu yeni bir yer — önerimi gönder": "No, this is a new place - send my suggestion",
+  "“Bu o” demek, kaydı herkes için “hâlâ burada” olarak günceller.":
+    "“That's it” marks the record as “still here” for everyone.",
+  "Önerin alındı, teşekkürler.": "Suggestion received, thank you.",
+  "Moderasyon onayından sonra haritada görünecek.": "It will appear on the map after moderation.",
+  "Mekan adı": "Place name",
+  "Örn. Sahil Parkı Çeşmesi": "e.g. Seaside Park fountain",
+  "Kategori": "Category",
+  "(birden fazla seçebilirsin)": "(you can pick more than one)",
+  "Konum, haritanın şu anki merkezi:": "The location is the current centre of the map:",
+  ". Haritayı kaydırıp tekrar açarak değiştirebilirsin.": ". Move the map and reopen this to change it.",
+  "Not (isteğe bağlı)": "Note (optional)",
+  "Ücretsiz mi, erişilebilir mi, saatleri var mı?": "Is it free, accessible, does it have opening hours?",
+  "Yakın kayıtlar denetleniyor…": "Checking nearby records…",
+  "Öneriyi gönder": "Send suggestion",
+  "Önerin moderasyon onayına düşer, hemen yayınlanmaz.": "Your suggestion goes to moderation and is not published right away.",
+};

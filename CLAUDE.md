@@ -96,7 +96,7 @@ buradane/
 │   │   │       ├── contributions/  # Kullanıcı katkıları
 │   │   │       └── admin/          # Moderasyon + mekan düzenleme
 │   │   ├── components/             # İstemci bileşenleri
-│   │   └── lib/                    # Saf mantık — TESTLERİN ODAĞI
+│   │   └── lib/                    # Saf mantık — TESTLERİN ODAĞI (i18n.ts + i18n-en.ts: TR/EN kabuğu)
 │   ├── tests/                      # Vitest paketi
 │   ├── vitest.config.mts
 │   └── package.json
@@ -195,9 +195,15 @@ diske checkpoint atar ve üstel geri çekilme uygular. **Gereksiz yere
 - **Kod yorumları: İngilizce.** Yorum *ne* yapıldığını değil **neden**
   yapıldığını anlatır. Bu depodaki mevcut yorumlar bu standarttadır; onları
   örnek al.
-- **Kullanıcıya görünen her metin: Türkçe**, diakritikler tam ve doğru
+- **Kullanıcıya görünen her metin: Türkçe kaynak**, diakritikler tam ve doğru
   (ı, İ, ğ, Ğ, ü, Ü, ş, Ş, ö, Ö, ç, Ç). "fur" yerine "für" yazmak nasıl
   hataysa, "Kadikoy" yazmak da öyledir.
+- **Arayüz iki dilli (TR + EN).** Türkçe cümle çeviri anahtarıdır:
+  `const { t } = useT(); t("Filtreler")`. Yeni bir cümle eklediğinde
+  `src/lib/i18n-en.ts`'e İngilizcesini de yaz; `tests/i18n.test.ts` eksik,
+  kullanılmayan ya da yer tutucusu tutmayan girdiyi yakalar. Yer adları,
+  adresler ve OSM'den gelen her şey çevrilmez. Yönetim paneli ve `/yer/[id]`
+  Türkçe kalır.
 
 ### 5.2 Adlandırma
 
@@ -522,7 +528,7 @@ Bunları issue açıp tartışmadan PR'a dönüştürme:
 - `frontend/data/contributions.json`'ı elle düzenlemek (çalışma zamanı durumu)
 - Testleri geçirmek için testi zayıflatmak
 - `eslint-disable` eklemek (gerekçesini yazmadan)
-- Kullanıcıya görünen metni İngilizce yazmak
+- Kullanıcıya görünen metni doğrudan İngilizce yazmak (İngilizce yalnızca `i18n-en.ts` kataloğunda durur)
 
 ---
 

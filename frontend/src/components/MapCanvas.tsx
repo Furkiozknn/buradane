@@ -13,6 +13,7 @@ import {
   type MapMouseEvent,
 } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+import { useT } from "@/lib/use-locale";
 
 /**
  * MapLibre GL JS v6 is ESM-only and loads its tile-parsing worker from a
@@ -158,6 +159,7 @@ export default function MapCanvas({
   onMapMoved,
   onReady,
 }: MapCanvasProps) {
+  const { t } = useT();
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const readyRef = useRef(false);
@@ -420,9 +422,18 @@ export default function MapCanvas({
       );
     };
 
-    map.on("moveend", () => {
+    map.on("moveend", (event) => {
       emitViewport(map);
-      handlersRef.current.onMapMoved();
+      // "Search this area" is an offer to the person who moved the map. Every
+      // move used to raise it - including the ones the app makes itself (the
+      // first fit, the sheet-padding change) - so a black pill sat on the
+      // fresh map on first load with nothing for it to refer to. A gesture
+      // carries `originalEvent` (MapLibre sets it for mouse, touch, wheel,
+      // keyboard and the zoom buttons); the cluster tap below tags its own.
+      const userMove =
+        Boolean((event as { originalEvent?: unknown }).originalEvent) ||
+        Boolean((event as { userMove?: boolean }).userMove);
+      if (userMove) handlersRef.current.onMapMoved();
     });
 
     map.on("click", CLUSTER_LAYER, async (event: MapLayerMouseEvent) => {
@@ -436,7 +447,7 @@ export default function MapCanvas({
           center: (feature.geometry as GeoJSON.Point).coordinates as [number, number],
           zoom,
           duration: 380,
-        });
+        }, { userMove: true });
       } catch {
         // A cluster can vanish between click and resolve (source updated);
         // silently ignoring is correct - there's nothing to expand into.
@@ -706,14 +717,21 @@ export default function MapCanvas({
     map.setFilter(KB_FOCUS_LAYER, ["==", ["get", "id"], focusedId ?? "__none__"]);
   }, [kbSession]);
 
+  // The canvas is created once, so its label follows the language here.
+  useEffect(() => {
+    mapRef.current?.getCanvas().setAttribute("aria-label", t("Kamusal alan haritası"));
+  }, [t]);
+
   const kbFocusedItem = kbSession && kbSession.index >= 0 ? kbSession.items[kbSession.index] : null;
   const kbAnnouncement = !kbSession
     ? ""
     : kbSession.items.length === 0
-      ? "Görünür alanda tekil işaretçi yok. Yakınlaştırıp tekrar deneyin - kümeler yakınlaşınca işaretçilere ayrılır."
+      ? t("Görünür alanda tekil işaretçi yok. Yakınlaştırıp tekrar deneyin - kümeler yakınlaşınca işaretçilere ayrılır.")
       : kbFocusedItem
-        ? `${kbSession.index + 1} / ${kbSession.items.length}: ${kbFocusedItem.name}, ${categoryMeta(kbFocusedItem.category as Parameters<typeof categoryMeta>[0]).label}`
-        : `${kbSession.items.length} işaretçi gezilebilir. Ok tuşlarıyla ilerleyin, Enter ile seçin.`;
+        ? `${kbSession.index + 1} / ${kbSession.items.length}: ${t(kbFocusedItem.name)}, ${t(categoryMeta(kbFocusedItem.category as Parameters<typeof categoryMeta>[0]).label)}`
+        : t("{n} işaretçi gezilebilir. Ok tuşlarıyla ilerleyin, Enter ile seçin.", {
+            n: kbSession.items.length,
+          });
 
   // User location dot. A DOM marker is right here: exactly one, and it needs
   // a pulsing halo that a symbol layer can't express.
@@ -749,7 +767,7 @@ export default function MapCanvas({
           nothing. */}
       <div
         role="group"
-        aria-label="Haritadaki işaretçilerde klavye ile gezinme"
+        aria-label={t("Haritadaki işaretçilerde klavye ile gezinme")}
         className="absolute bottom-3 left-1/2 z-20 -translate-x-1/2"
       >
         <button
@@ -757,12 +775,12 @@ export default function MapCanvas({
           onFocus={startKbSession}
           onBlur={endKbSession}
           onKeyDown={onKbKeyDown}
-          aria-label="Haritadaki işaretçilerde gezin. Ok tuşları ilerletir, Enter seçer, Escape vurguyu kaldırır."
+          aria-label={t("Haritadaki işaretçilerde gezin. Ok tuşları ilerletir, Enter seçer, Escape vurguyu kaldırır.")}
           className="sr-only rounded-full border border-border bg-surface px-4 py-2.5 text-[13px] font-medium text-text shadow-lg focus:not-sr-only focus:outline-none focus:ring-2 focus:ring-brand"
         >
           {kbFocusedItem
-            ? `${kbSession!.index + 1}/${kbSession!.items.length} · ${kbFocusedItem.name}`
-            : "İşaretçilerde gezin: ← → tuşları, Enter seç"}
+            ? `${kbSession!.index + 1}/${kbSession!.items.length} · ${t(kbFocusedItem.name)}`
+            : t("İşaretçilerde gezin: ← → tuşları, Enter seç")}
         </button>
         {/* polite, not assertive: announcements follow key presses the user
             just made, so interrupting other output would add nothing. */}
