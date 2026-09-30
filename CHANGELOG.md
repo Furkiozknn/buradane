@@ -11,10 +11,11 @@ Buradaki her sayı ölçülmüştür. Ölçülmemiş bir iddia bu dosyaya girmez
 
 ## [Yayımlanmamış]
 
-Depoda etiket yok; bu bölümün sınırı bir etiket değil, `1.0.0` girdisinin
-tarihi (6 Eylül 2026). Aşağısı o tarihten sonra `main`'e giren işin
-tamamıdır. Sürüm numarası verilmedi — verilecek numara bir karardır ve
-burada kendiliğinden alınmadı.
+---
+
+## [1.1.0] — 2026-09-30
+
+`v1.1.0` etiketi bu sürüm-eşitleme commit'inden önceki bir noktada; dosyalardaki sürüm sonradan etikete uyduruldu. 1.0.0 girdisinin tarihinden (6 Eylül 2026) sonra `main`'e giren işin tamamı aşağıda.
 
 ### Güvenlik
 
