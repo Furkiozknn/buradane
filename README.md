@@ -566,7 +566,7 @@ sorgunun anlamını sessizce değiştirmek yerine.
 - Fotoğraflar ve yorumlar backend'de modellendi (`PlacePhoto`/
   `PlaceReview`) ama ne backend API'sinde ne demo'da bir arayüzü var.
   Fotoğraflar için OSM etiketleri ölçüldü ve **bilinçli olarak
-  ertelendi**: mekanların yalnızca %0,34'ünde (167.829'da 571) `image` ya da
+  ertelendi**: mekanların yalnızca %0,33'ünde (167.829'da 561) `image` ya da
   `wikimedia_commons` etiketi var, yani özellik eklense detay
   sayfalarının büyük çoğunluğu yine yer tutucuda kalır ve bugünkü tutarlı
   görünümden daha kötü durur. Gerçek fotoğraf kaynağı, kullanıcı
@@ -612,10 +612,10 @@ düzelttiğimiz üç nokta:
 | Bulgu | Veri | Karar |
 |---|---|---|
 | `access=private/no` | 612 mekan | Sonuçlara **hiç girmez**. Özel mülk içindeki bir tuvaleti umumi diye göstermek, acelesi olan birini açılmayacak bir kapıya göndermektir. |
-| `access=customers` / `permit` | 9 tuvalet + diğerleri | **Kalır ama etiketlenir.** "Bir çay al, tuvaleti kullan" İstanbul'da gerçekten işleyen bir çözüm; gizlemek gerçek bir cevabı çöpe atmak olurdu. |
+| `access=customers` / `permit` | 105 tuvalet + diğerleri | **Kalır ama etiketlenir.** "Bir çay al, tuvaleti kullan" İstanbul'da gerçekten işleyen bir çözüm; gizlemek gerçek bir cevabı çöpe atmak olurdu. |
 | `opening_hours` | Mekanların yalnızca **%1,81**'inde var (167.829'da 3.039) | Filtre yalnızca **kapalı olduğu bilinenleri** eler; çipin adı da bu ("Kapalıları gizle"). Bilinmeyeni kapalı saymak, 164.790 kaydı gizlemek için birkaç yüzünü ayıklamak olurdu - filtreyi işe yaramaz değil, zararlı yapardı. |
-| `wheelchair=designated` | 3 mekan | Artık `true`. OSM'nin en güçlü erişilebilirlik iddiasıydı ve "bilinmiyor" sayılıyordu. |
-| `wheelchair=limited` | 70 mekan | Boolean'a **düşürülmüyor** (ne evet ne hayır), detay sayfasında olduğu gibi yazılıyor. |
+| `wheelchair=designated` | 10 mekan | Artık `true`. OSM'nin en güçlü erişilebilirlik iddiasıydı ve "bilinmiyor" sayılıyordu. |
+| `wheelchair=limited` | 340 mekan | Boolean'a **düşürülmüyor** (ne evet ne hayır), detay sayfasında olduğu gibi yazılıyor. |
 
 **Cevabı bizde olmayan sorular.** Bazı aramaların doğru cevabı açık
 haritalama verisinde yapısal olarak yok. En net örnek "nöbetçi eczane":
