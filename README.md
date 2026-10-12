@@ -735,6 +735,6 @@ sitemap tam çalışır. Ayrıntısı ve kalıcı diske geçiş:
 
 - **[nova-drift](https://github.com/Furkiozknn/nova-drift)** — derleme adımı olmayan sonsuz tarayıcı uzay koşusu
 - **[masal](https://github.com/Furkiozknn/masal)** — çocuğun adına yazılan uyku öncesi masalı
-- **[turkce-ajanlar](https://github.com/Furkiozknn/turkce-ajanlar)** — Türkçe düşünen 70 Claude Code alt-ajanı
+- **[turkce-ajanlar](https://github.com/Furkiozknn/turkce-ajanlar)** — Türkçe düşünen 71 Claude Code alt-ajanı
 
 <sub>Hepsi tek bir aranabilir sayfada: **[furkiozknn.github.io](https://furkiozknn.github.io/)** — her kart, o deponun kendi <code>project-meta.json</code> dosyasından üretiliyor.</sub>
