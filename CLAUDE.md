@@ -115,7 +115,7 @@ buradane/
 │   └── pyproject.toml
 ├── scripts/                        # Python veri boru hattı (Overpass)
 ├── .github/workflows/              # CI
-└── README.md                       # Uzun teknik doküman (657 satır)
+└── README.md                       # Uzun teknik doküman (740 satır)
 ```
 
 ### En kritik dosyalar
@@ -557,7 +557,7 @@ Bunlar README'de de yazılıdır ve bilinçli kabul edilmiş durumlardır:
   **CI'daki gerçek Postgres+PostGIS servisinde koşar** (`.github/workflows/ci.yml`).
 - İl kapsamı **tamamlandı**: 81/81 il, her biri gerçek OSM il sınırından;
   167.829 mekan; 973 ilçe merkezinin tamamının 15 km'sinde veri var.
-- Fotoğraf desteği yoktur (OSM'de ölçülen kapsam %2,3 olduğu için ertelendi).
+- Fotoğraf desteği yoktur (OSM'de ölçülen kapsam %0,33 olduğu için ertelendi).
 - **`wheelchair=limited` listede görünmez, yalnızca detay panelinde görünür.**
   Sorgu motoru yanıttan `raw_tags`'i çıkarıyor (167.829 kayıt × ~11 etiketi
   tel üzerinden göndermemek için), `limited` ise boolean amenity'ye
