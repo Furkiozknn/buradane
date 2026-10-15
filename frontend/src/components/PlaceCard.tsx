@@ -5,7 +5,8 @@ import { BadgeCheck, ChevronRight, CircleAlert, Navigation } from "lucide-react"
 import { AMENITY_BY_KEY, categoryMeta } from "@/lib/categories";
 import { bearingDegrees, bearingLabel, formatDistance, type LatLon } from "@/lib/geo";
 import { DirectionArrow } from "./DirectionArrow";
-import { isOpenNow } from "@/lib/opening-hours";
+import { openChangeText } from "@/lib/open-change-text";
+import { isOpenNow, nextChange } from "@/lib/opening-hours";
 import type { AmenityKey, Place } from "@/lib/types";
 import { directionsUrl } from "@/lib/directions";
 import { useT } from "@/lib/use-locale";
@@ -41,6 +42,9 @@ export function PlaceCard({
   const primary = categoryMeta(place.categories[0]);
   const Icon = primary.icon;
   const openState = isOpenNow(place.opening_hours_raw);
+  // Only the switch that matters soon earns room on a card; the detail view shows any.
+  const change = nextChange(place.opening_hours_raw);
+  const changeSoon = change && change.inMinutes <= 3 * 60 ? openChangeText(change, t, locale) : null;
   const features = CARD_AMENITY_ORDER.filter((key) => place.amenities[key] === true).slice(0, 3);
   const isClosed = place.status === "temporarily_closed";
   const lowConfidence = place.reliability_score < 0.45;
@@ -129,6 +133,9 @@ export function PlaceCard({
           ) : openState === "closed" ? (
             <Badge tone="warning">{t("Şu an kapalı")}</Badge>
           ) : null}
+          {!isClosed && changeSoon && (
+            <span className="text-[11.5px] text-text-muted">{changeSoon}</span>
+          )}
 
           {/* Conditional access is worth more room than a feature badge:
               walking to a place and being turned away is the failure this
