@@ -336,6 +336,33 @@ için elle tutulan bir tablo yoktur (bir zamanlar vardı; merkezi eklenmeyen
    neredeyse her zaman bir etiketleme hatası olan `opening_hours: closed`
    değerlerini `null`'a (bilinmiyor) çevirir.
 
+### Açılış saatleri nasıl okunuyor
+
+"Şu an açık mı?" sorusunu `frontend/src/lib/opening-hours.ts` cevaplar; OSM
+`opening_hours` sözdiziminin küçük bir alt kümesini okur ve okuyamadığına
+"bilinmiyor" der. Alt küme OSM tanımına şu noktalarda uyar, çünkü yanlış
+okumak cevabı "bilinmiyor"a değil **yanlışa** çevirir:
+
+- Sonraki `;` kuralı adlandırdığı günler için öncekinin **yerine geçer**
+  (`Mo-Su 08:00-22:00; Su off` pazar kapalıdır); `, ` sonrası ek kural ekler.
+  Aynı gün seçicisinin tekrarı (`Mo-Fr 07:00-13:30; Mo-Fr 17:00-20:00`) bölünmüş
+  gün sayılır: harfiyen okununca sabahı siler, yazanın kastı ise ikisidir.
+- `<günler> off` / `closed` bir kuraldır. Küçük harfle yazılmış gün adları
+  (`mo-fr`) kabul edilir.
+- Gece yarısını geçen aralık başladığı güne aittir: `Fr 22:00-02:00`
+  cumartesi 01:00'de açıktır, cuma 01:00'de değil.
+- `PH` (resmî tatil) bir seçicidir. Sabit tarihli ulusal bayramlar biliniyor;
+  dinî bayramlar her yıl kaydığı için tabloya konmadı. Bu yüzden değer hem
+  "tatil" hem "normal gün" olarak okunur ve yalnızca ikisinin anlaştığı cevap
+  verilir; anlaşmazlarsa "bilinmiyor".
+
+Anlık görüntüde ölçüldü (3.039 değer, bir haftanın her saati, eski ve yeni
+okuyucu yan yana): okunamayan değerler **%9,1'den %4,6'ya** indi, 24.676
+mekan-saat "bilinmiyor"dan kesin cevaba geçti, hiçbir kesin cevap
+"bilinmiyor"a düşmedi; 78 mekan-saatte cevap tersine döndü, bunların çoğu
+gece yarısını geçen aralıklardır. Kalan bilinmeyenlerin başı güneş saatine
+bağlı değerler (`sunrise-sunset`, `(dawn-…)`) ve serbest Türkçe metindir.
+
 ## API Sözleşmesi
 
 ### Backend (FastAPI)
