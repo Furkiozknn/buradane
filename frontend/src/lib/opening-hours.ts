@@ -262,6 +262,68 @@ export function isOpenNow(raw: string | null | undefined, now: Date = new Date()
   return answers.has(true) ? "open" : "closed";
 }
 
+export interface OpenChange {
+  /** The state the place switches to. */
+  to: "open" | "closed";
+  /** Whole minutes from now until the switch. */
+  inMinutes: number;
+  /** Istanbul wall time of the switch, "HH:MM". */
+  at: string;
+  /** 0 = today, 1 = tomorrow ... in Istanbul. */
+  dayOffset: number;
+  /** Istanbul weekday of the switch, 0 = Sunday. */
+  weekday: number;
+}
+
+/**
+ * When does the answer change? "Closes in 20 min" matters more to someone
+ * walking to a toilet than "open now". The state can only flip at a span's
+ * start or end, so only those instants in the next 8 days are evaluated - by
+ * `isOpenNow` itself, so the two can never disagree. Returns null when the
+ * current state is unknown, when it never changes (24/7), or when an
+ * instant before the change is unknown (a PH rule we cannot resolve):
+ * a countdown to a change we are not sure of is worse than none.
+ */
+export function nextChange(raw: string | null | undefined, now: Date = new Date()): OpenChange | null {
+  const current = isOpenNow(raw, now);
+  if (current === "unknown" || !raw) return null;
+  const rules = parseRules(raw.trim());
+  if (!rules) return null;
+
+  const base = now.getTime() - (now.getTime() % 60000);
+  const start = istanbulClock(new Date(base));
+  const boundaries = new Set<number>();
+  for (const rule of rules) {
+    for (const s of rule.spans) {
+      for (let d = 0; d <= 8; d += 1) {
+        for (const m of [s.start, s.end]) {
+          const delta = d * 1440 + m - start.minutes;
+          if (delta > 0) boundaries.add(delta);
+        }
+      }
+    }
+  }
+  for (const delta of [...boundaries].sort((a, b) => a - b)) {
+    const state = isOpenNow(raw, new Date(base + delta * 60000));
+    if (state === "unknown") return null;
+    if (state === current) continue;
+    const total = start.minutes + delta;
+    const minuteOfDay = total % 1440;
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return {
+      to: state,
+      inMinutes: delta,
+      at: `${pad(Math.floor(minuteOfDay / 60))}:${pad(minuteOfDay % 60)}`,
+      dayOffset: Math.floor(total / 1440),
+      weekday: (start.day + Math.floor(total / 1440)) % 7,
+    };
+  }
+  return null;
+}
+
+/** Below this, a countdown ("in 20 min") reads better than a clock time. */
+export const SOON_MINUTES = 60;
+
 export function openStateLabel(state: OpenState): string {
   if (state === "open") return "Şu an açık";
   if (state === "closed") return "Şu an kapalı";

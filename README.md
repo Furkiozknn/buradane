@@ -363,6 +363,16 @@ mekan-saat "bilinmiyor"dan kesin cevaba geçti, hiçbir kesin cevap
 gece yarısını geçen aralıklardır. Kalan bilinmeyenlerin başı güneş saatine
 bağlı değerler (`sunrise-sunset`, `(dawn-…)`) ve serbest Türkçe metindir.
 
+Cevap ne zaman değişiyor, o da yazılır: kartta üç saat içindeki değişim
+("20 dk içinde kapanıyor", "Kapanış 18:00"), detayda bir sonraki değişim
+("Açılış yarın 09:00", "Açılış Pzt 09:00"). Tuvalete yürüyen biri için "şu an
+açık"tan çok "20 dakika sonra kapanıyor" önemlidir. Değişim yalnızca bir
+aralığın başında ya da sonunda olabildiği için yalnız o anlar, `isOpenNow`un
+kendisiyle denenir; ikisi birbirinden ayrışamaz (test, dakika dakika yürüyüşle
+karşılaştırır). Arada bir an "bilinmiyor" çıkarsa (çözülemeyen bir `PH`) geri
+sayım gösterilmez. Saat ek almadan yazılır ("18:00'de" ama "09:00'da"):
+yanlış bir ek her kartta görünür.
+
 ## API Sözleşmesi
 
 ### Backend (FastAPI)
