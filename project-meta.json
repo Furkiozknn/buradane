@@ -58,8 +58,8 @@
     "videos": []
   },
   "tests": {
-    "count": 425,
-    "source": "132 backend (119 + 13 in tests/test_query_validation.py) + 293 frontend (vitest)",
+    "count": 431,
+    "source": "132 backend (119 + 13 in tests/test_query_validation.py) + 299 frontend (vitest, 6 in tests/basemap.test.ts)",
     "measured": "2026-10-19"
   },
   "ci": {
