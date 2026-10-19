@@ -11,6 +11,9 @@ Park 343 sonuç, Cami 565, Tuvalet 130, ve "ücretsiz tuvalet" araması 21.
 Hepsi 167.829 kayıtlık OpenStreetMap anlık görüntüsünden. Sonuçlar görünen
 harita alanına göre sayılır; pencere boyutu değişince sayılar da değişir.</sub>
 
+<p align="center"><img src="docs/reel/reel.gif" alt="buradane - 15 saniyelik tanıtım videosu (hareketli grafik, gerçek kayıt değil)" width="720"></p>
+<p align="center"><sub>15 sn tanıtım videosu · <a href="docs/reel/reel.mp4">Sesli MP4 sürümü</a></sub></p>
+
 <details>
 <summary><b>In English</b></summary>
 
