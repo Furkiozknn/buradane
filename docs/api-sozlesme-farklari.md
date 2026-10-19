@@ -105,7 +105,7 @@ Ayrıca amenity anahtar listesi birebir aynı değil:
 | `sort` (`distance`/`reliability`) | Sıralama düğmesi | **YOK** (sabit sıralama) |
 | `free_only` | ✓ | ✓ (`free_only`) |
 | `category`, `amenity` (tekrarlı) | ✓ | ✓ |
-| `bbox`, `lat/lon/radius_m`, `limit/offset` | ✓ | ✓ (limit tavanı farklı: FE 300, BE 200) |
+| `bbox`, `lat/lon/radius_m`, `limit/offset` | ✓ | ✓ (limit tavanı farklı: FE 300, BE 200; offset tavanı yalnız BE'de: 10.000) |
 | — | — | Backend'de fazladan: `min_reliability`, `admin_region_id` (zararsız) |
 
 `q` en büyük parça: Türkçe çözümleme mantığı
