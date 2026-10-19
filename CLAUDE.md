@@ -115,7 +115,7 @@ buradane/
 │   └── pyproject.toml
 ├── scripts/                        # Python veri boru hattı (Overpass)
 ├── .github/workflows/              # CI
-└── README.md                       # Uzun teknik doküman (740 satır)
+└── README.md                       # Uzun teknik doküman (780 satır)
 ```
 
 ### En kritik dosyalar
