@@ -13,6 +13,12 @@ Buradaki her sayı ölçülmüştür. Ölçülmemiş bir iddia bu dosyaya girmez
 
 ### Düzeltildi
 
+- Backend `GET /places` ve `GET /reports`: `offset` artık en fazla 10.000.
+  Tavan yokken `?offset=99999999999999999999` BIGINT'e sığmıyor ve kimlik
+  doğrulamasız bir istek **500** döndürüyordu; artık 422.
+- Backend `bbox` doğrulaması: `nan`/`inf`, -180..180 / -90..90 dışı ve
+  ters çevrilmiş (min > max) kutular **200 + boş liste** döndürüyordu —
+  "burada hiçbir şey yok" ile ayırt edilemeyen bir cevap. Artık 400.
 - Taban harita stili (tiles.openfreemap.org) alınamadığında harita
   `load` olayına hiç ulaşmıyor, sonuç katmanları hiç eklenmiyordu: sokak
   yok, **pin de yok**, mesaj da yok — liste 200 sonuç gösterirken harita

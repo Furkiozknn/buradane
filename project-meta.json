@@ -58,8 +58,8 @@
     "videos": []
   },
   "tests": {
-    "count": 418,
-    "source": "119 backend (CI log: `119 passed`) + 299 frontend (vitest, 6 in tests/basemap.test.ts)",
+    "count": 431,
+    "source": "132 backend (119 + 13 in tests/test_query_validation.py) + 299 frontend (vitest, 6 in tests/basemap.test.ts)",
     "measured": "2026-10-19"
   },
   "ci": {

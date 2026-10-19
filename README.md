@@ -382,7 +382,7 @@ FastAPI otomatik dokümantasyonu çalışırken `/docs` (Swagger) ve `/redoc`
 
 | Metod & Yol | Açıklama |
 |---|---|
-| `GET /places` | Arama: `lat`/`lon`+`radius_m` (yakınımda) **veya** `bbox` (harita görünümü), `category`, `amenity`, `free_only`, `min_reliability`, `admin_region_id` filtreleriyle |
+| `GET /places` | Arama: `lat`/`lon`+`radius_m` (yakınımda) **veya** `bbox` (harita görünümü), `category`, `amenity`, `free_only`, `min_reliability`, `admin_region_id` filtreleriyle. Sınırlar: `radius_m` ≤ 50.000, `limit` ≤ 200, `offset` ≤ 10.000; `bbox` sonlu, geçerli koordinat aralığında ve min ≤ max olmalı (aksi 400/422) |
 | `GET /places/{id}` | Yer detayı (tüm amenity'ler, kaynak/güncellik bilgisi) |
 | `POST /places/suggest` | Yeni yer öner (→ `pending_review`, moderasyon bekler) |
 | `POST /places/{id}/reports` | Bir yer hakkında sorun bildir (kapalı, bakımda, bilgi yanlış, ...) |
@@ -606,7 +606,7 @@ sorgunun anlamını sessizce değiştirmek yerine.
 - Fotoğraflar ve yorumlar backend'de modellendi (`PlacePhoto`/
   `PlaceReview`) ama ne backend API'sinde ne demo'da bir arayüzü var.
   Fotoğraflar için OSM etiketleri ölçüldü ve **bilinçli olarak
-  ertelendi**: mekanların yalnızca %0,34'ünde (167.829'da 571) `image` ya da
+  ertelendi**: mekanların yalnızca %0,33'ünde (167.829'da 561) `image` ya da
   `wikimedia_commons` etiketi var, yani özellik eklense detay
   sayfalarının büyük çoğunluğu yine yer tutucuda kalır ve bugünkü tutarlı
   görünümden daha kötü durur. Gerçek fotoğraf kaynağı, kullanıcı
@@ -652,10 +652,10 @@ düzelttiğimiz üç nokta:
 | Bulgu | Veri | Karar |
 |---|---|---|
 | `access=private/no` | 612 mekan | Sonuçlara **hiç girmez**. Özel mülk içindeki bir tuvaleti umumi diye göstermek, acelesi olan birini açılmayacak bir kapıya göndermektir. |
-| `access=customers` / `permit` | 9 tuvalet + diğerleri | **Kalır ama etiketlenir.** "Bir çay al, tuvaleti kullan" İstanbul'da gerçekten işleyen bir çözüm; gizlemek gerçek bir cevabı çöpe atmak olurdu. |
+| `access=customers` / `permit` | 105 tuvalet + diğerleri | **Kalır ama etiketlenir.** "Bir çay al, tuvaleti kullan" İstanbul'da gerçekten işleyen bir çözüm; gizlemek gerçek bir cevabı çöpe atmak olurdu. |
 | `opening_hours` | Mekanların yalnızca **%1,81**'inde var (167.829'da 3.039) | Filtre yalnızca **kapalı olduğu bilinenleri** eler; çipin adı da bu ("Kapalıları gizle"). Bilinmeyeni kapalı saymak, 164.790 kaydı gizlemek için birkaç yüzünü ayıklamak olurdu - filtreyi işe yaramaz değil, zararlı yapardı. |
-| `wheelchair=designated` | 3 mekan | Artık `true`. OSM'nin en güçlü erişilebilirlik iddiasıydı ve "bilinmiyor" sayılıyordu. |
-| `wheelchair=limited` | 70 mekan | Boolean'a **düşürülmüyor** (ne evet ne hayır), detay sayfasında olduğu gibi yazılıyor. |
+| `wheelchair=designated` | 10 mekan | Artık `true`. OSM'nin en güçlü erişilebilirlik iddiasıydı ve "bilinmiyor" sayılıyordu. |
+| `wheelchair=limited` | 340 mekan | Boolean'a **düşürülmüyor** (ne evet ne hayır), detay sayfasında olduğu gibi yazılıyor. |
 
 **Cevabı bizde olmayan sorular.** Bazı aramaların doğru cevabı açık
 haritalama verisinde yapısal olarak yok. En net örnek "nöbetçi eczane":
@@ -775,6 +775,6 @@ sitemap tam çalışır. Ayrıntısı ve kalıcı diske geçiş:
 
 - **[Işık Tüneli](https://github.com/Furkiozknn/isik-tuneli)** — derleme adımı olmayan sonsuz tarayıcı uzay koşusu
 - **[masal](https://github.com/Furkiozknn/masal)** — çocuğun adına yazılan uyku öncesi masalı
-- **[turkce-ajanlar](https://github.com/Furkiozknn/turkce-ajanlar)** — Türkçe düşünen 70 Claude Code alt-ajanı
+- **[turkce-ajanlar](https://github.com/Furkiozknn/turkce-ajanlar)** — Türkçe düşünen 71 Claude Code alt-ajanı
 
 <sub>Hepsi tek bir aranabilir sayfada: **[furkiozknn.github.io](https://furkiozknn.github.io/)** — her kart, o deponun kendi <code>project-meta.json</code> dosyasından üretiliyor.</sub>
