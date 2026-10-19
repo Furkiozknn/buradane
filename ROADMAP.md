@@ -246,7 +246,7 @@ belirsizse, belirsiz olduğu açıkça yazılıdır.
 
 ### Düşük öncelik / ileride
 
-- 📋 Topluluk fotoğraf yüklemesi *(OSM'de fotoğraf kapsamı ölçüldü: %0,34 —
+- 📋 Topluluk fotoğraf yüklemesi *(OSM'de fotoğraf kapsamı ölçüldü: %0,33 —
   bu yüzden OSM fotoğrafları yerine topluluk yüklemesi düşünülüyor)*
 - 📋 Telemetri / analitik — şu an ne arandığı bilinmiyor
 - 📋 Production dağıtımı (hosting kararı verilmedi)
