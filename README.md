@@ -763,7 +763,7 @@ sitemap tam çalışır. Ayrıntısı ve kalıcı diske geçiş:
 
 ## Bu ekosistemden başka projeler
 
-- **[nova-drift](https://github.com/Furkiozknn/nova-drift)** — derleme adımı olmayan sonsuz tarayıcı uzay koşusu
+- **[Işık Tüneli](https://github.com/Furkiozknn/isik-tuneli)** — derleme adımı olmayan sonsuz tarayıcı uzay koşusu
 - **[masal](https://github.com/Furkiozknn/masal)** — çocuğun adına yazılan uyku öncesi masalı
 - **[turkce-ajanlar](https://github.com/Furkiozknn/turkce-ajanlar)** — Türkçe düşünen 70 Claude Code alt-ajanı
 
