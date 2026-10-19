@@ -21,7 +21,8 @@ import {
 
 import { AMENITIES, categoryMeta } from "@/lib/categories";
 import { formatDistance, walkingMinutes } from "@/lib/geo";
-import { humanizeOpeningHours, isOpenNow, openStateLabel } from "@/lib/opening-hours";
+import { openChangeText } from "@/lib/open-change-text";
+import { humanizeOpeningHours, isOpenNow, nextChange, openStateLabel } from "@/lib/opening-hours";
 import { directionsUrl, osmUrl } from "@/lib/directions";
 import { displayUrl, safeExternalUrl } from "@/lib/external-url";
 import type { Place } from "@/lib/types";
@@ -69,6 +70,7 @@ export function PlaceDetail({
   const primary = categoryMeta(place.categories[0]);
   const Icon = primary.icon;
   const openState = isOpenNow(place.opening_hours_raw);
+  const changeText = openChangeText(nextChange(place.opening_hours_raw), t, locale);
   const hours = humanizeOpeningHours(place.opening_hours_raw, locale);
   // null when the OSM value is not a usable web address, which also drops
   // the whole contact section if it was the only field in it - see
@@ -204,6 +206,7 @@ export function PlaceDetail({
               }}
             >
               {t(openStateLabel(openState))}
+              {changeText && <> · {changeText}</>}
             </span>
           </p>
 

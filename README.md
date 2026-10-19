@@ -11,6 +11,9 @@ Park 343 sonuç, Cami 565, Tuvalet 130, ve "ücretsiz tuvalet" araması 21.
 Hepsi 167.829 kayıtlık OpenStreetMap anlık görüntüsünden. Sonuçlar görünen
 harita alanına göre sayılır; pencere boyutu değişince sayılar da değişir.</sub>
 
+<p align="center"><img src="docs/reel/reel.gif" alt="buradane - 15 saniyelik tanıtım videosu (hareketli grafik, gerçek kayıt değil)" width="720"></p>
+<p align="center"><sub>15 sn tanıtım videosu · <a href="docs/reel/reel.mp4">Sesli MP4 sürümü</a></sub></p>
+
 <details>
 <summary><b>In English</b></summary>
 
@@ -332,6 +335,43 @@ için elle tutulan bir tablo yoktur (bir zamanlar vardı; merkezi eklenmeyen
    None" gibi adres satırlarını düzeltir, ve bir çeşme gibi yerlerde
    neredeyse her zaman bir etiketleme hatası olan `opening_hours: closed`
    değerlerini `null`'a (bilinmiyor) çevirir.
+
+### Açılış saatleri nasıl okunuyor
+
+"Şu an açık mı?" sorusunu `frontend/src/lib/opening-hours.ts` cevaplar; OSM
+`opening_hours` sözdiziminin küçük bir alt kümesini okur ve okuyamadığına
+"bilinmiyor" der. Alt küme OSM tanımına şu noktalarda uyar, çünkü yanlış
+okumak cevabı "bilinmiyor"a değil **yanlışa** çevirir:
+
+- Sonraki `;` kuralı adlandırdığı günler için öncekinin **yerine geçer**
+  (`Mo-Su 08:00-22:00; Su off` pazar kapalıdır); `, ` sonrası ek kural ekler.
+  Aynı gün seçicisinin tekrarı (`Mo-Fr 07:00-13:30; Mo-Fr 17:00-20:00`) bölünmüş
+  gün sayılır: harfiyen okununca sabahı siler, yazanın kastı ise ikisidir.
+- `<günler> off` / `closed` bir kuraldır. Küçük harfle yazılmış gün adları
+  (`mo-fr`) kabul edilir.
+- Gece yarısını geçen aralık başladığı güne aittir: `Fr 22:00-02:00`
+  cumartesi 01:00'de açıktır, cuma 01:00'de değil.
+- `PH` (resmî tatil) bir seçicidir. Sabit tarihli ulusal bayramlar biliniyor;
+  dinî bayramlar her yıl kaydığı için tabloya konmadı. Bu yüzden değer hem
+  "tatil" hem "normal gün" olarak okunur ve yalnızca ikisinin anlaştığı cevap
+  verilir; anlaşmazlarsa "bilinmiyor".
+
+Anlık görüntüde ölçüldü (3.039 değer, bir haftanın her saati, eski ve yeni
+okuyucu yan yana): okunamayan değerler **%9,1'den %4,6'ya** indi, 24.676
+mekan-saat "bilinmiyor"dan kesin cevaba geçti, hiçbir kesin cevap
+"bilinmiyor"a düşmedi; 78 mekan-saatte cevap tersine döndü, bunların çoğu
+gece yarısını geçen aralıklardır. Kalan bilinmeyenlerin başı güneş saatine
+bağlı değerler (`sunrise-sunset`, `(dawn-…)`) ve serbest Türkçe metindir.
+
+Cevap ne zaman değişiyor, o da yazılır: kartta üç saat içindeki değişim
+("20 dk içinde kapanıyor", "Kapanış 18:00"), detayda bir sonraki değişim
+("Açılış yarın 09:00", "Açılış Pzt 09:00"). Tuvalete yürüyen biri için "şu an
+açık"tan çok "20 dakika sonra kapanıyor" önemlidir. Değişim yalnızca bir
+aralığın başında ya da sonunda olabildiği için yalnız o anlar, `isOpenNow`un
+kendisiyle denenir; ikisi birbirinden ayrışamaz (test, dakika dakika yürüyüşle
+karşılaştırır). Arada bir an "bilinmiyor" çıkarsa (çözülemeyen bir `PH`) geri
+sayım gösterilmez. Saat ek almadan yazılır ("18:00'de" ama "09:00'da"):
+yanlış bir ek her kartta görünür.
 
 ## API Sözleşmesi
 
@@ -733,7 +773,7 @@ sitemap tam çalışır. Ayrıntısı ve kalıcı diske geçiş:
 
 ## Bu ekosistemden başka projeler
 
-- **[nova-drift](https://github.com/Furkiozknn/nova-drift)** — derleme adımı olmayan sonsuz tarayıcı uzay koşusu
+- **[Işık Tüneli](https://github.com/Furkiozknn/isik-tuneli)** — derleme adımı olmayan sonsuz tarayıcı uzay koşusu
 - **[masal](https://github.com/Furkiozknn/masal)** — çocuğun adına yazılan uyku öncesi masalı
 - **[turkce-ajanlar](https://github.com/Furkiozknn/turkce-ajanlar)** — Türkçe düşünen 71 Claude Code alt-ajanı
 

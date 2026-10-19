@@ -40,7 +40,7 @@
     "turkiye",
     "typescript"
   ],
-  "summary": "\"What do I need, and where is the nearest one?\" 167,829 real OpenStreetMap places across all 81 provinces of Türkiye - pulled from each province's true boundary, not a box around its capital, so all 973 district centres have data within 15 km. Bearing, distance and a one-tap \"still here?\" on every result. 395 tests.",
+  "summary": "Need-first finder for public places in Türkiye - toilets, parks, drinking water, mosques and more - over 167,829 OpenStreetMap places in all 81 provinces, with direction, distance and freshness.",
   "key_features": [
     "167,829 real OpenStreetMap places across all 81 provinces of Turkiye",
     "Pulled from each province's true boundary, not a box around its capital, so all 973 district centres have data within 15 km",
@@ -58,8 +58,8 @@
     "videos": []
   },
   "tests": {
-    "count": 395,
-    "source": "119 backend (CI log: `119 passed`) + 276 frontend (vitest)",
+    "count": 412,
+    "source": "119 backend (CI log: `119 passed`) + 293 frontend (vitest)",
     "measured": "2026-09-29"
   },
   "ci": {

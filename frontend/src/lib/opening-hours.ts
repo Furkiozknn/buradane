@@ -1,23 +1,49 @@
 /**
  * A deliberately small subset of the OSM `opening_hours` syntax - enough to
  * answer "şu an açık mı?" honestly for the tags that actually appear in the
- * Istanbul dataset, and honest enough to return `null` ("bilinmiyor") for
+ * Türkiye dataset, and honest enough to return "unknown" ("bilinmiyor") for
  * anything it can't parse rather than guessing.
  *
  * Not using a full opening_hours library on purpose: the complete grammar
- * (holidays, sunset offsets, week-of-month rules) is a large dependency for
- * a field that is empty on most of our POIs. If the dataset later gets rich
- * enough to need it, `opening_hours.js` is the drop-in - see BACKLOG.
+ * (sunset offsets, week-of-month rules, month ranges) is a large dependency
+ * for a field that is empty on most of our POIs. If the dataset later gets
+ * rich enough to need it, `opening_hours.js` is the drop-in - see BACKLOG.
+ *
+ * What the subset does follow from the OSM specification, because getting it
+ * wrong turns a real answer into a wrong one rather than an unknown one:
+ *
+ *  - A later `;` rule REPLACES earlier ones for the days it names:
+ *    "Mo-Su 08:00-22:00; Su off" is closed on Sunday, and
+ *    "Mo-Fr 09:00-18:00; Fr 09:00-12:00" closes at noon on Friday.
+ *    A rule after `, ` (an additional rule) adds to them instead.
+ *  - `<days> off` / `<days> closed` is a rule, not an unparseable token.
+ *  - An overnight span belongs to the day it starts on: "Fr 22:00-02:00" is
+ *    open at 01:00 on Saturday, not at 01:00 on Friday.
+ *  - `PH` (public holiday) is a selector. Whether today is a public holiday
+ *    is only known for Türkiye's fixed-date national holidays; the religious
+ *    holidays move every year, so on any other day the value is evaluated as
+ *    a holiday AND as a normal day, and only an answer both agree on is given.
+ *  - Two-letter day names are accepted in lower case ("mo-fr"), which is how
+ *    a large share of hand-typed Turkish values are written.
  */
 
 export type OpenState = "open" | "closed" | "unknown";
 
-const DAY_TOKENS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+const DAY_TOKENS = ["su", "mo", "tu", "we", "th", "fr", "sa"];
 
-interface Interval {
-  days: Set<number>;
-  startMinutes: number;
-  endMinutes: number;
+interface Span {
+  start: number;
+  end: number;
+}
+
+interface Rule {
+  /** Weekdays the rule names; null = every day (no weekday selector). */
+  days: Set<number> | null;
+  /** The selector names PH; with `days` null and `ph` true it applies on holidays only. */
+  ph: boolean;
+  spans: Span[];
+  /** `, ` additional rule: adds to the day instead of replacing it. */
+  additional: boolean;
 }
 
 function parseTime(value: string): number | null {
@@ -25,54 +51,133 @@ function parseTime(value: string): number | null {
   if (!match) return null;
   const hours = Number(match[1]);
   const minutes = Number(match[2]);
-  if (hours > 24 || minutes > 59) return null;
+  if (hours > 24 || minutes > 59 || (hours === 24 && minutes > 0)) return null;
   return hours * 60 + minutes;
 }
 
-function parseDayRange(token: string): Set<number> | null {
+function dayIndex(token: string): number {
+  return DAY_TOKENS.indexOf(token.trim().toLowerCase());
+}
+
+/** "Mo-Fr,PH" -> {days, ph}; null when any part is not a weekday or PH. */
+function parseSelector(token: string): { days: Set<number> | null; ph: boolean } | null {
   const days = new Set<number>();
+  let ph = false;
   for (const part of token.split(",")) {
     const range = part.trim();
     if (!range) continue;
-    const [fromRaw, toRaw] = range.split("-");
-    const from = DAY_TOKENS.indexOf(fromRaw?.trim() ?? "");
+    if (/^ph$/i.test(range)) {
+      ph = true;
+      continue;
+    }
+    const [fromRaw, toRaw, extra] = range.split("-");
+    if (extra !== undefined) return null;
+    const from = dayIndex(fromRaw ?? "");
     if (from === -1) return null;
-    if (!toRaw) {
+    if (toRaw === undefined) {
       days.add(from);
       continue;
     }
-    const to = DAY_TOKENS.indexOf(toRaw.trim());
+    const to = dayIndex(toRaw);
     if (to === -1) return null;
-    // Ranges can wrap (e.g. Sa-Su): walk forward from `from` until `to`.
+    // Ranges can wrap (e.g. Sa-Su, Fr-Mo): walk forward from `from` until `to`.
     for (let i = from; ; i = (i + 1) % 7) {
       days.add(i);
       if (i === to) break;
     }
   }
-  return days.size > 0 ? days : null;
+  if (days.size === 0 && !ph) return null;
+  return { days: days.size > 0 ? days : null, ph };
 }
 
-function parseRule(rule: string): Interval[] | null {
+function parseRule(rule: string, additional: boolean): Rule | null {
   const trimmed = rule.trim();
   if (!trimmed) return null;
 
-  const match = /^([A-Za-z,\-\s]+)?\s*([\d:,\-\s]+)$/.exec(trimmed);
+  const match = /^([A-Za-z,\-\s]*?)\s*((?:\d[\d:,\-\s]*)|off|closed)$/i.exec(trimmed);
   if (!match) return null;
+  const [, selectorRaw, body] = match;
 
-  const [, dayToken, timeToken] = match;
-  const days = dayToken ? parseDayRange(dayToken) : new Set([0, 1, 2, 3, 4, 5, 6]);
-  if (!days) return null;
-
-  const intervals: Interval[] = [];
-  for (const span of timeToken.split(",")) {
-    const [startRaw, endRaw] = span.split("-");
-    if (!startRaw || !endRaw) return null;
-    const startMinutes = parseTime(startRaw);
-    const endMinutes = parseTime(endRaw);
-    if (startMinutes == null || endMinutes == null) return null;
-    intervals.push({ days, startMinutes, endMinutes });
+  let days: Set<number> | null = null;
+  let ph = false;
+  if (selectorRaw.trim()) {
+    const selector = parseSelector(selectorRaw);
+    if (!selector) return null;
+    ({ days, ph } = selector);
   }
-  return intervals;
+
+  if (/^(off|closed)$/i.test(body)) return { days, ph, spans: [], additional };
+
+  const spans: Span[] = [];
+  for (const span of body.split(",")) {
+    const [startRaw, endRaw, extra] = span.split("-");
+    if (!startRaw || !endRaw || extra !== undefined) return null;
+    const start = parseTime(startRaw);
+    const end = parseTime(endRaw);
+    if (start == null || end == null) return null;
+    spans.push({ start, end });
+  }
+  return { days, ph, spans, additional };
+}
+
+/**
+ * Splits a value into rules. `;` separates normal rules; a comma straight
+ * after a time and before a letter ("..18:00, Sa 10:00-14:00") starts an
+ * additional rule. A comma between times ("09:00-12:00,14:00-18:00") or
+ * between days ("Mo,We") stays inside its rule.
+ */
+function selectorKey(rule: Rule): string {
+  return `${rule.days ? [...rule.days].sort().join("") : "*"}|${rule.ph ? "PH" : ""}`;
+}
+
+function parseRules(value: string): Rule[] | null {
+  const rules: Rule[] = [];
+  const seen = new Set<string>();
+  for (const group of value.split(";")) {
+    if (!group.trim()) continue;
+    const parts = group.split(/(?<=\d),\s*(?=[A-Za-z])/);
+    for (let i = 0; i < parts.length; i += 1) {
+      const parsed = parseRule(parts[i], i > 0);
+      if (!parsed) return null; // one unparseable rule ⇒ don't pretend to know
+      // "Mo-Fr 07:00-13:30; Mo-Fr 17:00-20:00" read to the letter keeps only
+      // the evening, but a mapper who repeats the SAME selector means a split
+      // day (opening_hours.js warns about exactly this). An identical selector
+      // with hours therefore adds; a different selector, or `off`, replaces.
+      const key = selectorKey(parsed);
+      if (seen.has(key) && parsed.spans.length > 0) parsed.additional = true;
+      seen.add(key);
+      rules.push(parsed);
+    }
+  }
+  return rules.length > 0 ? rules : null;
+}
+
+function ruleApplies(rule: Rule, day: number, holiday: boolean): boolean {
+  if (rule.days === null && !rule.ph) return true;
+  return (rule.days !== null && rule.days.has(day)) || (rule.ph && holiday);
+}
+
+/** The spans a day ends up with after every rule has had its say. */
+function daySpans(rules: Rule[], day: number, holiday: boolean): Span[] {
+  let spans: Span[] = [];
+  for (const rule of rules) {
+    if (!ruleApplies(rule, day, holiday)) continue;
+    spans = rule.additional ? [...spans, ...rule.spans] : rule.spans;
+  }
+  return spans;
+}
+
+function openAt(rules: Rule[], day: number, minutes: number, holidayToday: boolean, holidayYesterday: boolean): boolean {
+  for (const s of daySpans(rules, day, holidayToday)) {
+    const overnight = s.end <= s.start;
+    if (minutes >= s.start && (overnight || minutes < s.end)) return true;
+  }
+  // The tail of yesterday's overnight span ("Fr 22:00-02:00" at Sat 01:00).
+  const yesterday = (day + 6) % 7;
+  for (const s of daySpans(rules, yesterday, holidayYesterday)) {
+    if (s.end <= s.start && minutes < s.end) return true;
+  }
+  return false;
 }
 
 // OSM opening_hours values describe the wall clock at the place, and every
@@ -83,6 +188,8 @@ function parseRule(rule: string): Interval[] | null {
 const ISTANBUL_CLOCK = new Intl.DateTimeFormat("en-US", {
   timeZone: "Europe/Istanbul",
   weekday: "short",
+  month: "2-digit",
+  day: "2-digit",
   hour: "2-digit",
   minute: "2-digit",
   hourCycle: "h23",
@@ -92,16 +199,36 @@ const WEEKDAY_INDEX: Record<string, number> = {
   Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
 };
 
-function istanbulDayAndMinutes(now: Date): { day: number; minutes: number } {
+/**
+ * Türkiye's fixed-date national holidays (2429 sayılı Kanun), as MM-DD. The
+ * religious holidays (Ramazan and Kurban Bayramı) move with the lunar
+ * calendar and are deliberately not listed: a stale table would answer
+ * wrongly, while leaving them out only makes a PH-dependent answer unknown.
+ * 28 October is a half day, so it is not a known holiday either.
+ */
+const FIXED_HOLIDAYS = new Set(["01-01", "04-23", "05-01", "05-19", "07-15", "08-30", "10-29"]);
+
+interface WallClock {
+  day: number;
+  minutes: number;
+  monthDay: string | null;
+}
+
+function istanbulClock(now: Date): WallClock {
   const parts = ISTANBUL_CLOCK.formatToParts(now);
   const part = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
   const day = WEEKDAY_INDEX[part("weekday")];
   const minutes = Number(part("hour")) * 60 + Number(part("minute"));
   if (day === undefined || Number.isNaN(minutes)) {
     // An Intl surprise should degrade to the runtime clock, not crash the map.
-    return { day: now.getDay(), minutes: now.getHours() * 60 + now.getMinutes() };
+    return { day: now.getDay(), minutes: now.getHours() * 60 + now.getMinutes(), monthDay: null };
   }
-  return { day, minutes };
+  return { day, minutes, monthDay: `${part("month")}-${part("day")}` };
+}
+
+/** true on a fixed national holiday; otherwise unknown, never "certainly not". */
+function holidayOptions(monthDay: string | null): boolean[] {
+  return monthDay && FIXED_HOLIDAYS.has(monthDay) ? [true] : [true, false];
 }
 
 /**
@@ -116,27 +243,86 @@ export function isOpenNow(raw: string | null | undefined, now: Date = new Date()
   if (value === "24/7") return "open";
   if (/^(closed|off)$/i.test(value)) return "closed";
 
-  const intervals: Interval[] = [];
-  for (const rule of value.split(";")) {
-    const parsed = parseRule(rule);
-    if (!parsed) return "unknown"; // one unparseable rule ⇒ don't pretend to know
-    intervals.push(...parsed);
-  }
-  if (intervals.length === 0) return "unknown";
+  const rules = parseRules(value);
+  if (!rules) return "unknown";
 
-  const { day, minutes } = istanbulDayAndMinutes(now);
+  const today = istanbulClock(now);
+  const usesPh = rules.some((r) => r.ph);
+  if (!usesPh) return openAt(rules, today.day, today.minutes, false, false) ? "open" : "closed";
 
-  for (const interval of intervals) {
-    if (!interval.days.has(day)) continue;
-    if (interval.endMinutes <= interval.startMinutes) {
-      // Overnight span (e.g. 22:00-06:00)
-      if (minutes >= interval.startMinutes || minutes < interval.endMinutes) return "open";
-    } else if (minutes >= interval.startMinutes && minutes < interval.endMinutes) {
-      return "open";
+  // Evaluate in every holiday world we cannot rule out; answer only if they agree.
+  const yesterday = istanbulClock(new Date(now.getTime() - 24 * 60 * 60 * 1000));
+  const answers = new Set<boolean>();
+  for (const h of holidayOptions(today.monthDay)) {
+    for (const hy of holidayOptions(yesterday.monthDay)) {
+      answers.add(openAt(rules, today.day, today.minutes, h, hy));
     }
   }
-  return "closed";
+  if (answers.size !== 1) return "unknown";
+  return answers.has(true) ? "open" : "closed";
 }
+
+export interface OpenChange {
+  /** The state the place switches to. */
+  to: "open" | "closed";
+  /** Whole minutes from now until the switch. */
+  inMinutes: number;
+  /** Istanbul wall time of the switch, "HH:MM". */
+  at: string;
+  /** 0 = today, 1 = tomorrow ... in Istanbul. */
+  dayOffset: number;
+  /** Istanbul weekday of the switch, 0 = Sunday. */
+  weekday: number;
+}
+
+/**
+ * When does the answer change? "Closes in 20 min" matters more to someone
+ * walking to a toilet than "open now". The state can only flip at a span's
+ * start or end, so only those instants in the next 8 days are evaluated - by
+ * `isOpenNow` itself, so the two can never disagree. Returns null when the
+ * current state is unknown, when it never changes (24/7), or when an
+ * instant before the change is unknown (a PH rule we cannot resolve):
+ * a countdown to a change we are not sure of is worse than none.
+ */
+export function nextChange(raw: string | null | undefined, now: Date = new Date()): OpenChange | null {
+  const current = isOpenNow(raw, now);
+  if (current === "unknown" || !raw) return null;
+  const rules = parseRules(raw.trim());
+  if (!rules) return null;
+
+  const base = now.getTime() - (now.getTime() % 60000);
+  const start = istanbulClock(new Date(base));
+  const boundaries = new Set<number>();
+  for (const rule of rules) {
+    for (const s of rule.spans) {
+      for (let d = 0; d <= 8; d += 1) {
+        for (const m of [s.start, s.end]) {
+          const delta = d * 1440 + m - start.minutes;
+          if (delta > 0) boundaries.add(delta);
+        }
+      }
+    }
+  }
+  for (const delta of [...boundaries].sort((a, b) => a - b)) {
+    const state = isOpenNow(raw, new Date(base + delta * 60000));
+    if (state === "unknown") return null;
+    if (state === current) continue;
+    const total = start.minutes + delta;
+    const minuteOfDay = total % 1440;
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return {
+      to: state,
+      inMinutes: delta,
+      at: `${pad(Math.floor(minuteOfDay / 60))}:${pad(minuteOfDay % 60)}`,
+      dayOffset: Math.floor(total / 1440),
+      weekday: (start.day + Math.floor(total / 1440)) % 7,
+    };
+  }
+  return null;
+}
+
+/** Below this, a countdown ("in 20 min") reads better than a clock time. */
+export const SOON_MINUTES = 60;
 
 export function openStateLabel(state: OpenState): string {
   if (state === "open") return "Şu an açık";
